@@ -96,6 +96,31 @@ db-down: ## Stop Postgres + Redis
 db-logs: ## Tail Postgres logs
 	docker compose -f restaurant_api/docker-compose.yml logs -f db
 
+.PHONY: db-migrate
+db-migrate: install ## Apply all pending Alembic migrations (alembic upgrade head)
+	cd restaurant_api && ../$(VENV)/bin/alembic upgrade head
+
+.PHONY: db-rollback
+db-rollback: install ## Roll back the most recent migration (alembic downgrade -1)
+	cd restaurant_api && ../$(VENV)/bin/alembic downgrade -1
+
+.PHONY: db-revision
+db-revision: install ## Autogenerate a new migration. Usage: make db-revision MSG="add foo"
+	@test -n "$(MSG)" || (echo 'usage: make db-revision MSG="<short description>"' && exit 1)
+	cd restaurant_api && ../$(VENV)/bin/alembic revision --autogenerate -m "$(MSG)"
+
+.PHONY: db-current
+db-current: install ## Show current Alembic head + DB state
+	cd restaurant_api && ../$(VENV)/bin/alembic current
+
+.PHONY: db-check
+db-check: install ## Verify models match DB schema (no drift)
+	cd restaurant_api && ../$(VENV)/bin/alembic check
+
+.PHONY: db-smoke
+db-smoke: install ## End-to-end insert/select smoke against real DB
+	$(PY) scripts/smoke_db.py
+
 .PHONY: api
 api: install ## Run the FastAPI restaurant backend in dev mode (auto-reload)
 	$(VENV)/bin/uvicorn restaurant_api.main:app --reload --host 0.0.0.0 --port 8000
