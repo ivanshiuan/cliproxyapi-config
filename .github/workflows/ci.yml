@@ -22,6 +22,32 @@ jobs:
       matrix:
         python-version: ["3.12"]
 
+    # Real Postgres + pgvector so we can run migrations and DB smoke against
+    # the actual engine (catches SQL syntax / Alembic-autogen drift that
+    # mock-only tests miss).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: resto
+          POSTGRES_PASSWORD: resto_dev_password
+          POSTGRES_DB: resto_dev
+          TZ: Asia/Taipei
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      RESTO_DB_HOST: localhost
+      RESTO_DB_PORT: 5432
+      RESTO_DB_USER: resto
+      RESTO_DB_PASSWORD: resto_dev_password
+      RESTO_DB_NAME: resto_dev
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,10 +68,30 @@ jobs:
           pip install ruff
 
       - name: Lint (ruff check)
-        run: ruff check devswarm restaurant_api tests
+        run: ruff check devswarm restaurant_api tests scripts
 
-      - name: Run test suite (no API key needed)
+      - name: Initialise Postgres extensions
+        env:
+          PGPASSWORD: resto_dev_password
+        run: |
+          psql -h localhost -U resto -d resto_dev -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+          psql -h localhost -U resto -d resto_dev -c 'CREATE EXTENSION IF NOT EXISTS "citext";'
+          psql -h localhost -U resto -d resto_dev -c 'CREATE EXTENSION IF NOT EXISTS "pg_trgm";'
+          psql -h localhost -U resto -d resto_dev -c 'CREATE EXTENSION IF NOT EXISTS "vector";'
+
+      - name: Apply Alembic migrations
+        working-directory: restaurant_api
+        run: alembic upgrade head
+
+      - name: Verify migrations match models (no drift)
+        working-directory: restaurant_api
+        run: alembic check
+
+      - name: Run mock test suite (no API key needed)
         run: pytest tests/ -v --tb=short
+
+      - name: Run real-DB smoke
+        run: python scripts/smoke_db.py
 
       - name: Import smoke
         run: |

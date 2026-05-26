@@ -27,6 +27,11 @@ def _route_after_qa(state: SwarmState) -> Literal["heal", "done"]:
         return "done"
     if state.get("heal_iter", 0) >= state.get("max_heal_iters", 5):
         return "done"
+    # Budget guardrail: halt before the next Coder iteration if we'd cross
+    # the limit. cost_limit_usd of 0.0 means "unlimited".
+    limit = state.get("cost_limit_usd", 0.0)
+    if limit > 0 and state.get("cost_estimate_usd", 0.0) >= limit:
+        return "done"
     return "heal"
 
 

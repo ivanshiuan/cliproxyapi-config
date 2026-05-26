@@ -83,6 +83,12 @@ class Ingredient(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         Numeric(12, 4),
         nullable=True,
     )
+    # Food-safety: per-batch traceability. Populated on purchase; copied onto
+    # every stock_movement that consumes from this lot. Lets us answer
+    # "which orders used batch #PO-0512 of chicken?" during a 食安事件回溯.
+    lot_no: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # FIFO + 即期警示: nightly job flags ingredients within N days of expiring.
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -200,6 +206,11 @@ class StockMovement(TenantScopedMixin, Base):
         PG_UUID(as_uuid=True),
         nullable=True,
     )
+    # Food-safety: copied from the ingredient lot at the moment of consumption.
+    # Lets a food-poisoning investigation trace from a customer order back to
+    # the exact supplier batch — *without* having to join through ingredients
+    # (which can be edited; the ledger row cannot).
+    lot_no: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

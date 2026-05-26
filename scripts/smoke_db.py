@@ -22,7 +22,6 @@ from sqlalchemy import select
 from restaurant_api.database import dispose_engine, get_sessionmaker
 from restaurant_api.models import Employee, EmployeeRole, Store, Tenant
 
-
 _SLUG = "smoke-test-tenant"
 
 

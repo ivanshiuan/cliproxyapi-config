@@ -78,6 +78,11 @@ swarm: install ## Run a one-off task. Usage: make swarm REQ="Build me X"
 backlog: ## List all DevSwarm specs and run history
 	$(PY) scripts/backlog.py
 
+.PHONY: promote
+promote: install ## Promote workspace/<id>/ artifacts into restaurant_api. Usage: make promote TASK=abc12345
+	@test -n "$(TASK)" || (echo 'usage: make promote TASK=<task_id>' && exit 1)
+	$(PY) scripts/promote.py $(TASK)
+
 .PHONY: backlog-json
 backlog-json: ## Same as backlog, machine-readable JSON
 	$(PY) scripts/backlog.py --json

@@ -275,3 +275,68 @@ def test_max_heal_exhausted_terminates_with_failure(tmp_path: Path):
     assert final["heal_iter"] == 2  # exhausted limit
     assert final["qa_report"]["passed"] is False
     assert "root_cause" in final["qa_report"]
+
+
+def test_budget_guard_halts_before_max_heal(tmp_path: Path):
+    """A tight USD budget halts the graph before max_heal_iters even though
+    tests still fail. Status will read "budget halted", not "failed exhaustion"."""
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    ws = WorkspaceManager.create(workspace_root, "test04", "Build greet()")
+
+    qa_failure_json = (
+        '{"passed": false, "exit_code": 1, '
+        '"failed_tests": ["test_hello.py::test_greet_returns_hi"], '
+        '"root_cause": "broken", "fix_direction": "fix",'
+        ' "stdout_tail": "", "stderr_tail": ""}'
+    )
+
+    # Each LLM call we hand back claims very high token usage so cost
+    # explodes immediately: ~$2.25 per call, blowing the $0.05 budget
+    # after the very first Coder iteration finishes.
+    big_usage = _usage(in_=1_000_000, out=200_000, cc=600_000, cr=0)
+
+    scripted = [
+        # PM (cost should jump well past budget alone)
+        _response([_text_block("# PRD")], usage=big_usage),
+        # Architect (and again)
+        _response(
+            [_text_block("## Architecture Spec\nx\n## Security Constraints\n1. None.")],
+            usage=big_usage,
+        ),
+        # Coder iter 1 — broken code
+        _response(
+            [
+                _tool_use_block("write_file", {"path": "hello.py", "content": _FAIL_MODULE}, id_="t1"),
+                _tool_use_block("write_file", {"path": "test_hello.py", "content": _PASS_TEST}, id_="t2"),
+            ],
+            stop_reason="tool_use",
+            usage=big_usage,
+        ),
+        _response([_text_block("Wrote.")], stop_reason="end_turn", usage=big_usage),
+        # QA failure (Haiku call)
+        _response([_text_block(qa_failure_json)], usage=big_usage),
+        # No further calls expected — budget should halt the graph here.
+    ]
+    client = _make_mock_client(scripted)
+
+    cfg = load_config(workspace_root=workspace_root)
+    cfg = replace(cfg, max_retries=0, max_heal_iters=5)
+
+    app = build_graph(client, cfg)
+    seed = initial_state(
+        task_id="test04",
+        user_request="Build greet()",
+        workspace_path=str(ws.root),
+        max_heal_iters=cfg.max_heal_iters,
+        cost_limit_usd=0.05,  # < single-call cost, halt after first QA
+    )
+    final = app.invoke(seed, config={"recursion_limit": 32})
+
+    assert final["tests_passed"] is False
+    # Heal iter 1 happened (Coder ran once), then QA failed, then budget
+    # routing kicked in BEFORE coder ran a second time.
+    assert final["heal_iter"] == 1
+    assert final["cost_estimate_usd"] >= 0.05
+    # We should not have used the full 5 heal budget.
+    assert final["heal_iter"] < cfg.max_heal_iters

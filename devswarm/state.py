@@ -74,6 +74,10 @@ class SwarmState(TypedDict, total=False):
     heal_iter: int  # starts at 0, +1 each Coder pass
     max_heal_iters: int  # from config
 
+    # --- Cost guardrails ---
+    cost_limit_usd: float  # 0.0 = unlimited; else graph halts when exceeded
+    budget_exceeded: bool  # set by routing if cost_estimate_usd > cost_limit_usd
+
     # --- Telemetry (accumulating) ---
     messages: Annotated[list[TelemetryMsg], operator.add]
     cost_estimate_usd: float  # replaced each step with running total
@@ -84,8 +88,13 @@ def initial_state(
     user_request: str,
     workspace_path: str,
     max_heal_iters: int,
+    cost_limit_usd: float = 0.0,
 ) -> SwarmState:
-    """Construct the seed state injected at graph START."""
+    """Construct the seed state injected at graph START.
+
+    ``cost_limit_usd`` of 0.0 disables the budget guard; positive values
+    halt the graph as soon as accumulated cost exceeds the limit.
+    """
     return SwarmState(
         task_id=task_id,
         user_request=user_request,
@@ -98,6 +107,8 @@ def initial_state(
         tests_passed=False,
         heal_iter=0,
         max_heal_iters=max_heal_iters,
+        cost_limit_usd=cost_limit_usd,
+        budget_exceeded=False,
         messages=[],
         cost_estimate_usd=0.0,
     )

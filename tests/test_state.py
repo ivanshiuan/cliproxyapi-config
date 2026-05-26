@@ -23,6 +23,19 @@ def test_initial_state_has_required_keys():
     assert s["messages"] == []
     assert s["security_constraints"] == []
     assert s["cost_estimate_usd"] == 0.0
+    assert s["cost_limit_usd"] == 0.0  # default = unlimited
+    assert s["budget_exceeded"] is False
+
+
+def test_initial_state_with_budget():
+    s = initial_state(
+        task_id="b1",
+        user_request="x",
+        workspace_path="/tmp/b1",
+        max_heal_iters=5,
+        cost_limit_usd=2.50,
+    )
+    assert s["cost_limit_usd"] == 2.50
 
 
 def test_initial_state_defaults_are_independent():

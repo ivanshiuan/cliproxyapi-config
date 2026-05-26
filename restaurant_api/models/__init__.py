@@ -7,6 +7,7 @@ sub-modules.
 
 from __future__ import annotations
 
+from .audit import AuditLog
 from .base import (
     Base,
     Money,
@@ -15,13 +16,18 @@ from .base import (
     TimestampedMixin,
     uuid7,
 )
+from .cash import CashDrawerSession
 from .cost_events import StaffMealEvent, TastingEvent, WasteEvent
+from .customers import Customer, CustomerPointsLedger, CustomerTier
+from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
 from .menu import MenuCategory, MenuItem
 from .orders import (
     DiscountKind,
+    InvoiceMedia,
+    InvoiceStatus,
     Order,
     OrderDiscount,
     OrderLine,
@@ -57,6 +63,8 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "StockMovement",
     # orders
     "DiscountKind",
+    "InvoiceMedia",
+    "InvoiceStatus",
     "Order",
     "OrderDiscount",
     "OrderLine",
@@ -73,4 +81,15 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "LeaveType",
     "Shift",
     "TimeClock",
+    # cash drawer
+    "CashDrawerSession",
+    # audit trail
+    "AuditLog",
+    # customers / loyalty
+    "Customer",
+    "CustomerTier",
+    "CustomerPointsLedger",
+    # embeddings (AI data asset seed)
+    "Embedding",
+    "VECTOR_DIM",
 ]

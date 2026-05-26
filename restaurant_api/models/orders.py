@@ -39,6 +39,36 @@ class OrderStatus(enum.StrEnum):
     REFUNDED = "refunded"
 
 
+class InvoiceStatus(enum.StrEnum):
+    """Lifecycle of a Taiwan 統一發票 attached to this order.
+
+    ``pending``  — order finalised but no invoice issued yet (typical for
+                   walk-in cash sales that get a paper invoice at the end of
+                   the day).
+    ``issued``   — invoice number assigned & uploaded to 財政部 (cloud) or
+                   printed (paper).
+    ``voided``   — 作廢 within the same period.
+    ``allowance``— 折讓 (C0701) certificate issued for full/partial refund.
+    ``winner``   — drew a prize in the 統一發票對獎 lottery.
+    ``redeemed`` — prize claimed by the buyer (we tracked it back to them
+                   for marketing follow-up).
+    """
+
+    PENDING = "pending"
+    ISSUED = "issued"
+    VOIDED = "voided"
+    ALLOWANCE = "allowance"
+    WINNER = "winner"
+    REDEEMED = "redeemed"
+
+
+class InvoiceMedia(enum.StrEnum):
+    """雲端 vs 紙本 — affects when the invoice must be uploaded to MoF."""
+
+    CLOUD = "cloud"  # 雲端發票 — uploaded via API on issue
+    PAPER = "paper"  # 紙本 / 收銀機發票 — uploaded in monthly batch
+
+
 class DiscountKind(enum.StrEnum):
     """Closed set of discount kinds.
 
@@ -109,6 +139,19 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
 
     # 統一發票 fields — Taiwan-specific.
     invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    invoice_status: Mapped[InvoiceStatus | None] = mapped_column(
+        SQLEnum(InvoiceStatus, name="invoice_status", native_enum=False, length=16),
+        nullable=True,
+    )
+    invoice_media: Mapped[InvoiceMedia | None] = mapped_column(
+        SQLEnum(InvoiceMedia, name="invoice_media", native_enum=False, length=8),
+        nullable=True,
+    )
+    # If invoice gets voided/replaced, the OLD number lives here so we can
+    # cross-reference with MoF's records when reconciling.
+    void_invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 折讓單 C0701 number if a partial refund is processed against this order.
+    allowance_invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     carrier_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     carrier_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     buyer_tax_id: Mapped[str | None] = mapped_column(Text, nullable=True)

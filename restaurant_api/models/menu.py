@@ -6,6 +6,7 @@ import uuid
 from decimal import Decimal
 
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -90,6 +91,15 @@ class MenuItem(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     price: Mapped[Decimal] = mapped_column(Money, nullable=False)
     cost_estimate: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    # Allergen codes per Taiwan 消保法 (11 大過敏原): e.g.
+    # ["milk","egg","wheat","peanut","tree_nut","shellfish","fish","soy",
+    #  "sulfite","sesame","mango"]. Empty list = no declared allergens.
+    allergens: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default="[]",
+    )
     is_available: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,

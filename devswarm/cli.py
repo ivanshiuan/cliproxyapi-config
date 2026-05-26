@@ -63,6 +63,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Override the self-heal loop limit (default: 5 or DEVSWARM_MAX_HEAL_ITERS).",
     )
     p.add_argument(
+        "--budget",
+        type=float,
+        default=0.0,
+        metavar="USD",
+        help=(
+            "Hard USD ceiling. Graph halts before the next Coder iteration "
+            "once cumulative cost exceeds this. 0 = unlimited (default)."
+        ),
+    )
+    p.add_argument(
         "--workspace-root",
         type=Path,
         default=None,
@@ -133,10 +143,17 @@ def _print_final_summary(final_state: dict[str, Any], task_id: str, workspace_di
     passed = final_state.get("tests_passed", False)
     heal_iter = final_state.get("heal_iter", 0)
     cost = final_state.get("cost_estimate_usd", 0.0)
+    limit = final_state.get("cost_limit_usd", 0.0)
     artifacts = final_state.get("artifacts") or []
 
-    status_color = "green" if passed else "red"
-    status_text = "PASSED ✅" if passed else "FAILED ❌"
+    budget_halted = not passed and limit > 0 and cost >= limit
+
+    if passed:
+        status_color, status_text = "green", "PASSED ✅"
+    elif budget_halted:
+        status_color, status_text = "yellow", "BUDGET HALTED 💰"
+    else:
+        status_color, status_text = "red", "FAILED ❌"
 
     body = Table.grid(padding=(0, 1))
     body.add_column(style="bold")
@@ -145,7 +162,10 @@ def _print_final_summary(final_state: dict[str, Any], task_id: str, workspace_di
     body.add_row("task_id:", task_id)
     body.add_row("workspace:", str(workspace_dir))
     body.add_row("heal iterations used:", str(heal_iter))
-    body.add_row("total cost (est.):", f"${cost:.4f} USD")
+    cost_row = f"${cost:.4f} USD"
+    if limit > 0:
+        cost_row += f" (limit ${limit:.2f})"
+    body.add_row("total cost (est.):", cost_row)
     body.add_row("artifacts written:", str(len({a['path'] for a in artifacts})))
 
     console.print(Panel(body, title="DevSwarm run summary", border_style=status_color))
@@ -204,12 +224,14 @@ def main(argv: list[str] | None = None) -> int:
     cfg.workspace_root.mkdir(parents=True, exist_ok=True)
     ws = WorkspaceManager.create(cfg.workspace_root, task_id, request)
 
+    budget_display = f"USD ${args.budget:.2f}" if args.budget > 0 else "unlimited"
     console.print(Panel.fit(
         f"[bold]task_id:[/bold] {task_id}\n"
         f"[bold]workspace:[/bold] {ws.root}\n"
         f"[bold]models:[/bold] pm={cfg.model_pm} architect={cfg.model_architect} "
         f"coder={cfg.model_coder} qa={cfg.model_qa}\n"
-        f"[bold]max heal:[/bold] {cfg.max_heal_iters}",
+        f"[bold]max heal:[/bold] {cfg.max_heal_iters}    "
+        f"[bold]budget:[/bold] {budget_display}",
         title="DevSwarm starting",
         border_style="cyan",
     ))
@@ -222,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
         user_request=request,
         workspace_path=str(ws.root),
         max_heal_iters=cfg.max_heal_iters,
+        cost_limit_usd=max(0.0, args.budget),
     )
 
     if args.dry_run:
