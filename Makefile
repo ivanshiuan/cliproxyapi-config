@@ -74,6 +74,14 @@ swarm: install ## Run a one-off task. Usage: make swarm REQ="Build me X"
 	@test -n "$(REQ)" || (echo 'usage: make swarm REQ="<your task brief>"' && exit 1)
 	$(PY) -m devswarm "$(REQ)" --verbose
 
+.PHONY: backlog
+backlog: ## List all DevSwarm specs and run history
+	$(PY) scripts/backlog.py
+
+.PHONY: backlog-json
+backlog-json: ## Same as backlog, machine-readable JSON
+	$(PY) scripts/backlog.py --json
+
 # ----- restaurant backend (Phase 1) --------------------------------------
 
 .PHONY: db-up
