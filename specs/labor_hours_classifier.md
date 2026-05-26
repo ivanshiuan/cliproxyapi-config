@@ -204,13 +204,11 @@ def classify_hours(input: LaborInput) -> LaborBuckets:
 
 ## 9. Edge cases (must be enumerated in tests)
 
-- **跨午夜長班**：見 AC-11、AC-12。重要觀念：「12h 上限」是**單一 calendar day**上的限制，跨日的話兩段獨立各 ≤ 12h。
-- **整段在假日**：見 AC-7、AC-8。holiday bucket 不切 tier、不受 12h ceiling 約束（理由：勞基法 §39 對假日加班的時薪倍率單一；天數上限由排班違法性處理，不在工時分桶模組內）。
+- **跨午夜長班**：見 AC-11、AC-12。「12h 上限」是**單一 calendar day**上的限制，跨日兩段各自獨立 ≤ 12h。
+- **整段在假日**：見 AC-7、AC-8。holiday bucket 不切 tier、不受 12h ceiling 約束（勞基法 §39 對假日加班倍率單一）。
 - **跨日進入假日**：見 AC-10。段 A 按平日切分，段 B 整段歸 holiday。
-- **DST / tz 變更**：MVP 鎖定 `Asia/Taipei`（無 DST），不測 DST 邊界。Architect 若想預留，把日界線計算交給 `zoneinfo`，不要手算 ±8h。
-- **`clock_in` 與 `clock_out` 在不同 tz**：MVP 不支援；Pydantic 接受 tz-aware datetime（自動轉到 `input.tz` 做日界線計算）。
-- **時段精度**：跨午夜分段時，邊界點歸**段 B**（half-open `[midnight, ...]`），避免重複計算。
-- **>24h shift**：見 AC-18，拒絕。實務上 24h 工時本身就是違法，不需要本模組支援。
+- **DST / 跨 tz / >24h shift**：MVP 鎖定 `Asia/Taipei`（無 DST）；clock_in/out 在不同 tz 由 Pydantic 自動轉到 `input.tz`；>24h 拒絕（AC-18）。
+- **時段精度**：跨午夜邊界點歸**段 B**（half-open `[midnight, ...]`），避免重複計算。
 - **空 `public_holidays`**：合法；所有日子按平日切分。
 
 ---
@@ -294,11 +292,10 @@ COALESCE(tc.hours_regular,0)
 
 ## 14. 給 PM Agent 的提醒
 
-- **倍率不在本模組**：reviewer 看到「1.34x」「1.67x」「2.0x」在 brief 裡只是描述，**模組本身只回桶數**，不乘倍率。乘倍率是 caller 的責任。Coder 若把倍率寫進來，會跟薪資模組重複，月底結算對不上。
-- **`overtime_tier1_hours` / `overtime_tier2_hours` 命名要對齊 ORM**：直接用 `restaurant_api/models/hr.py` 的 `TimeClock` 命名，不要自己縮寫成 `ot1` / `ot2`。
-- **跨午夜 vs 12h 上限**：AC-11 / AC-12 是這個模組最容易誤實作的地方。Coder 直覺會寫「總時數 > 12 就拋」，但這對跨午夜長班是錯的（兩段獨立切）。請在 PR review 時針對這對 AC 寫評語。
-- **holiday-only 段不切 tier**：勞基法 §39 對國定假日的處理是「整日 2.0x」，跟平日加班的 1.34 / 1.67 帶是兩套系統。本模組刻意把 holiday 當成一個獨立桶，不切 tier、不受 12h 上限，是合規的簡化。違法的「假日上 16 小時」由排班 / 同意書層處理，不是工時分桶層。
-- **`Asia/Taipei` 無 DST 是事實**：MVP 鎖死 tz="Asia/Taipei"，不必擔心 DST。Coder 若想 future-proof，把日界線計算交給 `zoneinfo`，不要手算 ±8h。
-- **public_holidays list 由 caller 提供**：本模組不知道 2024 春節是哪幾天。可以建議 caller 用內政部公告的「政府行政機關辦公日曆表」做來源，但這在 out of scope。
+- **倍率不在本模組**：brief 裡的 1.34x / 1.67x / 2.0x 只是描述；本模組只回桶數，乘倍率是 caller 的責任。Coder 若把倍率寫進來會跟薪資模組重複，月底結算對不上。
+- **欄位命名對齊 ORM**：直接用 `restaurant_api/models/hr.py` 的 `TimeClock` 欄位名，不要縮寫成 `ot1` / `ot2`。
+- **跨午夜 vs 12h 上限**：AC-11 / AC-12 是最容易誤實作的點。Coder 直覺會寫「總時數 > 12 就拋」，但跨午夜長班兩段獨立各 ≤ 12h，PR review 必看。
+- **holiday-only 段不切 tier、不受 12h 上限**：勞基法 §39 對假日加班倍率單一；違法的「假日上 16 小時」由排班 / 同意書層處理，不在本模組範疇。
+- **public_holidays 由 caller 提供**：本模組不內建假日表；caller 建議用內政部公告的「政府行政機關辦公日曆表」。
 
 — end of brief —

@@ -151,26 +151,6 @@ def resolve_discounts(input: DiscountResolveInput) -> DiscountResolveOutput:
 
 折扣套用順序固定為以下 4 步驟。Architect 與 Coder **不得**重新解釋：
 
-### Step 1: percent + employee 折扣（依 input 順序，逐筆 compound）
-
-- `employee` 在計算上**完全等同 percent**（`value` 是 0..1 ratio）；分開 enum 只是審計用。
-- 多筆 percent / employee 在**同一步驟內**依出現順序**複利套用**（NOT 相加百分比）。
-- 例：subtotal=1000、percent(0.10)、percent(0.05) → 第一次後 900、第二次後 855，effective_twd 分別是 100 與 45。
-
-### Step 2: amount 折扣（依 input 順序，逐筆扣 TWD）
-
-- 對 step 1 結果 subtotal 逐筆扣 `value`。
-- amount 可以把 subtotal 扣成負（不 clamp）；後續 amount / allowance 繼續扣（同樣不 clamp）。
-
-### Step 3: allowance 折扣（依 input 順序，逐筆扣 TWD）
-
-- 行為與 amount 完全相同；分開只是為了 P&L 報表分類。
-- 同樣允許 subtotal 變負。
-
-### Step 4: comp + employee... 等等 — 修正：**comp 永遠最後一筆吃掉所有**
-
-修正最終定義（覆蓋上面）：
-
 | Step | Kind | 套用順序 | 行為 |
 |---|---|---|---|
 | 1 | `percent` | input order | 對當前 running subtotal 複利套用 ratio |
