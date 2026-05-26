@@ -10,15 +10,15 @@ Token-floor targets (per Anthropic caching minimums):
 - QA_SYSTEM                                  : >= 2048 tokens (Haiku 4.5 floor)
 """
 
-from .pm import PM_SYSTEM
 from .architect import ARCHITECT_SYSTEM
-from .coder import CODER_SYSTEM, CODER_HEAL_USER_TEMPLATE
+from .coder import CODER_HEAL_USER_TEMPLATE, CODER_SYSTEM
+from .pm import PM_SYSTEM
 from .qa import QA_SYSTEM
 
 __all__ = [
-    "PM_SYSTEM",
     "ARCHITECT_SYSTEM",
-    "CODER_SYSTEM",
     "CODER_HEAL_USER_TEMPLATE",
+    "CODER_SYSTEM",
+    "PM_SYSTEM",
     "QA_SYSTEM",
 ]

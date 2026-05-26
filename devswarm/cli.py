@@ -229,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
         from .nodes import architect_node, pm_node
 
         s: dict[str, Any] = dict(seed)
-        for fn, label in [(pm_node, "pm"), (architect_node, "architect")]:
+        for fn, _label in [(pm_node, "pm"), (architect_node, "architect")]:
             delta = fn(s, client=client, cfg=cfg)  # type: ignore[arg-type]
             for k, v in delta.items():
                 if k == "messages":

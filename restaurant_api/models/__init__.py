@@ -32,7 +32,7 @@ from .orders import (
 from .stores import Store
 from .tenants import Tenant
 
-__all__ = [
+__all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readability
     # base / shared
     "Base",
     "Money",

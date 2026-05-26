@@ -89,7 +89,7 @@ def test_money_columns_are_numeric_14_4():
     """Spot-check: revenue-critical columns must use the Money type (Numeric(14,4))."""
     from sqlalchemy import Numeric
 
-    from restaurant_api.models import OrderLine, MenuItem, WasteEvent
+    from restaurant_api.models import MenuItem, OrderLine, WasteEvent
 
     def is_money(col):
         t = col.type

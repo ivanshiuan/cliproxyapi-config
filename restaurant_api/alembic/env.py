@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import all ORM models so Alembic's autogenerate sees their metadata.
 from restaurant_api.config import get_settings
-from restaurant_api.models import Base  # noqa: F401 — re-exports register every table
+from restaurant_api.models import Base
 
 config = context.config
 

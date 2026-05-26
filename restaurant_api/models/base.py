@@ -22,14 +22,13 @@ import os
 import time
 import uuid
 from datetime import datetime
-from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 if TYPE_CHECKING:
-    from .tenants import Tenant
+    pass
 
 
 # ---------------------------------------------------------------------------

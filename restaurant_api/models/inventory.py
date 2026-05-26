@@ -11,7 +11,6 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     Numeric,
@@ -19,6 +18,9 @@ from sqlalchemy import (
     Text,
     func,
     text,
+)
+from sqlalchemy import (
+    Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column

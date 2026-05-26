@@ -7,7 +7,7 @@ Each task gets `workspace/<task_id>/`. All writes from the Coder agent go throug
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -33,7 +33,7 @@ class WorkspaceManager:
         manifest = {
             "task_id": task_id,
             "user_request": user_request,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         (root / "task.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
         return cls(root)

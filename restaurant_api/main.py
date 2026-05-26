@@ -53,7 +53,6 @@ async def health() -> dict[str, object]:
         status_ok = False
         db = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-    from fastapi import Response
     from fastapi.responses import JSONResponse
 
     payload = {

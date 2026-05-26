@@ -10,13 +10,14 @@ from decimal import Decimal
 from sqlalchemy import (
     Date,
     DateTime,
-    Enum as SQLEnum,
     ForeignKey,
     Index,
     Numeric,
-    String,
     Text,
     func,
+)
+from sqlalchemy import (
+    Enum as SQLEnum,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship

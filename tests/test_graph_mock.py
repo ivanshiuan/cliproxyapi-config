@@ -25,7 +25,6 @@ from devswarm.graph import build_graph
 from devswarm.state import initial_state
 from devswarm.workspace import WorkspaceManager
 
-
 # ──────────────────────────────────────────────────────────────────────────
 # Fake-response builders
 # ──────────────────────────────────────────────────────────────────────────
@@ -251,11 +250,12 @@ def test_max_heal_exhausted_terminates_with_failure(tmp_path: Path):
             _response([_text_block(qa_failure_json)]),
         ]
 
-    scripted = (
-        [_response([_text_block("# PRD")]), _response([_text_block("## Architecture\n## Security Constraints\n1. None.")])]
-        + fail_cycle()
-        + fail_cycle()
-    )
+    scripted = [
+        _response([_text_block("# PRD")]),
+        _response([_text_block("## Architecture\n## Security Constraints\n1. None.")]),
+        *fail_cycle(),
+        *fail_cycle(),
+    ]
     client = _make_mock_client(scripted)
 
     cfg = load_config(workspace_root=workspace_root)

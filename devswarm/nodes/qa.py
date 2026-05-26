@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Config
-from ..llm import Usage, call as llm_call
+from ..llm import Usage
+from ..llm import call as llm_call
 from ..prompts import QA_SYSTEM
 from ..sandbox import run_pytest
 from ..state import QAReport, SwarmState

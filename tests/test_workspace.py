@@ -22,7 +22,7 @@ def test_create_writes_manifest(tmp_path: Path):
 def test_write_and_read_roundtrip(tmp_path: Path):
     ws = WorkspaceManager.create(tmp_path, "task02", "X")
     n = ws.write("hello.py", "print('hi')\n")
-    assert n == len("print('hi')\n".encode("utf-8"))
+    assert n == len(b"print('hi')\n")
     assert ws.read("hello.py") == "print('hi')\n"
 
 

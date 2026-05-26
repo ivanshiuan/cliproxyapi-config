@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
+
+      - name: Install package + dev deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install ruff
+
+      - name: Lint (ruff check)
+        run: ruff check devswarm restaurant_api tests
+
+      - name: Run test suite (no API key needed)
+        run: pytest tests/ -v --tb=short
+
+      - name: Import smoke
+        run: |
+          python -c "from devswarm.graph import build_graph; print('DevSwarm OK')"
+          python -c "from restaurant_api.main import app; print('Restaurant API OK')"
+          python -c "from restaurant_api.models import Base; print('Tables:', len(Base.metadata.tables))"
