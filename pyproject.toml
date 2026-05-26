@@ -1,0 +1,51 @@
+[project]
+name = "devswarm"
+version = "0.1.0"
+description = "LangGraph-based AI agent swarm — the factory that builds the Taiwan restaurant SaaS"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Proprietary" }
+authors = [{ name = "Commander" }]
+
+dependencies = [
+    "anthropic>=0.40.0,<1.0",
+    "langgraph>=0.2.50,<1.0",
+    "pydantic>=2.5,<3.0",
+    "python-dotenv>=1.0,<2.0",
+    "rich>=13.7,<15.0",
+    "pytest>=8.0,<9.0",
+]
+
+[project.scripts]
+devswarm = "devswarm.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["devswarm*"]
+exclude = ["tests*", "workspace*", "docs*", "specs*"]
+
+# ──────────────────────────────────────────────────────────────────────────
+# Tooling
+# ──────────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q --tb=short --strict-markers"
+markers = [
+    "integration: requires ANTHROPIC_API_KEY and network",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.format]
+quote-style = "double"

@@ -1,0 +1,98 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Secrets — NEVER commit
+# ──────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+.anthropic_api_key
+
+# ──────────────────────────────────────────────────────────────────────────
+# DevSwarm workspaces — agent-generated artifacts, ephemeral
+# ──────────────────────────────────────────────────────────────────────────
+workspace/
+.swarm_state/
+*.swarm.log
+
+# ──────────────────────────────────────────────────────────────────────────
+# Python
+# ──────────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.cache/
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# uv / poetry
+.uv/
+poetry.lock.bak
+.pdm-python
+
+# ──────────────────────────────────────────────────────────────────────────
+# Node / Next.js (for future restaurant frontend)
+# ──────────────────────────────────────────────────────────────────────────
+node_modules/
+.next/
+out/
+.turbo/
+.pnp.*
+.yarn/cache
+.yarn/install-state.gz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ──────────────────────────────────────────────────────────────────────────
+# Database / migrations runtime
+# ──────────────────────────────────────────────────────────────────────────
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+postgres-data/
+
+# ──────────────────────────────────────────────────────────────────────────
+# IDE / OS
+# ──────────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+!.vscode/settings.json.example
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ──────────────────────────────────────────────────────────────────────────
+# Logs / temp
+# ──────────────────────────────────────────────────────────────────────────
+*.log
+logs/
+tmp/
+.tmp/
