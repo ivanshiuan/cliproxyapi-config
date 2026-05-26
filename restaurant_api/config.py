@@ -1,0 +1,79 @@
+"""Restaurant API settings — Pydantic Settings v2 binding.
+
+All settings read from environment (and `.env` if present, loaded by FastAPI lifespan).
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="RESTO_",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    # ─── App ────────────────────────────────────────────────────────────
+    env: str = "dev"  # dev | staging | prod
+    debug: bool = False
+    app_name: str = "Restaurant API"
+
+    # ─── Database ───────────────────────────────────────────────────────
+    db_host: str = "localhost"
+    db_port: int = 5432
+    db_user: str = "resto"
+    db_password: str = "resto_dev_password"
+    db_name: str = "resto_dev"
+    db_echo: bool = False  # log SQL when True
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+
+    # ─── Redis ──────────────────────────────────────────────────────────
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+
+    # ─── Multi-tenancy ──────────────────────────────────────────────────
+    # When False (MVP), every request uses the same tenant. When True, the
+    # tenant_id is resolved from JWT/header and applied via Postgres RLS.
+    multi_tenant_enabled: bool = False
+    default_tenant_id: str = "00000000-0000-0000-0000-000000000000"
+
+    # ─── Locale ─────────────────────────────────────────────────────────
+    default_timezone: str = "Asia/Taipei"
+    default_currency: str = "TWD"
+
+    # ─── Logging ────────────────────────────────────────────────────────
+    log_level: str = Field(default="INFO", pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
+
+    @property
+    def database_url(self) -> str:
+        """asyncpg DSN."""
+        return (
+            f"postgresql+asyncpg://{self.db_user}:{self.db_password}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
+
+    @property
+    def database_url_sync(self) -> str:
+        """Sync DSN for Alembic migrations (psycopg or asyncpg-with-sync-driver).
+
+        We standardize on psycopg2-style URL because Alembic's `run_migrations_online`
+        helper expects a sync engine. The `+psycopg` driver is in alembic env.py.
+        """
+        return (
+            f"postgresql+psycopg://{self.db_user}:{self.db_password}"
+            f"@{self.db_host}:{self.db_port}/{self.db_name}"
+        )
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()

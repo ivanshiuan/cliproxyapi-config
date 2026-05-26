@@ -1,0 +1,43 @@
+# Dev-only Postgres 16 + Redis 7 for the restaurant API.
+# Production deploys use managed services (RDS / Cloud SQL / Supabase).
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: resto-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${RESTO_DB_USER:-resto}
+      POSTGRES_PASSWORD: ${RESTO_DB_PASSWORD:-resto_dev_password}
+      POSTGRES_DB: ${RESTO_DB_NAME:-resto_dev}
+      TZ: Asia/Taipei
+      PGTZ: Asia/Taipei
+    ports:
+      - "${RESTO_DB_PORT:-5432}:5432"
+    volumes:
+      - resto_pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RESTO_DB_USER:-resto} -d ${RESTO_DB_NAME:-resto_dev}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: resto-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "${RESTO_REDIS_PORT:-6379}:6379"
+    volumes:
+      - resto_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  resto_pgdata:
+  resto_redisdata:
