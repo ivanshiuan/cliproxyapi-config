@@ -15,6 +15,7 @@ dependencies = [
     "python-dotenv>=1.0,<2.0",
     "rich>=13.7,<15.0",
     "pytest>=8.0,<9.0",
+    "pytest-asyncio>=0.24,<1.0",
     # Restaurant API (Phase 1)
     "fastapi>=0.115,<1.0",
     "uvicorn[standard]>=0.32,<1.0",
@@ -46,8 +47,11 @@ exclude = ["tests*", "workspace*", "docs*", "specs*"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q --tb=short --strict-markers"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "integration: requires ANTHROPIC_API_KEY and network",
+    "needs_db: requires a reachable Postgres at RESTO_DB_*",
 ]
 
 [tool.ruff]
