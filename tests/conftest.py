@@ -12,8 +12,6 @@ Skip strategy:
 
 from __future__ import annotations
 
-import asyncio
-import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from datetime import date
@@ -29,7 +27,6 @@ from restaurant_api.integrations.line import StubLineMessenger
 from restaurant_api.integrations.line.messenger import reset_messenger
 from restaurant_api.main import app
 from restaurant_api.models import (
-    Base,
     Employee,
     EmployeeRole,
     Ingredient,
@@ -39,7 +36,6 @@ from restaurant_api.models import (
     Store,
     Tenant,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────────
 # Detect DB availability — skip router tests cleanly when no Postgres around
@@ -71,14 +67,21 @@ needs_db = pytest.mark.skipif(
 # ──────────────────────────────────────────────────────────────────────────
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def _engine() -> AsyncIterator:
+    """Function-scoped engine — pytest-asyncio 1.x rejects session-scoped
+    async fixtures unless they explicitly declare ``loop_scope="session"``.
+    Engine creation is cheap relative to the savepoint round-trip, so
+    per-test scope keeps things simple and isolated.
+    """
     if not _DB_AVAILABLE:
         pytest.skip("Postgres not reachable")
     settings = get_settings()
     engine = create_async_engine(settings.database_url, echo=False, future=True)
-    yield engine
-    await engine.dispose()
+    try:
+        yield engine
+    finally:
+        await engine.dispose()
 
 
 @pytest_asyncio.fixture
@@ -97,8 +100,13 @@ async def db_session(_engine) -> AsyncIterator[AsyncSession]:
 
 @pytest_asyncio.fixture
 async def client(db_session: AsyncSession) -> AsyncIterator[Any]:
-    """FastAPI TestClient with get_db overridden to the rolled-back session."""
-    from fastapi.testclient import TestClient
+    """``httpx.AsyncClient`` over ``ASGITransport`` so HTTP requests and the
+    DB session share one event loop. The sync ``TestClient`` runs the app
+    on anyio's blocking portal (different loop), which causes asyncpg
+    futures to be attached to the wrong loop — symptom: "got Future
+    attached to a different loop".
+    """
+    import httpx
 
     from restaurant_api.api.deps import get_db
 
@@ -106,7 +114,8 @@ async def client(db_session: AsyncSession) -> AsyncIterator[Any]:
         yield db_session
 
     app.dependency_overrides[get_db] = _override
-    with TestClient(app) as c:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
 

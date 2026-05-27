@@ -14,8 +14,13 @@ from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .api.errors import DomainError, domain_error_handler
 from .config import get_settings
 from .database import dispose_engine, ping_db
+from .routers import clock as clock_router
+from .routers import events as events_router
+from .routers import orders as orders_router
+from .routers import stock as stock_router
 
 logger = logging.getLogger("restaurant_api")
 
@@ -35,6 +40,25 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+# Domain-error → JSON envelope handler (single shape for every 4xx/5xx).
+app.add_exception_handler(DomainError, domain_error_handler)  # type: ignore[arg-type]
+
+
+# Mount routers. Each router module's tests also self-mount with a guard,
+# so the import order doesn't matter — mounting here is the "real prod"
+# wiring; the in-test self-mount becomes a no-op once we're already here.
+def _mount_router(module, prefix_hint: str) -> None:
+    """Idempotent include_router — skip if any route under prefix already exists."""
+    if any(getattr(r, "path", "").startswith(prefix_hint) for r in app.routes):
+        return
+    app.include_router(module.router)
+
+
+_mount_router(orders_router, "/orders")
+_mount_router(stock_router, "/stock")
+_mount_router(clock_router, "/clock")
+_mount_router(events_router, "/events")
 
 
 @app.get("/version", tags=["meta"])
