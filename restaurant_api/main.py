@@ -10,7 +10,8 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from fastapi.responses import JSONResponse
 
 from . import __version__
 from .config import get_settings
@@ -43,7 +44,7 @@ async def version() -> dict[str, str]:
 
 
 @app.get("/health", tags=["meta"])
-async def health() -> dict[str, object]:
+async def health() -> Response:
     """Liveness + DB ping. Returns 200 on full health, 503 if DB unreachable."""
     db: dict[str, object]
     status_ok = True
@@ -53,17 +54,13 @@ async def health() -> dict[str, object]:
         status_ok = False
         db = {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
-    from fastapi.responses import JSONResponse
-
-    payload = {
+    payload: dict[str, object] = {
         "status": "ok" if status_ok else "degraded",
         "service": "restaurant_api",
         "version": __version__,
         "checks": {"database": db},
     }
-    if not status_ok:
-        return JSONResponse(payload, status_code=503)
-    return payload
+    return JSONResponse(payload, status_code=200 if status_ok else 503)
 
 
 @app.get("/", tags=["meta"])

@@ -52,7 +52,12 @@ test-fast: ## Run tests assuming env is already set up
 
 .PHONY: lint
 lint: install ## Lint with ruff (read-only)
-	$(VENV)/bin/python -m ruff check devswarm tests
+	$(VENV)/bin/python -m ruff check devswarm restaurant_api tests scripts
+
+.PHONY: typecheck
+typecheck: install ## Run pyright type checker
+	$(VENV)/bin/pip install --quiet pyright
+	$(VENV)/bin/pyright
 
 .PHONY: fmt
 fmt: install ## Format with ruff

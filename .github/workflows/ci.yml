@@ -65,10 +65,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install ruff
+          pip install ruff pyright
 
       - name: Lint (ruff check)
         run: ruff check devswarm restaurant_api tests scripts
+
+      - name: Type check (pyright)
+        run: pyright
 
       - name: Initialise Postgres extensions
         env:

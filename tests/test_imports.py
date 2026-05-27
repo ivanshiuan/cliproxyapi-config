@@ -86,3 +86,18 @@ def test_heal_template_formats_without_error():
         file_tree="  a.py",
     )
     assert "Iteration 1 of 5" in result
+
+
+def test_prompt_versions_registered_for_all_four_roles():
+    """E7: every role must have a version string so telemetry can pin it."""
+    from devswarm.prompts import PROMPT_VERSIONS, get_version
+
+    assert set(PROMPT_VERSIONS) == {"pm", "architect", "coder", "qa"}
+    for role in ("pm", "architect", "coder", "qa"):
+        assert get_version(role)  # non-empty
+
+
+def test_get_version_unknown_role_returns_zero():
+    from devswarm.prompts import get_version
+
+    assert get_version("nonexistent") == "0.0.0"

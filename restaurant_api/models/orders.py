@@ -69,6 +69,31 @@ class InvoiceMedia(enum.StrEnum):
     PAPER = "paper"  # 紙本 / 收銀機發票 — uploaded in monthly batch
 
 
+class KitchenStation(enum.StrEnum):
+    """Where this order line gets prepared. Drives KDS routing."""
+
+    KITCHEN = "kitchen"  # 主廚房 — hot dishes
+    BAR = "bar"  # 飲料吧 — drinks, cocktails
+    DESSERT = "dessert"  # 甜點 / cold prep
+    COUNTER = "counter"  # 外帶 / 收銀 prep (no kitchen required)
+
+
+class KitchenStatus(enum.StrEnum):
+    """KDS lifecycle of a single order line.
+
+    Transitions:
+        queued → cooking → ready → served
+        ↓
+        cancelled (any time before ``served``)
+    """
+
+    QUEUED = "queued"  # entered KDS, awaiting cook
+    COOKING = "cooking"  # cook acknowledged + started
+    READY = "ready"  # plated, waiting for runner
+    SERVED = "served"  # delivered to table / counter
+    CANCELLED = "cancelled"  # voided before service
+
+
 class DiscountKind(enum.StrEnum):
     """Closed set of discount kinds.
 
@@ -218,6 +243,35 @@ class OrderLine(TenantScopedMixin, Base):
     line_total: Mapped[Decimal] = mapped_column(Money, nullable=False)
     cogs_actual: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
     cogs_theoretical: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
+    # ─── KDS (kitchen display system) routing & status ───
+    # Nullable to support legacy / counter-only orders that never reached
+    # the kitchen. When set, the KDS surface picks the line up.
+    kitchen_station: Mapped[KitchenStation | None] = mapped_column(
+        SQLEnum(KitchenStation, name="kitchen_station", native_enum=False, length=16),
+        nullable=True,
+    )
+    kitchen_status: Mapped[KitchenStatus | None] = mapped_column(
+        SQLEnum(KitchenStatus, name="kitchen_status", native_enum=False, length=16),
+        nullable=True,
+    )
+    # Timestamps for kitchen latency analytics. NULL when the corresponding
+    # transition hasn't happened (or wasn't routed through KDS at all).
+    sent_to_kitchen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    cooking_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    ready_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    served_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -232,6 +286,16 @@ class OrderLine(TenantScopedMixin, Base):
     )
 
     order: Mapped[Order] = relationship(back_populates="lines")
+
+    __table_args__ = (
+        # KDS queue scans: "what's queued at the kitchen station, oldest first?"
+        Index(
+            "ix_order_lines_kitchen_queue",
+            "kitchen_station",
+            "kitchen_status",
+            "sent_to_kitchen_at",
+        ),
+    )
 
 
 class OrderDiscount(TenantScopedMixin, Base):

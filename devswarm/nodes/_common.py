@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 
 from ..llm import Usage
+from ..prompts import get_version
 from ..state import TelemetryMsg
 
 
@@ -39,6 +40,7 @@ def build_telemetry(
     return TelemetryMsg(
         node=node,
         role=role,
+        prompt_version=get_version(role),
         ts=now_iso(),
         summary=summary,
         tokens_in=usage.input_tokens,

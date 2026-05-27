@@ -28,12 +28,20 @@ from .orders import (
     DiscountKind,
     InvoiceMedia,
     InvoiceStatus,
+    KitchenStation,
+    KitchenStatus,
     Order,
     OrderDiscount,
     OrderLine,
     OrderPayment,
     OrderStatus,
     PaymentMethod,
+)
+from .reservations import (
+    QueueStatus,
+    Reservation,
+    ReservationStatus,
+    WalkInQueueEntry,
 )
 from .stores import Store
 from .tenants import Tenant
@@ -65,12 +73,19 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "DiscountKind",
     "InvoiceMedia",
     "InvoiceStatus",
+    "KitchenStation",
+    "KitchenStatus",
     "Order",
     "OrderDiscount",
     "OrderLine",
     "OrderPayment",
     "OrderStatus",
     "PaymentMethod",
+    # reservations / queue
+    "QueueStatus",
+    "Reservation",
+    "ReservationStatus",
+    "WalkInQueueEntry",
     # cost events
     "StaffMealEvent",
     "TastingEvent",

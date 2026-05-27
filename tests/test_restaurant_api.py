@@ -56,12 +56,8 @@ def test_health_endpoint_db_down():
     assert body["checks"]["database"]["ok"] is False
 
 
-def test_models_metadata_has_23_tables():
-    """18 Phase-1 core tables + 5 Phase-1 closed-loop additions = 23 total.
-
-    Closed-loop additions: audit_log, cash_drawer_sessions, customers,
-    customer_points_ledger, embeddings.
-    """
+def test_models_metadata_has_25_tables():
+    """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) = 25 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -90,10 +86,13 @@ def test_models_metadata_has_23_tables():
         "customers",
         "customer_points_ledger",
         "embeddings",
+        # Reservation + queue (2)
+        "reservations",
+        "walk_in_queue",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 23
+    assert len(Base.metadata.tables) == 25
 
 
 def test_money_columns_are_numeric_14_4():
@@ -156,3 +155,51 @@ def test_stock_movement_has_lot_no():
     from restaurant_api.models import StockMovement
 
     assert "lot_no" in StockMovement.__table__.c
+
+
+def test_kitchen_station_and_status_enums():
+    """KDS routing + lifecycle enums must cover the 4 stations and 5 states."""
+    from restaurant_api.models import KitchenStation, KitchenStatus
+
+    assert {v.value for v in KitchenStation} == {"kitchen", "bar", "dessert", "counter"}
+    assert {v.value for v in KitchenStatus} == {
+        "queued",
+        "cooking",
+        "ready",
+        "served",
+        "cancelled",
+    }
+
+
+def test_order_line_has_kds_fields():
+    from restaurant_api.models import OrderLine
+
+    cols = OrderLine.__table__.c
+    for f in (
+        "kitchen_station",
+        "kitchen_status",
+        "sent_to_kitchen_at",
+        "cooking_started_at",
+        "ready_at",
+        "served_at",
+    ):
+        assert f in cols, f"OrderLine missing KDS field: {f}"
+
+
+def test_reservation_lifecycle_enum():
+    from restaurant_api.models import ReservationStatus
+
+    assert {v.value for v in ReservationStatus} == {
+        "booked",
+        "confirmed",
+        "seated",
+        "completed",
+        "no_show",
+        "cancelled",
+    }
+
+
+def test_walk_in_queue_lifecycle_enum():
+    from restaurant_api.models import QueueStatus
+
+    assert {v.value for v in QueueStatus} == {"waiting", "called", "seated", "abandoned"}

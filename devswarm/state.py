@@ -32,11 +32,12 @@ class QAReport(TypedDict):
     fix_direction: str  # concrete next-step suggestion
 
 
-class TelemetryMsg(TypedDict):
+class TelemetryMsg(TypedDict, total=False):
     """One log line per node invocation. Aggregated for CLI display and post-mortem."""
 
     node: str
     role: str  # "pm" | "architect" | "coder" | "qa"
+    prompt_version: str  # which system-prompt revision produced this turn
     ts: str  # ISO-8601 UTC
     summary: str
     tokens_in: int
