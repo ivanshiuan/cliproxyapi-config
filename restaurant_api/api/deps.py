@@ -20,9 +20,22 @@ from ..integrations.line import get_messenger as _get_messenger
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """Re-exported under a router-friendly name."""
+    """Async DB session with commit-on-success / rollback-on-error.
+
+    Services only ``flush()`` (so they can use the returned PK before commit);
+    the request-level transaction boundary lives here. If the handler
+    returns successfully, we commit; if it raised, we roll back.
+    Tests override this with the savepoint-rolled-back fixture so this
+    commit never reaches the DB during pytest.
+    """
     async for session in _get_session():
-        yield session
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
+        else:
+            await session.commit()
 
 
 def get_line_messenger() -> LineMessenger:

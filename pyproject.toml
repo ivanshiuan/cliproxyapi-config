@@ -53,6 +53,15 @@ markers = [
     "integration: requires ANTHROPIC_API_KEY and network",
     "needs_db: requires a reachable Postgres at RESTO_DB_*",
 ]
+filterwarnings = [
+    # LangChain's serializer plugin emits a pending-deprecation on import.
+    # Not our code; harmless until LangGraph 1.0.
+    "ignore::DeprecationWarning:langgraph.cache.base",
+    "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
+    # Starlette renamed HTTP_422_UNPROCESSABLE_ENTITY → ..._CONTENT in 0.40.
+    # We use the literal 422 constant; this filter just keeps the test output clean.
+    "ignore:.*HTTP_422_UNPROCESSABLE_ENTITY.*:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100
@@ -61,6 +70,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.per-file-ignores]
+# Demo + seed scripts deliberately use 中文標點 in user-facing prints.
+"scripts/demo_flow.py" = ["RUF001"]
+"scripts/seed_demo_data.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"

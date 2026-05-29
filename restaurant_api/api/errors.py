@@ -63,7 +63,9 @@ class ConflictError(DomainError):
 
 class ValidationError(DomainError):
     code = "VALIDATION_ERROR"
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    # Starlette deprecated HTTP_422_UNPROCESSABLE_ENTITY in favour of the RFC
+    # 9110 spelling. Hard-coded so this module doesn't break if the alias goes.
+    status_code = 422
 
 
 # ──────────────────────────────────────────────────────────────────────────

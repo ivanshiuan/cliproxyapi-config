@@ -131,6 +131,33 @@ db-check: install ## Verify models match DB schema (no drift)
 db-smoke: install ## End-to-end insert/select smoke against real DB
 	$(PY) scripts/smoke_db.py
 
+.PHONY: db-truncate
+db-truncate: ## Wipe all rows (DB owner only; bypasses ledger append-only rules)
+	PGPASSWORD=$$RESTO_DB_PASSWORD psql -h $$RESTO_DB_HOST -U $$RESTO_DB_USER -d $$RESTO_DB_NAME -c \
+		"TRUNCATE TABLE order_payments, order_discounts, order_lines, orders, waste_events, staff_meal_events, tasting_events, time_clocks, shifts, leave_requests, customer_points_ledger, customers, stock_movements, recipes, menu_items, menu_categories, ingredients, cash_drawer_sessions, audit_log, employees, stores, tenants CASCADE;"
+
+.PHONY: seed
+seed: install ## Seed demo restaurant data (1 tenant, 1 store, 5 employees, 12 menu items, 3 customers)
+	$(PY) scripts/seed_demo_data.py
+
+.PHONY: seed-reset
+seed-reset: install ## Wipe seed tenant first, then seed fresh
+	$(PY) scripts/seed_demo_data.py --reset
+
+.PHONY: demo-flow
+demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳→報廢→員工餐→下班→彙總)
+	$(PY) scripts/demo_flow.py
+
+.PHONY: full-check
+full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smoke + migration drift
+	$(VENV)/bin/ruff check devswarm restaurant_api tests scripts
+	$(VENV)/bin/pyright
+	$(PYTEST) tests/
+	cd restaurant_api && ../$(VENV)/bin/alembic check
+	$(PY) scripts/smoke_db.py
+	@echo
+	@echo "✅ Full quality gate green."
+
 .PHONY: api
 api: install ## Run the FastAPI restaurant backend in dev mode (auto-reload)
 	$(VENV)/bin/uvicorn restaurant_api.main:app --reload --host 0.0.0.0 --port 8000
