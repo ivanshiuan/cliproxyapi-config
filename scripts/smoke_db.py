@@ -70,18 +70,16 @@ async def main() -> int:
             print(f"  · tenant already exists: {existing.id} (idempotent)")
 
         # Read-back assertions
-        tenant = (
-            await session.execute(select(Tenant).where(Tenant.slug == _SLUG))
-        ).scalar_one()
+        tenant = (await session.execute(select(Tenant).where(Tenant.slug == _SLUG))).scalar_one()
         store_count = len(
-            (
-                await session.execute(select(Store).where(Store.tenant_id == tenant.id))
-            ).scalars().all()
+            (await session.execute(select(Store).where(Store.tenant_id == tenant.id)))
+            .scalars()
+            .all()
         )
         emp_count = len(
-            (
-                await session.execute(select(Employee).where(Employee.tenant_id == tenant.id))
-            ).scalars().all()
+            (await session.execute(select(Employee).where(Employee.tenant_id == tenant.id)))
+            .scalars()
+            .all()
         )
 
         print()

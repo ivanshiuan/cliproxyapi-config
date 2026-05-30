@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make help:*)",
+      "Bash(make status:*)",
+      "Bash(make backlog:*)",
+      "Bash(make backlog-json:*)",
+      "Bash(make test:*)",
+      "Bash(make test-fast:*)",
+      "Bash(make lint:*)",
+      "Bash(make typecheck:*)",
+      "Bash(make seed:*)",
+      "Bash(make db-smoke:*)",
+      "Bash(make db-current:*)",
+      "Bash(make db-check:*)",
+      "Bash(make demo-flow:*)",
+      "Bash(make full-check:*)",
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(.venv/bin/ruff:*)",
+      "Bash(.venv/bin/pyright:*)",
+      "Bash(.venv/bin/python:*)",
+      "Bash(.venv/bin/alembic:*)",
+      "Bash(.venv/bin/uvicorn:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git show:*)",
+      "Bash(git remote:*)",
+      "Bash(pg_isready:*)",
+      "Bash(psql:* -c SELECT*)",
+      "Bash(psql:* -c \\dt*)",
+      "Bash(psql:* -c \\d *)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(jq:*)",
+      "Bash(test:*)",
+      "Read",
+      "Glob",
+      "Grep"
+    ],
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(git rebase:*)",
+      "Bash(git merge:*)",
+      "Bash(make db-truncate:*)",
+      "Bash(rm:*)",
+      "Bash(sudo:*)",
+      "Bash(.venv/bin/python -m devswarm:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // .tool_response.filePath // empty' | { read -r f; [[ \"$f\" == *.py ]] && /home/user/cliproxyapi-config/.venv/bin/ruff format \"$f\" >/dev/null 2>&1; } || true"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sudo service postgresql start >/dev/null 2>&1 || true; pg_isready >/dev/null 2>&1 && echo '✅ PG up' || echo '⚠️ PG down — run: sudo service postgresql start'; grep -q 'ANTHROPIC_API_KEY=sk-' /home/user/cliproxyapi-config/.env 2>/dev/null && echo '✅ API key set' || echo '⚠️ ANTHROPIC_API_KEY missing — DevSwarm unavailable until you fill .env'"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"[compact at $(date -Iseconds)] tokens-near-limit\" >> /home/user/cliproxyapi-config/.claude/compact-log.txt"
+          }
+        ]
+      }
+    ]
+  }
+}
