@@ -171,6 +171,18 @@ jobs-once: install ## Run all 3 nightly jobs once and exit (for cron-style exter
 	$(PY) -c "import asyncio; from restaurant_api.jobs import run_expiry_warning, run_points_expire, run_cogs_variance_check; \
 		asyncio.run(run_expiry_warning()); asyncio.run(run_points_expire()); asyncio.run(run_cogs_variance_check())"
 
+.PHONY: openapi
+openapi: install ## Export OpenAPI 3 schema to openapi.json (regenerate any time)
+	$(PY) scripts/export_openapi.py
+
+.PHONY: migration-safety
+migration-safety: ## Scan Alembic migrations for unsafe ops (DROP COLUMN, NOT NULL, ...)
+	$(PY) scripts/check_migration_safety.py
+
+.PHONY: migration-safety-strict
+migration-safety-strict: ## As above but exits 1 on MEDIUM findings too (use in CI)
+	$(PY) scripts/check_migration_safety.py --strict
+
 # ----- pre-commit hooks --------------------------------------------------
 
 .PHONY: install-hooks

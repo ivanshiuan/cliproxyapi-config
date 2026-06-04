@@ -90,6 +90,12 @@ jobs:
         working-directory: restaurant_api
         run: alembic check
 
+      - name: Scan migrations for unsafe ops (DROP COLUMN, NOT NULL, ...)
+        run: python scripts/check_migration_safety.py
+
+      - name: Export OpenAPI schema (validate it renders without error)
+        run: python scripts/export_openapi.py --out /tmp/openapi.json
+
       - name: Run mock test suite (no API key needed)
         run: pytest tests/ -v --tb=short
 

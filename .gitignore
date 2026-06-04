@@ -97,3 +97,8 @@ logs/
 tmp/
 .tmp/
 .claude/compact-log.txt
+
+# Generated OpenAPI spec — regenerate with `make openapi`. Commit it
+# explicitly if you want PR diffs to track API contract changes.
+/openapi.json
+/openapi.yaml

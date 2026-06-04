@@ -1,6 +1,36 @@
-# DevSwarm — AI Agent 蜂群開發工廠
+# Autonomous RestTech Enterprise
 
-> **指揮官的終極無人化餐飲 SaaS 願景**的第一塊基石。
+[![CI](https://github.com/ivanshiuan/cliproxyapi-config/actions/workflows/ci.yml/badge.svg?branch=claude%2Fautonomous-resttech-enterprise-oW9jp)](https://github.com/ivanshiuan/cliproxyapi-config/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
+![License](https://img.shields.io/badge/license-Proprietary-red)
+
+> **台灣全域 AI 餐飲智慧營運作業系統**。雙層架構：
+> - **DevSwarm**（LangGraph 4-agent 蜂群）→ 自動產出程式碼
+> - **RestSwarm**（FastAPI + 25 表 PG + LINE）→ 真實餐飲後端
+
+## 文件導覽
+
+| # | 文件 | 用途 |
+|---|---|---|
+| **入口** | [CLAUDE.md](CLAUDE.md) | 專案說明書、不變法則 |
+| **指揮官** | [COMMANDER_HANDOFF.md](COMMANDER_HANDOFF.md) | 你還沒做的事 |
+| **CHANGELOG** | [CHANGELOG.md](CHANGELOG.md) | 版本歷史 |
+| 00 | [docs/00_vision.md](docs/00_vision.md) | 願景凍結（SSOT） |
+| 01 | [docs/01_tech_stack_recommendation.md](docs/01_tech_stack_recommendation.md) | 技術選型 |
+| 02 | [docs/02_devswarm_architecture.md](docs/02_devswarm_architecture.md) | 蜂群架構 |
+| 03 | [docs/03_roadmap.md](docs/03_roadmap.md) | Phase 0→5 路線圖 |
+| 04 | [docs/04_data_schema.md](docs/04_data_schema.md) | 909 行 PostgreSQL DDL |
+| 06 | [docs/06_execution_plan.md](docs/06_execution_plan.md) | 12 任務拆解 |
+| 07 | [docs/07_devswarm_runbook.md](docs/07_devswarm_runbook.md) | DevSwarm 操作手冊 |
+| 08 | [docs/08_safety_compliance.md](docs/08_safety_compliance.md) | 食安/勞檢/個資/災難 SOP |
+| 09 | [docs/09_phase1_extension_kit.md](docs/09_phase1_extension_kit.md) | KDS / 訂位 / LINE |
+| 10 | [docs/10_claude_code_workflow.md](docs/10_claude_code_workflow.md) | Claude Code 工作流 |
+| 11 | [docs/11_production_deployment.md](docs/11_production_deployment.md) | 部署 SOP + T-7 開店 |
+
+---
+
+## DevSwarm — AI Agent 蜂群開發工廠
+
 > DevSwarm 是一套 LangGraph 多 Agent 蜂群，會把指揮官的需求一句話翻譯成可運行、有測試、自我修復過的 Python 模組。後續整套餐飲系統 — ERP、CRM、行銷、地圖、人事 — 都會由它孵出來。
 
 ---
