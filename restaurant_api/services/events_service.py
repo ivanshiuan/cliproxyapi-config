@@ -28,9 +28,10 @@ This keeps the dedup self-contained in the append-only ledger, which is
 already the canonical record. When the calc-engine refactor lands a real
 idempotency table, this swaps cleanly.
 
-TODO: swap ``_expand_recipe_stub`` for the real ``bom_consumer`` once the
-calc-engine module exposes it. The current implementation reads from the
-``recipes`` table directly (current version: ``effective_to IS NULL``).
+Recipe expansion (``_expand_recipe_serving``) reads active recipes from DB
+and runs them through the ``bom_consumer`` calc engine at qty_sold=1 so
+staff_meal / tasting events stay numerically aligned with order-line BOM
+consumption.
 """
 
 from __future__ import annotations
@@ -67,6 +68,11 @@ from ..schemas.events import (
     TastingEventResponse,
     WasteEventCreate,
     WasteEventResponse,
+)
+from .calc.bom_consumer import (
+    BOMConsumeInput,
+    RecipeRow,
+    consume_bom,
 )
 
 TPE = ZoneInfo("Asia/Taipei")
@@ -124,21 +130,49 @@ async def _require_menu_item(session: AsyncSession, menu_item_id: uuid.UUID) -> 
     return res
 
 
-async def _expand_recipe_stub(
+async def _expand_recipe_serving(
     session: AsyncSession, menu_item_id: uuid.UUID
 ) -> list[tuple[uuid.UUID, Decimal]]:
-    """Return [(ingredient_id, qty_per_serving)] for the current BOM.
+    """Return [(ingredient_id, qty_per_serving)] for one serving of a menu item.
 
-    Phase 1 stub: reads ``recipes`` directly (``effective_to IS NULL``).
-    TODO: replace with ``calc_engine.bom_consumer.expand(menu_item_id)`` when
-    that module exposes the helper.
+    Reads active recipes (``effective_to IS NULL``) joined to ingredients,
+    then runs them through ``consume_bom`` at qty_sold=1. The calc engine's
+    sign convention (negative qty for consumption) is inverted here because
+    the caller wraps the result with its own ``MovementType``-specific sign.
     """
-    stmt = select(Recipe.ingredient_id, Recipe.qty_per_serving).where(
-        Recipe.menu_item_id == menu_item_id,
-        Recipe.effective_to.is_(None),
+    stmt = (
+        select(
+            Recipe.ingredient_id,
+            Recipe.qty_per_serving,
+            Ingredient.standard_cost_per_unit,
+        )
+        .join(Ingredient, Ingredient.id == Recipe.ingredient_id)
+        .where(
+            Recipe.menu_item_id == menu_item_id,
+            Recipe.effective_to.is_(None),
+            Ingredient.is_active.is_(True),
+        )
     )
     rows = (await session.execute(stmt)).all()
-    return [(row[0], row[1]) for row in rows]
+    if not rows:
+        return []
+
+    recipes = [
+        RecipeRow(
+            ingredient_id=str(r[0]),
+            qty_per_serving=r[1],
+            standard_unit_cost=r[2],
+        )
+        for r in rows
+    ]
+    output = consume_bom(
+        BOMConsumeInput(
+            menu_item_id=str(menu_item_id),
+            qty_sold=Decimal("1"),
+            recipes=recipes,
+        )
+    )
+    return [(uuid.UUID(d.ingredient_id), -d.qty) for d in output.movements]
 
 
 async def _find_idempotent_event(
@@ -260,7 +294,7 @@ async def create_staff_meal_event(
     lines: list[tuple[uuid.UUID, Decimal]]
     if payload.menu_item_id is not None:
         await _require_menu_item(session, payload.menu_item_id)
-        lines = await _expand_recipe_stub(session, payload.menu_item_id)
+        lines = await _expand_recipe_serving(session, payload.menu_item_id)
         if not lines:
             raise ValidationError(
                 "menu item has no recipe",
@@ -357,7 +391,7 @@ async def create_tasting_event(
     lines: list[tuple[uuid.UUID, Decimal]]
     if payload.menu_item_id is not None:
         await _require_menu_item(session, payload.menu_item_id)
-        lines = await _expand_recipe_stub(session, payload.menu_item_id)
+        lines = await _expand_recipe_serving(session, payload.menu_item_id)
         if not lines:
             raise ValidationError(
                 "menu item has no recipe",

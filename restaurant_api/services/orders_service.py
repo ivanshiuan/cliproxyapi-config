@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -39,6 +40,7 @@ from ..models import (
     OrderLine,
     OrderPayment,
     OrderStatus,
+    Recipe,
     StockMovement,
     Store,
 )
@@ -47,6 +49,11 @@ from ..schemas.orders import (
     OrderCreateRequest,
     OrderLineCreate,
     OrderResponse,
+)
+from .calc.bom_consumer import (
+    BOMConsumeInput,
+    RecipeRow,
+    consume_bom,
 )
 
 if TYPE_CHECKING:
@@ -116,18 +123,51 @@ async def _resolve_tenant_from_store(
     return store_tenant
 
 
+async def _load_active_recipes(
+    session: AsyncSession,
+    menu_item_id: uuid.UUID,
+) -> list[RecipeRow]:
+    """Fetch current (effective_to IS NULL) recipes for a menu item.
+
+    Joins to ``ingredients`` so each row carries the standard unit cost the
+    calc engine needs for theoretical-COGS computation. Inactive ingredients
+    are skipped — a recipe pointing at a discontinued ingredient is treated
+    as if it didn't exist.
+    """
+    stmt = (
+        select(
+            Recipe.ingredient_id,
+            Recipe.qty_per_serving,
+            Ingredient.standard_cost_per_unit,
+        )
+        .join(Ingredient, Ingredient.id == Recipe.ingredient_id)
+        .where(
+            Recipe.menu_item_id == menu_item_id,
+            Recipe.effective_to.is_(None),
+            Ingredient.is_active.is_(True),
+        )
+    )
+    rows = (await session.execute(stmt)).all()
+    return [
+        RecipeRow(
+            ingredient_id=str(row[0]),
+            qty_per_serving=row[1],
+            standard_unit_cost=row[2],
+        )
+        for row in rows
+    ]
+
+
 async def _placeholder_ingredient(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     store_id: uuid.UUID,
 ) -> Ingredient:
-    """Return (or create) a placeholder ingredient for stub BOM consumption.
+    """Return (or create) a placeholder ingredient for fallback BOM consumption.
 
-    TODO(bom_consumer): replace this stub with the real BOM expansion from
-    ``specs/bom_consumer.md`` — that module returns
-    ``list[(ingredient_id, qty_consumed)]`` per order line based on the
-    ``recipes`` table. Until then, each line consumes 1 unit of one
-    placeholder ingredient so the ledger contract is exercised end-to-end.
+    Used only when a menu item has *no* active recipes configured — we still
+    write one ledger row per line so the audit trail stays complete. Real
+    recipes flow through ``consume_bom`` (calc engine) and skip this path.
     """
     stmt = (
         select(Ingredient)
@@ -313,13 +353,17 @@ async def create_order(
     session.add(order)
     await session.flush()  # populate order.id
 
-    # Lines + their stock-movement stubs.
-    needs_movements = bool(payload.lines)
-    placeholder = (
-        await _placeholder_ingredient(session, store_tenant, payload.store_id)
-        if needs_movements
-        else None
-    )
+    # Lines + their stock-movement consumption (BOM-expanded when recipes
+    # exist; placeholder row otherwise). Placeholder is materialised lazily
+    # — created the first time a line has no recipe.
+    placeholder_state: dict[str, Ingredient] = {}
+
+    async def _get_placeholder() -> Ingredient:
+        if "ing" not in placeholder_state:
+            placeholder_state["ing"] = await _placeholder_ingredient(
+                session, store_tenant, payload.store_id
+            )
+        return placeholder_state["ing"]
 
     for line_payload in payload.lines:
         await _add_line_with_movement(
@@ -328,7 +372,7 @@ async def create_order(
             tenant_id=store_tenant,
             store_id=payload.store_id,
             line_payload=line_payload,
-            placeholder=placeholder,
+            get_placeholder=_get_placeholder,
             occurred_at=opened_at,
         )
 
@@ -380,17 +424,35 @@ async def _add_line_with_movement(
     tenant_id: uuid.UUID,
     store_id: uuid.UUID,
     line_payload: OrderLineCreate,
-    placeholder: Ingredient | None,
+    get_placeholder: Callable[[], Awaitable[Ingredient]],
     occurred_at: datetime,
 ) -> None:
-    """Create one OrderLine + its consumption stub.
+    """Create one OrderLine + its consumption ledger rows.
 
-    TODO(bom_consumer): replace the flat 1-unit placeholder consumption with
-    the real BOM expansion (``specs/bom_consumer.md``):
-    ``consumptions = await bom_consumer.expand_consumption(line)``
-    then iterate and create one StockMovement per (ingredient_id, qty).
+    Recipe path (``consume_bom``):
+        Active recipes exist for this menu item → expand into one
+        ``stock_movements`` row per ingredient with signed negative qty,
+        and persist the engine's ``theoretical_cogs`` onto the line.
+
+    Fallback path:
+        No recipes configured → write a single placeholder row at qty=-1 so
+        the ledger stays self-consistent and downstream variance jobs can
+        flag the missing recipe.
     """
-    line_total = (line_payload.qty * line_payload.unit_price)
+    line_total = line_payload.qty * line_payload.unit_price
+    recipes = await _load_active_recipes(session, line_payload.menu_item_id)
+
+    theoretical_cogs: Decimal | None = None
+    if recipes:
+        bom_output = consume_bom(
+            BOMConsumeInput(
+                menu_item_id=str(line_payload.menu_item_id),
+                qty_sold=line_payload.qty,
+                recipes=recipes,
+            )
+        )
+        theoretical_cogs = bom_output.theoretical_cogs
+
     line = OrderLine(
         tenant_id=tenant_id,
         order_id=order.id,
@@ -398,25 +460,41 @@ async def _add_line_with_movement(
         qty=line_payload.qty,
         unit_price=line_payload.unit_price,
         line_total=line_total,
+        cogs_theoretical=theoretical_cogs,
         notes=line_payload.notes,
     )
     session.add(line)
     await session.flush()  # need line.id for source_id
 
-    assert placeholder is not None, "placeholder ingredient required when lines present"
-    session.add(
-        StockMovement(
-            tenant_id=tenant_id,
-            store_id=store_id,
-            ingredient_id=placeholder.id,
-            movement_type=MovementType.SALE_CONSUME,
-            qty=Decimal("-1"),  # Phase-1 stub: flat 1 unit per line.
-            source_table="order_lines",
-            source_id=line.id,
-            occurred_at=occurred_at,
-            note=f"phase1_stub for order_line {line.id}",
-        ),
-    )
+    if recipes:
+        for delta in bom_output.movements:
+            session.add(
+                StockMovement(
+                    tenant_id=tenant_id,
+                    store_id=store_id,
+                    ingredient_id=uuid.UUID(delta.ingredient_id),
+                    movement_type=MovementType.SALE_CONSUME,
+                    qty=delta.qty,  # already signed-negative
+                    source_table="order_lines",
+                    source_id=line.id,
+                    occurred_at=occurred_at,
+                ),
+            )
+    else:
+        placeholder = await get_placeholder()
+        session.add(
+            StockMovement(
+                tenant_id=tenant_id,
+                store_id=store_id,
+                ingredient_id=placeholder.id,
+                movement_type=MovementType.SALE_CONSUME,
+                qty=Decimal("-1"),
+                source_table="order_lines",
+                source_id=line.id,
+                occurred_at=occurred_at,
+                note=f"no recipe for menu_item {line_payload.menu_item_id}",
+            ),
+        )
 
 
 async def get_order(
