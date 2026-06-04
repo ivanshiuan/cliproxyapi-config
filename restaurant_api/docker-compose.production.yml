@@ -1,0 +1,118 @@
+# Production-shape compose. Use as a reference for the real K8s manifests; for
+# single-VM "good-enough" deploys you can run this verbatim.
+#
+# Usage:
+#   docker compose -f restaurant_api/docker-compose.production.yml up -d
+#   docker compose -f restaurant_api/docker-compose.production.yml logs -f api
+#
+# Pre-flight requirements:
+#   - .env.production exists at repo root with real RESTO_* + LINE_* values
+#   - Image is built and tagged (or pulled from registry)
+#   - DB is provisioned (managed PG ideal — this compose runs PG embedded
+#     only as a fallback when there's no managed instance)
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: resto-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${RESTO_DB_USER}
+      POSTGRES_PASSWORD: ${RESTO_DB_PASSWORD}
+      POSTGRES_DB: ${RESTO_DB_NAME}
+      TZ: Asia/Taipei
+      PGTZ: Asia/Taipei
+    volumes:
+      - resto_pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks: [resto]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RESTO_DB_USER} -d ${RESTO_DB_NAME}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    # No ports published — only the api/jobs containers reach it via the internal network.
+
+  redis:
+    image: redis:7-alpine
+    container_name: resto-redis
+    restart: always
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - resto_redisdata:/data
+    networks: [resto]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    image: ${RESTO_IMAGE:-resto-api:latest}
+    container_name: resto-migrate
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: ../.env.production
+    networks: [resto]
+    working_dir: /app/restaurant_api
+    command: ["alembic", "upgrade", "head"]
+
+  api:
+    image: ${RESTO_IMAGE:-resto-api:latest}
+    container_name: resto-api
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    env_file: ../.env.production
+    ports:
+      - "8000:8000"
+    networks: [resto]
+    # Healthcheck inherited from the Dockerfile (/health/live).
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  jobs:
+    image: ${RESTO_IMAGE:-resto-api:latest}
+    container_name: resto-jobs
+    restart: always
+    depends_on:
+      api:
+        condition: service_started
+    env_file: ../.env.production
+    networks: [resto]
+    command: ["python", "-m", "restaurant_api.jobs"]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  resto:
+    driver: bridge
+
+volumes:
+  resto_pgdata:
+  resto_redisdata:

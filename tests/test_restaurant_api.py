@@ -7,8 +7,6 @@ a live Postgres in CI.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
-
 from fastapi.testclient import TestClient
 
 from restaurant_api.main import app
@@ -30,30 +28,9 @@ def test_root_endpoint():
     assert resp.json()["service"] == "restaurant_api"
 
 
-def test_health_endpoint_db_ok():
-    with patch(
-        "restaurant_api.main.ping_db",
-        AsyncMock(return_value={"ok": True, "version": "PostgreSQL 16", "database": "resto_test"}),
-    ):
-        client = TestClient(app)
-        resp = client.get("/health")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["status"] == "ok"
-    assert body["checks"]["database"]["ok"] is True
-
-
-def test_health_endpoint_db_down():
-    with patch(
-        "restaurant_api.main.ping_db",
-        AsyncMock(side_effect=RuntimeError("connection refused")),
-    ):
-        client = TestClient(app)
-        resp = client.get("/health")
-    assert resp.status_code == 503
-    body = resp.json()
-    assert body["status"] == "degraded"
-    assert body["checks"]["database"]["ok"] is False
+# Health endpoints moved to /health/live + /health/ready; see tests/test_health_endpoints.py
+# for the live/ready/composite coverage. The legacy `/health` is now an alias
+# to /health/ready and tested there.
 
 
 def test_models_metadata_has_25_tables():

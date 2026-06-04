@@ -313,8 +313,10 @@ async def test_leave_request_happy_path(
 async def test_today_returns_open_clocks_only(
     client, db_session, seed_tenant, seed_store, seed_employee
 ):
-    # Currently-open clock for seed_employee.
-    in_at = datetime.now(UTC) - timedelta(hours=2)
+    # Currently-open clock for seed_employee. Use minutes-ago not hours-ago
+    # so the row's TPE date is guaranteed equal to today even when the CI
+    # clock is within an hour of midnight TPE.
+    in_at = datetime.now(UTC) - timedelta(minutes=10)
     await _seed_open_clock(
         db_session, employee=seed_employee, store=seed_store, clock_in_at=in_at
     )
@@ -351,7 +353,8 @@ async def test_today_returns_open_clocks_only(
     items = resp.json()
     assert len(items) == 1
     assert items[0]["employee_id"] == str(seed_employee.id)
-    assert Decimal(items[0]["elapsed_hours"]) > Decimal("1.50")
+    # Elapsed > 5 minutes since we clocked-in 10 minutes ago.
+    assert Decimal(items[0]["elapsed_hours"]) > Decimal("0.05")
 
 
 # Optional AC-7: holiday override puts everything into holiday_hours.

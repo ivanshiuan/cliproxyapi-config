@@ -66,17 +66,21 @@
 │   ├── prompts/                 # 4 agent 系統提示 + 版本登記
 │   └── nodes/                   # 4 agent node 實作
 │
-├── restaurant_api/              # Phase 1 餐飲後端（5,200 LOC）
-│   ├── main.py                  # FastAPI app + 路由註冊
+├── restaurant_api/              # Phase 1 餐飲後端（6,500+ LOC）
+│   ├── main.py                  # FastAPI app + 路由註冊 + middleware
 │   ├── config.py                # Pydantic Settings
 │   ├── database.py              # async engine + session
 │   ├── docker-compose.yml       # PG + Redis（開發用）
+│   ├── docker-compose.production.yml  # 真實上線 stack
+│   ├── Dockerfile               # multi-stage、non-root、tini PID-1
 │   ├── alembic/                 # 3 份遷移
 │   ├── models/                  # 25 表 SQLAlchemy（含 audit_log、embeddings）
-│   ├── api/                     # deps.py + errors.py（共用 DI / 例外）
+│   ├── middleware/              # RequestContext + 結構化 JSON 日誌
+│   ├── api/                     # deps.py + errors.py + health.py（/live + /ready）
 │   ├── schemas/                 # Pydantic 請求/回應（每 router 一檔）
-│   ├── services/                # 業務邏輯（純 async，無 HTTP）
+│   ├── services/                # 業務邏輯（純 async，無 HTTP；含 audit_service）
 │   ├── routers/                 # FastAPI APIRouter（每模組一檔）
+│   ├── jobs/                    # APScheduler 背景任務（expiry/points/COGS）
 │   └── integrations/line/       # LINE 統一通道（Stub + HTTP skeleton）
 │
 ├── docs/                        # 10 份戰略文件
@@ -90,7 +94,8 @@
 │   ├── 07_devswarm_runbook.md   # `make demo` 故障排除
 │   ├── 08_safety_compliance.md  # 食安/勞檢/個資/災難 SOP
 │   ├── 09_phase1_extension_kit.md  # KDS / 訂位 / LINE 設計
-│   └── 10_claude_code_workflow.md  # 何時用什麼 Claude Code 能力
+│   ├── 10_claude_code_workflow.md  # 何時用什麼 Claude Code 能力
+│   └── 11_production_deployment.md # Docker / Cloudflare / 部署 SOP
 │
 ├── specs/                       # 10 份 DevSwarm 任務簡報
 │   ├── profit_calc.md           # 真實損益（demo 用）
@@ -139,6 +144,9 @@
 - Ledger 表（stock_movements、audit_log、customer_points_ledger）**append-only**（DB-level RULE 已擋 UPDATE/DELETE）
 - Pydantic 輸入 `model_config = ConfigDict(frozen=True)` + 用 `BeforeValidator` 拒絕 float（不要用 `strict=True` 會擋 JSON UUID 字串）
 - Domain 例外用 `restaurant_api/api/errors.py` 的 `DomainError` 系列，不要用 raw `HTTPException`
+- 寫稽核紀錄一律走 `services/audit_service.audit()`，不要直接 INSERT `AuditLog`
+- 結構化日誌用 `logger.info("event.name", extra={...})`；不要把祕密塞進 extra（會自動 redact 但不要試）
+- 健康檢查永遠呼叫 `/health/ready`，liveness 用 `/health/live`
 
 ### 測試
 - 路由整合測用 `tests/conftest.py` 的 `client` fixture（`httpx.AsyncClient` + `ASGITransport`，**不要** sync `TestClient`，會 event loop 衝突）

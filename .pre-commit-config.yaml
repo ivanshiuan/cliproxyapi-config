@@ -1,0 +1,58 @@
+# Pre-commit hooks — catch issues locally before they trip CI.
+#
+# Install once:   make install-hooks
+# Run manually:   .venv/bin/pre-commit run --all-files
+# Skip in a pinch: git commit --no-verify   (CI will still gate)
+
+minimum_pre_commit_version: "3.5.0"
+
+repos:
+  # ─── Sanity: stop secrets / large blobs / merge artifacts ──────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: check-yaml
+        exclude: ^restaurant_api/alembic/
+      - id: check-toml
+      - id: check-json
+        exclude: ^\.claude/  # Claude Code settings.json allows JSONC comments
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        exclude: \.md$  # markdown trailing spaces are sometimes intentional
+      - id: detect-private-key
+      - id: forbid-submodules
+
+  # ─── Ruff: format + lint (must match pyproject.toml) ─────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.13.4
+    hooks:
+      - id: ruff-format
+        files: ^(devswarm|restaurant_api|tests|scripts)/.*\.py$
+      - id: ruff
+        args: [--fix]
+        files: ^(devswarm|restaurant_api|tests|scripts)/.*\.py$
+
+  # ─── Local hooks: project-specific guards ────────────────────────────
+  - repo: local
+    hooks:
+      - id: no-dotenv-in-commit
+        name: 'block .env / .env.* (secrets!)'
+        entry: bash -c 'git diff --cached --name-only | grep -E "^\.env(\..*)?$" && { echo "🚫 Refusing to commit .env*"; exit 1; } || exit 0'
+        language: system
+        pass_filenames: false
+
+      - id: no-workspace-in-commit
+        name: 'block workspace/ (DevSwarm artifacts)'
+        entry: bash -c 'git diff --cached --name-only | grep -E "^workspace/" && { echo "🚫 Refusing to commit workspace/"; exit 1; } || exit 0'
+        language: system
+        pass_filenames: false
+
+      - id: pyright
+        name: 'pyright (basic mode)'
+        entry: bash -c '.venv/bin/pyright 2>&1 | tail -5'
+        language: system
+        pass_filenames: false
+        files: ^(devswarm|restaurant_api|scripts)/.*\.py$

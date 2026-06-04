@@ -162,6 +162,41 @@ full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smok
 api: install ## Run the FastAPI restaurant backend in dev mode (auto-reload)
 	$(VENV)/bin/uvicorn restaurant_api.main:app --reload --host 0.0.0.0 --port 8000
 
+.PHONY: jobs
+jobs: install ## Run the background-job scheduler (expiry warning, points expire, COGS variance)
+	$(PY) -m restaurant_api.jobs
+
+.PHONY: jobs-once
+jobs-once: install ## Run all 3 nightly jobs once and exit (for cron-style external schedulers)
+	$(PY) -c "import asyncio; from restaurant_api.jobs import run_expiry_warning, run_points_expire, run_cogs_variance_check; \
+		asyncio.run(run_expiry_warning()); asyncio.run(run_points_expire()); asyncio.run(run_cogs_variance_check())"
+
+# ----- pre-commit hooks --------------------------------------------------
+
+.PHONY: install-hooks
+install-hooks: install ## Install pre-commit hooks (ruff + secrets/env guard + pyright)
+	$(VENV)/bin/pip install --quiet pre-commit
+	$(VENV)/bin/pre-commit install
+
+.PHONY: hooks-run
+hooks-run: install ## Run all pre-commit hooks against every tracked file
+	$(VENV)/bin/pre-commit run --all-files
+
+# ----- production docker -------------------------------------------------
+
+.PHONY: docker-build
+docker-build: ## Build the production image (usage: make docker-build TAG=v0.1.0)
+	docker build -t resto-api:$${TAG:-latest} -f restaurant_api/Dockerfile .
+
+.PHONY: docker-prod-up
+docker-prod-up: ## Bring up production-shape stack (requires .env.production)
+	@test -f .env.production || (echo "Missing .env.production at repo root" && exit 1)
+	docker compose -f restaurant_api/docker-compose.production.yml up -d
+
+.PHONY: docker-prod-down
+docker-prod-down: ## Tear down production-shape stack
+	docker compose -f restaurant_api/docker-compose.production.yml down
+
 # ----- info --------------------------------------------------------------
 
 .PHONY: status
