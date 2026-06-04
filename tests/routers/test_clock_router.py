@@ -21,6 +21,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -217,19 +218,39 @@ async def test_clock_out_6h_all_regular(
     assert Decimal(body["total_hours"]) == Decimal("6.00")
 
 
+# A fixed UTC moment that maps to a mid-evening TPE time so a 9/11/13h shift
+# back from this anchor is guaranteed to stay within ONE calendar day in TPE.
+# The labor classifier splits hours by TPE calendar day; without this anchor
+# the test would flap any time CI runs around midnight TPE.
+# 2026-06-04 14:00 UTC == 2026-06-04 22:00 TPE — a 13h back lands at 09:00 TPE.
+_FIXED_NOW_UTC = datetime(2026, 6, 4, 14, 0, 0, tzinfo=UTC)
+
+
+def _freeze_clock_now():
+    """Patch _utcnow() in clock_service to return the fixed anchor.
+
+    Returns a context manager. Use as: ``with _freeze_clock_now(): ...``
+    """
+    return patch(
+        "restaurant_api.services.clock_service._utcnow",
+        return_value=_FIXED_NOW_UTC,
+    )
+
+
 # Hour-bucket: 9h shift → 8 regular + 1 OT1.
 async def test_clock_out_9h_regular_plus_ot1(
     client, db_session, seed_employee, seed_store
 ):
-    in_at = datetime.now(UTC) - timedelta(hours=9)
+    in_at = _FIXED_NOW_UTC - timedelta(hours=9)
     await _seed_open_clock(
         db_session, employee=seed_employee, store=seed_store, clock_in_at=in_at
     )
 
-    resp = await client.post(
-        "/clock/out",
-        json={"employee_id": str(seed_employee.id)},
-    )
+    with _freeze_clock_now():
+        resp = await client.post(
+            "/clock/out",
+            json={"employee_id": str(seed_employee.id)},
+        )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert Decimal(body["regular_hours"]) == Decimal("8.00")
@@ -242,15 +263,16 @@ async def test_clock_out_9h_regular_plus_ot1(
 async def test_clock_out_11h_fills_ot1_and_ot2(
     client, db_session, seed_employee, seed_store
 ):
-    in_at = datetime.now(UTC) - timedelta(hours=11)
+    in_at = _FIXED_NOW_UTC - timedelta(hours=11)
     await _seed_open_clock(
         db_session, employee=seed_employee, store=seed_store, clock_in_at=in_at
     )
 
-    resp = await client.post(
-        "/clock/out",
-        json={"employee_id": str(seed_employee.id)},
-    )
+    with _freeze_clock_now():
+        resp = await client.post(
+            "/clock/out",
+            json={"employee_id": str(seed_employee.id)},
+        )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert Decimal(body["regular_hours"]) == Decimal("8.00")
@@ -263,15 +285,16 @@ async def test_clock_out_11h_fills_ot1_and_ot2(
 async def test_clock_out_13h_rejected_over_12h_cap(
     client, db_session, seed_employee, seed_store
 ):
-    in_at = datetime.now(UTC) - timedelta(hours=13)
+    in_at = _FIXED_NOW_UTC - timedelta(hours=13)
     await _seed_open_clock(
         db_session, employee=seed_employee, store=seed_store, clock_in_at=in_at
     )
 
-    resp = await client.post(
-        "/clock/out",
-        json={"employee_id": str(seed_employee.id)},
-    )
+    with _freeze_clock_now():
+        resp = await client.post(
+            "/clock/out",
+            json={"employee_id": str(seed_employee.id)},
+        )
     assert resp.status_code == 422, resp.text
     body = resp.json()
     assert body["error"]["details"]["code"] == "hours_over_cap"
@@ -363,14 +386,15 @@ async def test_holiday_override_routes_hours_to_holiday_bucket(
 ):
     app.dependency_overrides[get_is_holiday] = lambda: (lambda d: True)
     try:
-        in_at = datetime.now(UTC) - timedelta(hours=10)
+        in_at = _FIXED_NOW_UTC - timedelta(hours=10)
         await _seed_open_clock(
             db_session, employee=seed_employee, store=seed_store, clock_in_at=in_at
         )
-        resp = await client.post(
-            "/clock/out",
-            json={"employee_id": str(seed_employee.id)},
-        )
+        with _freeze_clock_now():
+            resp = await client.post(
+                "/clock/out",
+                json={"employee_id": str(seed_employee.id)},
+            )
         assert resp.status_code == 200, resp.text
         body = resp.json()
         assert Decimal(body["regular_hours"]) == Decimal("0.00")

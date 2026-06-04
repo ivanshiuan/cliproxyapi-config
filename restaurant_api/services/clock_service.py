@@ -84,48 +84,58 @@ def classify_hours(
     *,
     is_holiday: bool,
 ) -> tuple[Decimal, Decimal, Decimal, Decimal]:
-    """Split worked hours into the four LSA buckets.
+    """Split worked hours into the four 勞基法 buckets.
 
-    TODO(devswarm): swap this stub for ``labor_hours_classifier.classify``
-    once the calc-engine spec is implemented. The signature is stable.
+    Thin adapter around ``calc.labor_hours_classifier.classify_hours`` —
+    callers keep the (clock_in, clock_out, is_holiday) tuple signature
+    they had with the stub; the real engine receives a LaborInput
+    Pydantic model with public_holidays list.
 
-    Rules (stub):
+    Rules:
       * is_holiday=True  → every hour into ``holiday_hours``.
       * is_holiday=False → first 8h regular, next 2h OT-tier1, next 2h
-        OT-tier2, anything over 12h is a ``ValidationError``.
+        OT-tier2, > 12h raises ValidationError.
 
     Returns a 4-tuple of Decimals (regular, ot1, ot2, holiday), 2 d.p.
     """
+    from .calc.labor_hours_classifier import (
+        LaborInput as _CalcLaborInput,
+    )
+    from .calc.labor_hours_classifier import (
+        classify_hours as _calc_classify,
+    )
+
     if clock_out <= clock_in:
         raise ValidationError(
             "clock_out must be after clock_in",
             details={"code": "clock_order_violation"},
         )
 
-    seconds = Decimal(str((clock_out - clock_in).total_seconds()))
-    hours = (seconds / Decimal("3600")).quantize(_TWO_DP, rounding=ROUND_HALF_UP)
-
-    zero = Decimal("0.00")
-    if is_holiday:
-        return (zero, zero, zero, hours)
-
-    if hours > _TWELVE:
-        raise ValidationError(
-            "worked hours exceed the 12h daily cap",
-            details={"code": "hours_over_cap", "hours": str(hours)},
+    # The real engine reads its holiday status from ``public_holidays``;
+    # we synthesise a one-element list when the caller's stub says holiday.
+    holiday_dates = [clock_in.date()] if is_holiday else []
+    try:
+        buckets = _calc_classify(
+            _CalcLaborInput(
+                employee_id="adapter",  # not used in buckets math
+                clock_in=clock_in,
+                clock_out=clock_out,
+                public_holidays=holiday_dates,
+            )
         )
+    except ValueError as e:
+        # Real engine raises ValueError on > 12h / naive datetime; surface as
+        # our typed domain error for the FastAPI handler.
+        raise ValidationError(
+            str(e),
+            details={"code": "hours_over_cap"},
+        ) from e
 
-    regular = min(hours, _EIGHT)
-    remaining = hours - regular
-    ot1 = min(remaining, _TWO)
-    remaining -= ot1
-    ot2 = min(remaining, _TWO)
-    # Anything left here would mean > 12h — already raised above.
     return (
-        regular.quantize(_TWO_DP),
-        ot1.quantize(_TWO_DP),
-        ot2.quantize(_TWO_DP),
-        zero,
+        buckets.regular_hours,
+        buckets.overtime_tier1_hours,
+        buckets.overtime_tier2_hours,
+        buckets.holiday_hours,
     )
 
 
