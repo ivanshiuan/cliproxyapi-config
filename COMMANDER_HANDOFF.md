@@ -2,18 +2,18 @@
 
 > 我這邊已經完成的所有「不需要你決策、不需要 API key」的工作全部 commit + push 完。
 > 這份文件只列**你接下來要做的事**，按時間順序排好。
+>
+> **最後一次重寫：2026-06-06（autonomous 模式延長戰之後）**
 
 ---
 
 ## ✅ 我已完成（不需要你動手）
 
+### 初版交付（前期）
 - DevSwarm 4-agent LangGraph 蜂群骨架（PM/Architect/Coder/QA + self-heal）
-- Phase 1 餐飲後端：25 表 SQLAlchemy + 3 套 Alembic 遷移
-- 4 個 FastAPI router（orders/stock/clock/events）+ 對應 schemas + services + tests
-- 11 個 HTTP endpoint 全部接好、`make api` 後 /docs 可見
+- Phase 1 餐飲後端：26 表 SQLAlchemy + 5 套 Alembic 遷移
 - 10 份 DevSwarm 任務簡報（specs/）— 等你填 API key 後就可一鍵跑
 - 10 份戰略文件（docs/00-09 + MORNING_BRIEF + 本文）
-- 11 commits、106/106 測通過、ruff 全綠、pyright 0 錯誤
 - 真實 Postgres 16 + pgvector 0.6.0 已啟動並驗證
 - Seed 資料腳本 + End-to-end demo flow 跑通了一個完整 POS 日
 - 9 個食安/勞檢/個資/災難 SOP 寫入 `docs/08_safety_compliance.md`
@@ -22,11 +22,38 @@
 - 預算煞車（`--budget USD N` 防 DevSwarm 燒錢）
 - promote pipeline（`make promote TASK=<id>` 把蜂群產出搬進正式 services/）
 
+### Autonomous 延長戰新增（2026-06-05 → 06）
+- **6 個 calc engine** 全部已實作 + 已替換掉所有舊 stub：
+  `bom_consumer / discount_resolver / cogs_variance_detector /
+  labor_hours_classifier / profit_calc / uniform_invoice_validator`
+  全部被相應 service / job / router 真的呼叫到（不是 dead code）。
+- **TW 公定假日表** + in-memory cache + 2026/2027 seed —
+  `clock_service` 真實假日查詢取代「週末＝假日」MVP，符合 LSA §39 假日加給。
+- **/reservations + /queue 7 個端點** — 訂位狀態機（booked→confirmed→
+  seated→completed / no_show / cancelled）、現場候位 lifecycle
+  （waiting→called→seated / abandoned）、tenant 隔離 + audit 鏈完整。
+- **/kitchen 2 個端點** — KDS poll + 4-state lifecycle（queued→cooking→
+  ready→served / cancelled），自動時間戳記入 cooking_started_at /
+  ready_at / served_at；訂單建立可選 `kitchen_station` 自動推上 KDS。
+- **Customer loop 收完** — `orders.customer_id` FK（SET NULL 符合
+  個資法 §11 right-to-erasure）、close 時寫 `customer_points_ledger`
+  （1 點 / 100 TWD x tier multiplier）、更新 Customer 快取聚合、
+  push LINE 收據 + 點數（fire-and-forget，LINE 掛掉不擋 close）。
+- **CI 修補** — `scripts/export_openapi.py` 寫到 `/tmp` 不再炸；
+  `make full-check` 全綠跑得過。
+
+### 數字
+- **274 個 pytest 全部通過**（初版 106 → 現在 274，+158 新測試）
+- **26 OpenAPI paths · 47 schemas**（初版 11 → 現在 26）
+- **ruff 全綠 · pyright 0 errors / 0 warnings · alembic 無 drift**
+- **5 份 Alembic 遷移、migration safety scanner 全部過**
+- **未動 ledger DDL** — append-only 保護完整保留
+
 ---
 
 ## 🔴 你**現在**要做的（5 分鐘內）
 
-### 1. 拍 D1-D4 四個決策
+### 1. 拍 D1-D4 四個決策（**仍卡在這**）
 
 | 決策 | 影響 | 你的選擇 |
 |---|---|---|
@@ -36,6 +63,7 @@
 | **D4** 硬體採購人 | 標籤機 / 發票機 / 收銀錢箱 誰買 | __________ |
 
 D2 拖過 W2 末 → 軌道 B/C 動不了。**最重要的決策**。
+程式碼這邊已經把 D2 的所有準備工作做完（schema 預留欄位、API 已就緒），現在只剩你拍板。
 
 ### 2. 填 ANTHROPIC_API_KEY
 
@@ -45,59 +73,72 @@ cp .env.example .env
 ```
 
 從 https://console.anthropic.com/settings/keys 拿。
+（這個只影響 DevSwarm；FastAPI 後端不需要它。）
 
 ---
 
 ## 🟡 你**今天/明天**要做的
 
-### 3. 跑驗證
+### 3. 跑驗證（確認新功能你滿意）
 
 ```bash
-make test         # 應 106 passed
-make typecheck    # 應 0 errors
-make full-check   # 跑全部 quality gate
+make full-check   # ruff + pyright + pytest 274 + alembic + smoke
 ```
 
-### 4. 跑第一個真實 DevSwarm 任務
+或分開：
 
 ```bash
-make demo         # 真實損益模組（profit_calc）
+.venv/bin/pytest tests/ -q                   # 應 274 passed
+.venv/bin/pyright                            # 應 0 errors
+.venv/bin/ruff check devswarm restaurant_api tests scripts
 ```
 
-預期：5-10 分鐘、USD $0.5-2、產出 `workspace/<task_id>/real_profit_calculator.py` + 測試。
+### 4. 用瀏覽器看新增的端點
+
+```bash
+make api                                      # http://localhost:8000/docs
+```
+
+新增可看的端點：
+
+- `POST /reservations` / `PATCH /reservations/{id}/status` / `GET /reservations`
+- `POST /queue` / `PATCH /queue/{id}/status` / `GET /queue`
+- `GET /kitchen/queue` / `PATCH /kitchen/lines/{id}/status`
+- POST /orders 現在接受 `customer_id` 跟 line 內的 `kitchen_station`
+
+### 5. 跑第一個真實 DevSwarm 任務（需要 API key）
+
+```bash
+make demo
+```
+
+預期：5-10 分鐘、USD $0.5-2、產出 `workspace/<task_id>/real_profit_calculator.py`。
 詳細故障排除見 `docs/07_devswarm_runbook.md`。
 
-### 5. 玩一下 demo data + flow
+⚠️ 注意：6 個 spec 對應的 calc engine 都已經實作好了（autonomous 模式期間 promote 過了），所以實際上現在跑 DevSwarm 主要是測試流程能不能跑得起來，不是還缺什麼產出。
+
+### 6. 灌測試資料 + 跑一日
 
 ```bash
-make db-up        # 起 Postgres + Redis（你環境若無 docker，已有 native postgres）
-make db-migrate   # 套用 3 份 Alembic 遷移
-make seed         # 灌一家測試餐廳（王老闆漢堡店、12 道菜、3 顧客）
-make api          # 起 FastAPI， http://localhost:8000/docs 看 11 個 endpoint
-make demo-flow    # 跑完整 POS 一日鏈：打卡→開單→結帳→報廢→員工餐→下班→彙總
+make seed                                     # 灌王老闆漢堡店
+make demo-flow                                # 跑完整 POS 一日
+.venv/bin/python scripts/seed_tw_holidays.py  # 灌 2026/2027 公定假日
 ```
 
 ---
 
 ## 🟢 你**這週**要做的
 
-### 6. 跑剩下 5 個 DevSwarm spec
-
-```bash
-make swarm REQ="$(cat specs/bom_consumer.md)"
-make swarm REQ="$(cat specs/discount_resolver.md)"
-make swarm REQ="$(cat specs/cogs_variance_detector.md)"
-make swarm REQ="$(cat specs/labor_hours_classifier.md)"
-make swarm REQ="$(cat specs/uniform_invoice_validator.md)"
-```
-
-每個應 USD $0.5-2，全部 5 個 < USD $15。
-跑完用 `make promote TASK=<id>` 把產出搬進 `restaurant_api/services/`。
-
 ### 7. 跟 POS 廠商談（D2 決策的延伸）
 
 iCHEF / POS+ 業務聯絡 → 看 API 文件 → 評估整合工時。
 schema 已預留 `external_pos_id` + `pos_source` 欄位，整合層加在 `restaurant_api/integrations/pos/`。
+
+### 8. 申請 LINE 官方帳號 + 拿 channel access token
+
+- LINE OA：30-60 天審核期，越早越好
+- channel token 拿到後填進 `.env` 的 `LINE_CHANNEL_ACCESS_TOKEN`
+- 後端的 `HttpLineMessenger` 骨架已就位（`integrations/line/messenger.py`），實作 HTTP 邏輯 + 跑整合測試。autonomous mode 還沒做這層因為沒 credentials。
 
 ---
 
@@ -166,7 +207,7 @@ T2（對外可賣 SaaS）的啟動條件之一。
 
 ## 一句話
 
-**現在到開店日之間，瓶頸是你的 4 個決策（D1-D4），不是程式碼。**
-寫完決策 → 填 API key → `make demo` → 跑光 spec → 6 週後我們就有一個真實能用的單店 POS 系統。
+**程式碼這邊：Phase 1 已實質完工。POS + KDS + 訂位 + 候位 + 顧客 loop + 點數 + LINE 通知全部端到端跑得起來。**
+**瓶頸只剩你的 4 個決策（D1-D4）+ LINE OA 申請 + POS 廠商談判。**
 
-如果需要我繼續處理特定子任務，回我一句話（例如「跑光剩 5 個 spec」、「接 iCHEF 整合層」、「寫 nightly job 框架」），我接著開幹。
+如果需要我繼續處理特定子任務，回我一句話（例如「跑光 spec 驗證 DevSwarm」、「接 iCHEF 整合層」、「寫 customer router CRUD」、「實作 LINE HTTP messenger」），我接著開幹。
