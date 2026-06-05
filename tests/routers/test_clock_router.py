@@ -80,14 +80,23 @@ _MOUNTED = False
 
 @pytest.fixture(autouse=True)
 def _mount_router() -> Iterator[None]:
-    """Idempotently attach ``/clock`` (+ the shared error handler) to the app."""
+    """Idempotently attach ``/clock`` (+ the shared error handler) to the app.
+
+    ``main.py`` now mounts the clock router in prod wiring. This fixture
+    predates that — it stays as a defensive no-op for environments where
+    main hasn't run, but it must check route paths first to avoid a
+    duplicate include (which would trigger FastAPI's "Duplicate Operation
+    ID" warnings).
+    """
     global _MOUNTED
     if not _MOUNTED:
         from restaurant_api.api.errors import DomainError, domain_error_handler
 
-        app.include_router(clock_router)
-        # main.py doesn't wire this yet — needed so DomainError responses
-        # use the project's ``{"error": {...}}`` envelope.
+        already_mounted = any(
+            getattr(r, "path", "").startswith("/clock") for r in app.routes
+        )
+        if not already_mounted:
+            app.include_router(clock_router)
         app.add_exception_handler(DomainError, domain_error_handler)  # type: ignore[arg-type]
         _MOUNTED = True
     # Default holiday override: never a holiday — most tests want the

@@ -65,7 +65,14 @@ def main() -> int:
 
     n_paths = len(schema.get("paths", {}))
     n_schemas = len(schema.get("components", {}).get("schemas", {}))
-    print(f"✅ OpenAPI 3 schema written to {args.out.relative_to(REPO_ROOT)}")
+    # Try to render the out path as repo-relative for the log; fall back to
+    # the absolute string when the user supplied a path outside the repo
+    # (e.g. CI writes to /tmp/openapi.json for the validate-render step).
+    try:
+        printable = str(args.out.relative_to(REPO_ROOT))
+    except ValueError:
+        printable = str(args.out)
+    print(f"✅ OpenAPI 3 schema written to {printable}")
     print(f"   {n_paths} paths · {n_schemas} schemas · {schema.get('info', {}).get('version', '?')}")
     return 0
 

@@ -26,10 +26,17 @@ from ..models import (
     OrderStatus,
 )
 from ..services.audit_service import audit
+from ..services.calc.cogs_variance_detector import (
+    VarianceInput,
+    detect_variance,
+)
 
 logger = logging.getLogger("restaurant_api.jobs.cogs_variance")
 
-# 5% of net revenue: the threshold from docs/04 mv_daily_pnl
+# 5% of net revenue: the threshold from docs/04 mv_daily_pnl.
+# Source of truth for the threshold lives in the calc engine; this constant
+# is only used as the explicit override passed into VarianceInput so the
+# audit-log payload reports it.
 COGS_VARIANCE_THRESHOLD = Decimal("0.05")
 
 
@@ -84,19 +91,18 @@ async def _run(session: AsyncSession, day: date) -> int:
         discount_total = Decimal((await session.execute(disc_stmt)).scalar_one() or 0)
         net_revenue = gross - discount_total
 
-        if net_revenue <= 0:
-            continue
-
-        variance_abs = actual - theoretical
-        variance_pct = variance_abs / net_revenue
-        if variance_pct.copy_abs() < COGS_VARIANCE_THRESHOLD:
-            continue
-
-        severity = (
-            "critical"
-            if variance_pct.copy_abs() >= COGS_VARIANCE_THRESHOLD * 2
-            else "warning"
+        report = detect_variance(
+            VarianceInput(
+                business_date=day,
+                store_id=str(row.store_id),
+                actual_cogs=actual,
+                theoretical_cogs=theoretical,
+                net_revenue=net_revenue,
+                threshold_pct=COGS_VARIANCE_THRESHOLD,
+            )
         )
+        if not report.flag:
+            continue
 
         await audit(
             session,
@@ -109,12 +115,12 @@ async def _run(session: AsyncSession, day: date) -> int:
                 "net_revenue": str(net_revenue),
                 "cogs_actual": str(actual),
                 "cogs_theoretical": str(theoretical),
-                "variance_abs": str(variance_abs),
-                "variance_pct": str(variance_pct),
-                "severity": severity,
+                "variance_abs": str(report.variance_abs),
+                "variance_pct": str(report.variance_pct),
+                "severity": report.severity,
                 "threshold_pct": str(COGS_VARIANCE_THRESHOLD),
             },
-            reason=f"COGS 變異 {variance_pct:.2%} 超過閾值 {COGS_VARIANCE_THRESHOLD:.0%}",
+            reason=f"COGS 變異 {report.variance_pct:.2%} 超過閾值 {COGS_VARIANCE_THRESHOLD:.0%}",
         )
         written += 1
 

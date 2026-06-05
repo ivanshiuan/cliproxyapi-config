@@ -4,16 +4,14 @@ This module owns the *atomic* state transitions of an order — create, close,
 void — and the bookkeeping ledger writes that go with each. Routers stay
 thin and stateless; services here do the work.
 
-Phase 1 simplifications (TODO callouts inline):
-- BOM consumption is stubbed: one ``stock_movements`` row per order line at
-  ``qty = -1`` against a placeholder ingredient. The real swap-in is
-  ``bom_consumer.expand_consumption(line)`` per ``specs/bom_consumer.md``.
-- Discount → ``net_revenue`` calculation is a flat sum of line_totals minus
-  flat-amount discounts; the real engine is ``discount_resolver`` per
-  ``specs/discount_resolver.md``.
-- 統一發票 / 載具 / 統編 fields are stored as-supplied; the validator hook
-  (``uniform_invoice_validator``) is not yet wired here — Pydantic regex
-  catches the format, downstream validates against MoF.
+Wiring into the calc engines:
+- BOM consumption goes through ``consume_bom`` when the menu item has
+  active recipes; falls back to a placeholder ledger row when none exist.
+- Net revenue on close runs the discount stack through
+  ``resolve_discounts`` (percent → employee → amount → allowance → comp).
+- 統一發票 / 載具 / 統編 fields are stored as-supplied; the regex on the
+  Pydantic schema catches the format and ``uniform_invoice_validator``
+  is available for the downstream MoF roundtrip when that lands.
 - LINE messenger is fire-and-forget on close, skipped when no customer is
   attached (the order header has no customer FK in Phase 1).
 """
@@ -54,6 +52,11 @@ from .calc.bom_consumer import (
     BOMConsumeInput,
     RecipeRow,
     consume_bom,
+)
+from .calc.discount_resolver import (
+    DiscountResolveInput,
+    DiscountRow,
+    resolve_discounts,
 )
 
 if TYPE_CHECKING:
@@ -531,7 +534,7 @@ async def close_order(
         # Belt-and-braces; schema already rejected naive but guard anyway.
         raise ValidationError("closed_at must be timezone-aware")
 
-    net_revenue = _compute_net_revenue_stub(order)
+    net_revenue = _compute_net_revenue(order)
 
     order.status = OrderStatus.CLOSED  # type: ignore[assignment]
     order.closed_at = closed_dt  # type: ignore[assignment]
@@ -603,27 +606,27 @@ async def void_order(
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Internal calc-engine stubs (replaced by calc-engine modules in Phase 2)
+# Net-revenue computation (delegates to the discount_resolver calc engine)
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _compute_net_revenue_stub(order: Order) -> Decimal:
-    """Naive net-revenue stub.
+def _compute_net_revenue(order: Order) -> Decimal:
+    """Net revenue = subtotal after running the discount stack through
+    ``resolve_discounts``.
 
-    TODO(discount_resolver): replace with
-    ``discount_resolver.compute_net_revenue(order)`` per
-    ``specs/discount_resolver.md`` — that handles percent discounts,
-    line-scoped discounts, comp/allowance precedence, etc.
+    The calc engine handles percent → employee → amount → allowance → comp
+    stacking precedence; we just project the order's discount rows into the
+    engine's input shape and read ``net_revenue`` off the result.
     """
     gross = sum((ln.line_total for ln in order.lines), Decimal("0"))
-    deductions = Decimal("0")
-    for d in order.discounts:
-        kind = d.kind.value if hasattr(d.kind, "value") else d.kind
-        if kind == "percent":
-            deductions += gross * d.value
-        else:
-            deductions += d.value
-    return gross - deductions
+    discount_rows = [
+        DiscountRow(kind=d.kind.value, value=d.value)  # type: ignore[arg-type]
+        for d in order.discounts
+    ]
+    output = resolve_discounts(
+        DiscountResolveInput(subtotal=gross, discounts=discount_rows)
+    )
+    return output.net_revenue
 
 
 __all__ = [
