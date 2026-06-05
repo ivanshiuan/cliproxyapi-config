@@ -85,12 +85,14 @@ async def close_order_endpoint(
     payload: OrderCloseRequest,
     session: DbSession,
     tenant_id: TenantId,
+    messenger: Messenger,
 ) -> OrderResponse:
     return await orders_service.close_order(
         session=session,
         order_id=order_id,
         tenant_id=tenant_id,
         closed_at=payload.closed_at,
+        messenger=messenger,
     )
 
 

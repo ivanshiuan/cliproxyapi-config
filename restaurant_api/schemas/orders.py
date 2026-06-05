@@ -125,6 +125,10 @@ class OrderCreateRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     store_id: UUID
+    # Optional FK to a known customer (LINE / phone / member scan). When
+    # present, the close-order step writes a points-accrual ledger row
+    # (and pushes a LINE confirmation when the customer has line_user_id).
+    customer_id: UUID | None = None
     order_no: str = Field(min_length=1, max_length=64)
     business_date: date
     opened_at: datetime | None = None
@@ -231,6 +235,7 @@ class OrderResponse(BaseModel):
     id: UUID
     store_id: UUID
     tenant_id: UUID
+    customer_id: UUID | None = None
     order_no: str
     business_date: date
     opened_at: datetime

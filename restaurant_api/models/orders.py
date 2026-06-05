@@ -144,6 +144,15 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         nullable=False,
         index=True,
     )
+    # SET NULL on customer delete: keep the sales record even if the
+    # customer profile is removed (right-to-erasure / 個資法 §11). The
+    # historical revenue stays attributed to the store; only the
+    # personal-data link drops.
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("customers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     order_no: Mapped[str] = mapped_column(Text, nullable=False)
     business_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     opened_at: Mapped[datetime] = mapped_column(

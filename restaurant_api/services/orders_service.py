@@ -4,7 +4,7 @@ This module owns the *atomic* state transitions of an order — create, close,
 void — and the bookkeeping ledger writes that go with each. Routers stay
 thin and stateless; services here do the work.
 
-Wiring into the calc engines:
+Wiring into the calc engines and side-channels:
 - BOM consumption goes through ``consume_bom`` when the menu item has
   active recipes; falls back to a placeholder ledger row when none exist.
 - Net revenue on close runs the discount stack through
@@ -12,8 +12,12 @@ Wiring into the calc engines:
 - 統一發票 / 載具 / 統編 fields are stored as-supplied; the regex on the
   Pydantic schema catches the format and ``uniform_invoice_validator``
   is available for the downstream MoF roundtrip when that lands.
-- LINE messenger is fire-and-forget on close, skipped when no customer is
-  attached (the order header has no customer FK in Phase 1).
+- LINE messenger is fire-and-forget on close — only when the order has
+  a ``customer_id`` and the customer carries a ``line_user_id``.
+- Points accrual: on close, when ``customer_id`` is set, writes a
+  ``customer_points_ledger`` row (1 pt / 100 TWD x tier multiplier) and
+  bumps the cached ``Customer.points_balance / lifetime_value /
+  last_visit_at`` aggregates.
 """
 
 from __future__ import annotations
@@ -22,7 +26,7 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -30,7 +34,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
+from ..integrations.line import LineMessage
 from ..models import (
+    Customer,
+    CustomerPointsLedger,
+    CustomerTier,
     Ingredient,
     MovementType,
     Order,
@@ -231,6 +239,7 @@ def order_to_response(order: Order) -> OrderResponse:
         id=order.id,
         store_id=order.store_id,
         tenant_id=order.tenant_id,
+        customer_id=order.customer_id,
         order_no=order.order_no,
         business_date=order.business_date,
         opened_at=opened_at,
@@ -348,6 +357,7 @@ async def create_order(
     order = Order(
         tenant_id=store_tenant,
         store_id=payload.store_id,
+        customer_id=payload.customer_id,
         order_no=payload.order_no,
         business_date=payload.business_date,
         opened_at=opened_at,
@@ -420,9 +430,13 @@ async def create_order(
         order.id, order.store_id, len(order.lines),
     )
 
-    # LINE confirmation: Phase 1 has no customer FK on Order, so skip silently.
-    # TODO(line): wire customer_id on Order then call messenger.push(...) here.
-    _ = messenger  # reserved for Phase 2
+    # LINE on create-time is intentionally a no-op: dine-in is the dominant
+    # channel and the customer is already at the table. The customer-facing
+    # LINE push happens at close (with the receipt + earned points) — see
+    # ``_accrue_points_and_notify``. ``messenger`` is kept on the signature
+    # so Phase 2 online-orders flows can plug a "we received your order"
+    # push without a service-signature break.
+    _ = messenger
 
     return order_to_response(order), True
 
@@ -536,12 +550,22 @@ async def close_order(
     order_id: uuid.UUID,
     tenant_id: uuid.UUID,
     closed_at: datetime | None,
+    messenger: LineMessenger | None = None,
 ) -> OrderResponse:
     """Transition an open order → closed.
 
     Net revenue is computed but *not* persisted — ``mv_daily_pnl`` aggregates
     it on the read side. We still log it so the close event has an audit
     trail with the value at the time of close.
+
+    When the order has a ``customer_id`` attached:
+      - writes a ``customer_points_ledger`` accrual row (1 point per TWD 100
+        of net revenue, multiplied by the tier in ``_POINTS_TIER_MULTIPLIER``)
+      - bumps ``Customer.points_balance``, ``lifetime_value``,
+        ``last_visit_at`` (cached aggregates documented in
+        ``models/customers.py``)
+      - pushes a LINE 收據 + 點數 message when the customer carries a
+        ``line_user_id`` (fire-and-forget; LINE failure does not block close)
     """
     order = await _load_order_with_relations(session, order_id, tenant_id)
     if order.status != OrderStatus.OPEN:
@@ -561,11 +585,112 @@ async def close_order(
     order.closed_at = closed_dt  # type: ignore[assignment]
     await session.flush()
 
+    # ─── Customer loop (points + LINE) — no-op when no customer attached ───
+    if order.customer_id is not None:
+        await _accrue_points_and_notify(
+            session,
+            order=order,
+            net_revenue=net_revenue,
+            closed_dt=closed_dt,
+            messenger=messenger,
+        )
+
     logger.info(
         "order.closed order_id=%s net_revenue=%s closed_at=%s",
         order.id, net_revenue, closed_dt.isoformat(),
     )
     return order_to_response(order)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Customer loop — points accrual + LINE confirmation
+# ──────────────────────────────────────────────────────────────────────────
+
+# 1 point per 100 TWD of net revenue. Same convention as 全家 / 7-11 / 大苑子.
+_POINTS_PER_TWD = Decimal("0.01")
+
+# Tier-rate multipliers. Source-of-truth lives here until a
+# ``tenant_settings`` table lets operators override per brand.
+_POINTS_TIER_MULTIPLIER: dict[CustomerTier, Decimal] = {
+    CustomerTier.REGULAR: Decimal("1.0"),
+    CustomerTier.SILVER: Decimal("1.5"),
+    CustomerTier.GOLD: Decimal("2.0"),
+    CustomerTier.PLATINUM: Decimal("3.0"),
+}
+
+
+def _compute_points_earned(net_revenue: Decimal, tier: CustomerTier) -> Decimal:
+    """Round-half-up to whole points (loyalty programs don't fractional)."""
+    if net_revenue <= Decimal("0"):
+        return Decimal("0")
+    multiplier = _POINTS_TIER_MULTIPLIER.get(tier, Decimal("1.0"))
+    raw = net_revenue * _POINTS_PER_TWD * multiplier
+    return raw.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+
+
+async def _accrue_points_and_notify(
+    session: AsyncSession,
+    *,
+    order: Order,
+    net_revenue: Decimal,
+    closed_dt: datetime,
+    messenger: LineMessenger | None,
+) -> None:
+    """Write the points ledger row, bump customer aggregates, push LINE."""
+    assert order.customer_id is not None  # caller guards this
+    customer = await session.get(Customer, order.customer_id)
+    if customer is None or customer.tenant_id != order.tenant_id:
+        # Customer was deleted or belongs to another tenant — skip silently
+        # so close still succeeds. The order keeps the FK as NULL via the
+        # SET NULL ondelete in the next nightly batch.
+        logger.warning(
+            "order.close.customer_missing order_id=%s customer_id=%s",
+            order.id, order.customer_id,
+        )
+        return
+
+    points = _compute_points_earned(net_revenue, customer.tier)
+    if points > 0:
+        ledger = CustomerPointsLedger(
+            tenant_id=order.tenant_id,
+            customer_id=customer.id,
+            delta=points,
+            reason="order.earn",
+            source_order_id=order.id,
+            note=f"net_revenue={net_revenue}",
+        )
+        session.add(ledger)
+
+    # Cached aggregates on the Customer row. The nightly job recomputes
+    # these from the ledger; we keep them current here so the LINE push
+    # below carries the right balance.
+    customer.points_balance = (customer.points_balance or Decimal("0")) + points
+    customer.lifetime_value = (customer.lifetime_value or Decimal("0")) + max(
+        net_revenue, Decimal("0")
+    )
+    customer.last_visit_at = closed_dt
+    await session.flush()
+
+    # LINE push — fire-and-forget. The customer might not be a LINE user
+    # (we identified them by phone / member card), in which case we skip.
+    if messenger is not None and customer.line_user_id:
+        try:
+            text = (
+                f"感謝您的光臨!\n"
+                f"訂單 {order.order_no}\n"
+                f"消費金額 NT${net_revenue}\n"
+                f"本次累積點數 {points}\n"
+                f"目前點數餘額 {customer.points_balance}"
+            )
+            await messenger.push(
+                customer.line_user_id,
+                LineMessage(kind="text", text=text),
+            )
+        except Exception as exc:
+            logger.warning(
+                "order.close.line_push_failed order_id=%s err=%s",
+                order.id, exc,
+            )
 
 
 async def void_order(
