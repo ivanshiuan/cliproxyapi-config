@@ -6,8 +6,13 @@ The full service flow is:
                                     Phase 1 starts here; this module
                                     covers the two stages before it.
 
-This file is wired schema-only in Phase 1; the LINE-bot booking flow and
-the in-store kiosk for self-check-in land in Phase 2.
+Phase 1: CRUD + state-machine endpoints live in ``routers/reservations``
+(``/reservations`` + ``/queue``); state transitions are validated against
+the graphs in ``schemas/reservations``.
+
+Phase 2 will add the LINE-bot booking flow (auto-confirm reply on the
+``confirmed`` transition) and the in-store kiosk for self-check-in
+(which writes ``queue.joined`` rows from a tablet at the door).
 """
 
 from __future__ import annotations

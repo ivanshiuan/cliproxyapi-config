@@ -24,6 +24,7 @@ from .middleware import RequestContextMiddleware, configure_logging
 from .routers import clock as clock_router
 from .routers import events as events_router
 from .routers import orders as orders_router
+from .routers import reservations as reservations_router
 from .routers import stock as stock_router
 from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
 
@@ -82,6 +83,12 @@ _mount_router(orders_router, "/orders")
 _mount_router(stock_router, "/stock")
 _mount_router(clock_router, "/clock")
 _mount_router(events_router, "/events")
+# Reservations module exports two routers (one per prefix); mount each with
+# the path-based idempotency guard.
+if not any(getattr(r, "path", "").startswith("/reservations") for r in app.routes):
+    app.include_router(reservations_router.reservations_router)
+if not any(getattr(r, "path", "").startswith("/queue") for r in app.routes):
+    app.include_router(reservations_router.queue_router)
 app.include_router(health_router.router)
 
 
