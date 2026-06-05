@@ -1,0 +1,145 @@
+"""FastAPI router — ``/customers`` (member master + points history).
+
+Endpoints
+---------
+- POST   /customers                          create a new member
+- GET    /customers/{id}                     fetch one
+- GET    /customers                          list / search (counter lookup)
+- PATCH  /customers/{id}                     update display_name / tier / handles
+- DELETE /customers/{id}                     soft-delete (sets deleted_at)
+- GET    /customers/{id}/points-ledger       read-only points history
+
+Append-only contract: the points ledger has no POST / PATCH / DELETE
+here — earn rows are written by the orders close path, redeem rows
+will land on a future ``POST /customers/{id}/redeem`` endpoint, and
+expiry sweeps come from the nightly job. The OpenAPI immutability
+test asserts the absence of write endpoints.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from fastapi import APIRouter, Query, status
+
+from ..api.deps import DbSession, TenantId
+from ..models import CustomerTier
+from ..schemas.customers import (
+    CustomerCreate,
+    CustomerPointsLedgerResponse,
+    CustomerResponse,
+    CustomerUpdate,
+)
+from ..services import customers_service
+
+# Module-level Query() singletons (B008 / FastAPI metadata).
+_Q_SEARCH = Query(default=None, max_length=80)
+_Q_TIER = Query(default=None)
+_Q_INCLUDE_DELETED = Query(default=False)
+_Q_LIMIT = Query(default=200, ge=1, le=500)
+
+router = APIRouter(prefix="/customers", tags=["customers"])
+
+
+@router.post(
+    "",
+    response_model=CustomerResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="新增會員 (顧客自願填或櫃台代填)",
+)
+async def create_customer(
+    payload: CustomerCreate,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CustomerResponse:
+    return await customers_service.create_customer(
+        session, payload, tenant_id=tenant_id
+    )
+
+
+@router.get(
+    "/{customer_id}",
+    response_model=CustomerResponse,
+    summary="查單筆會員",
+)
+async def get_customer(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CustomerResponse:
+    return await customers_service.get_customer(
+        session, customer_id, tenant_id=tenant_id
+    )
+
+
+@router.get(
+    "",
+    response_model=list[CustomerResponse],
+    summary="搜尋會員 (display_name / phone / line_user_id 前綴比對)",
+)
+async def list_customers(
+    session: DbSession,
+    tenant_id: TenantId,
+    search: str | None = _Q_SEARCH,
+    tier: CustomerTier | None = _Q_TIER,
+    include_deleted: bool = _Q_INCLUDE_DELETED,
+    limit: int = _Q_LIMIT,
+) -> list[CustomerResponse]:
+    return await customers_service.list_customers(
+        session,
+        tenant_id=tenant_id,
+        search=search,
+        tier=tier,
+        include_deleted=include_deleted,
+        limit=limit,
+    )
+
+
+@router.patch(
+    "/{customer_id}",
+    response_model=CustomerResponse,
+    summary="部分更新會員資料",
+)
+async def patch_customer(
+    customer_id: uuid.UUID,
+    payload: CustomerUpdate,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CustomerResponse:
+    return await customers_service.patch_customer(
+        session, customer_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.delete(
+    "/{customer_id}",
+    response_model=CustomerResponse,
+    summary="軟刪除 (sets deleted_at, 保留歷史紀錄)",
+)
+async def soft_delete_customer(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CustomerResponse:
+    return await customers_service.soft_delete_customer(
+        session, customer_id, tenant_id=tenant_id
+    )
+
+
+@router.get(
+    "/{customer_id}/points-ledger",
+    response_model=list[CustomerPointsLedgerResponse],
+    summary="會員點數歷史 (newest first; append-only)",
+)
+async def list_points_ledger(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+    limit: int = _Q_LIMIT,
+) -> list[CustomerPointsLedgerResponse]:
+    return await customers_service.list_points_ledger(
+        session, customer_id, tenant_id=tenant_id, limit=limit
+    )
+
+
+__all__ = ["router"]
