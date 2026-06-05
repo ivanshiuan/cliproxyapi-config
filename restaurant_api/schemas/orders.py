@@ -48,7 +48,14 @@ StrictDecimal = Annotated[Decimal, BeforeValidator(_reject_float)]
 
 
 class OrderLineCreate(BaseModel):
-    """One line on a new order. ``unit_price`` is a sale-time snapshot."""
+    """One line on a new order. ``unit_price`` is a sale-time snapshot.
+
+    ``kitchen_station`` opts this line into the KDS (Kitchen Display System).
+    When set, the orders service stamps ``kitchen_status=queued`` +
+    ``sent_to_kitchen_at=now()`` so the line shows up on the kitchen
+    display the moment the order saves. Leave it ``None`` for counter-only
+    lines (no kitchen prep needed — drinks pre-poured, retail items, etc.).
+    """
 
     model_config = ConfigDict(frozen=True)
 
@@ -56,6 +63,7 @@ class OrderLineCreate(BaseModel):
     qty: StrictDecimal = Field(gt=Decimal("0"))
     unit_price: StrictDecimal = Field(ge=Decimal("0"))
     notes: str | None = Field(default=None, max_length=200)
+    kitchen_station: Literal["kitchen", "bar", "dessert", "counter"] | None = None
 
 
 class OrderDiscountCreate(BaseModel):
@@ -188,6 +196,10 @@ class OrderLineResponse(BaseModel):
     cogs_actual: Decimal | None = None
     cogs_theoretical: Decimal | None = None
     notes: str | None = None
+    # KDS fields — None when the line wasn't routed to a kitchen station.
+    kitchen_station: str | None = None
+    kitchen_status: str | None = None
+    sent_to_kitchen_at: datetime | None = None
 
 
 class OrderDiscountResponse(BaseModel):

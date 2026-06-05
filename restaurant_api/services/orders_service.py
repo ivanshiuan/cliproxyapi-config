@@ -42,7 +42,7 @@ from ..models import (
     StockMovement,
     Store,
 )
-from ..models.orders import DiscountKind, PaymentMethod
+from ..models.orders import DiscountKind, KitchenStation, KitchenStatus, PaymentMethod
 from ..schemas.orders import (
     OrderCreateRequest,
     OrderLineCreate,
@@ -253,6 +253,13 @@ def order_to_response(order: Order) -> OrderResponse:
                 "cogs_actual": ln.cogs_actual,
                 "cogs_theoretical": ln.cogs_theoretical,
                 "notes": ln.notes,
+                "kitchen_station": (
+                    ln.kitchen_station.value if ln.kitchen_station is not None else None
+                ),
+                "kitchen_status": (
+                    ln.kitchen_status.value if ln.kitchen_status is not None else None
+                ),
+                "sent_to_kitchen_at": _to_tpe(ln.sent_to_kitchen_at),
             }
             for ln in lines
         ],  # type: ignore[arg-type]
@@ -456,6 +463,17 @@ async def _add_line_with_movement(
         )
         theoretical_cogs = bom_output.theoretical_cogs
 
+    # KDS opt-in: if the caller routed this line to a station, stamp the
+    # initial KDS status + arrival timestamp so the kitchen display picks
+    # it up immediately. Counter-only lines (no station) skip KDS entirely.
+    kitchen_station = (
+        KitchenStation(line_payload.kitchen_station)
+        if line_payload.kitchen_station is not None
+        else None
+    )
+    kitchen_status = KitchenStatus.QUEUED if kitchen_station is not None else None
+    sent_to_kitchen_at = occurred_at if kitchen_station is not None else None
+
     line = OrderLine(
         tenant_id=tenant_id,
         order_id=order.id,
@@ -465,6 +483,9 @@ async def _add_line_with_movement(
         line_total=line_total,
         cogs_theoretical=theoretical_cogs,
         notes=line_payload.notes,
+        kitchen_station=kitchen_station,
+        kitchen_status=kitchen_status,
+        sent_to_kitchen_at=sent_to_kitchen_at,
     )
     session.add(line)
     await session.flush()  # need line.id for source_id

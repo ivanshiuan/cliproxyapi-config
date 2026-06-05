@@ -23,6 +23,7 @@ from .database import dispose_engine
 from .middleware import RequestContextMiddleware, configure_logging
 from .routers import clock as clock_router
 from .routers import events as events_router
+from .routers import kitchen as kitchen_router
 from .routers import orders as orders_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
@@ -83,6 +84,7 @@ _mount_router(orders_router, "/orders")
 _mount_router(stock_router, "/stock")
 _mount_router(clock_router, "/clock")
 _mount_router(events_router, "/events")
+_mount_router(kitchen_router, "/kitchen")
 # Reservations module exports two routers (one per prefix); mount each with
 # the path-based idempotency guard.
 if not any(getattr(r, "path", "").startswith("/reservations") for r in app.routes):
