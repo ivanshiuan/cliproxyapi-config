@@ -37,6 +37,7 @@ from .orders import (
     OrderStatus,
     PaymentMethod,
 )
+from .public_holidays import PublicHoliday
 from .reservations import (
     QueueStatus,
     Reservation,
@@ -98,6 +99,8 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "TimeClock",
     # cash drawer
     "CashDrawerSession",
+    # public holiday calendar (Taiwan)
+    "PublicHoliday",
     # audit trail
     "AuditLog",
     # customers / loyalty

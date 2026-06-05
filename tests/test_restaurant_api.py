@@ -33,8 +33,8 @@ def test_root_endpoint():
 # to /health/ready and tested there.
 
 
-def test_models_metadata_has_25_tables():
-    """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) = 25 total."""
+def test_models_metadata_has_26_tables():
+    """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national = 26 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -66,10 +66,12 @@ def test_models_metadata_has_25_tables():
         # Reservation + queue (2)
         "reservations",
         "walk_in_queue",
+        # National-scope reference data (1) — not tenant-scoped
+        "public_holidays",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 25
+    assert len(Base.metadata.tables) == 26
 
 
 def test_money_columns_are_numeric_14_4():
@@ -88,11 +90,18 @@ def test_money_columns_are_numeric_14_4():
 
 
 def test_every_business_table_has_tenant_id():
-    """tenant_id present on every table except tenants itself."""
+    """tenant_id present on every BUSINESS table.
+
+    Excluded by design:
+      - ``tenants`` itself (root of the tenancy graph)
+      - ``public_holidays`` (national reference data — same calendar for
+        every tenant in a given country)
+    """
     from restaurant_api.models import Base
 
+    national_scope = {"public_holidays"}
     for name, table in Base.metadata.tables.items():
-        if name == "tenants":
+        if name == "tenants" or name in national_scope:
             continue
         assert "tenant_id" in table.c, f"{name} missing tenant_id"
 

@@ -25,6 +25,7 @@ from .routers import clock as clock_router
 from .routers import events as events_router
 from .routers import orders as orders_router
 from .routers import stock as stock_router
+from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
 
 logger = logging.getLogger("restaurant_api")
 
@@ -37,6 +38,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "restaurant_api.starting",
         extra={"env": settings.env, "version": __version__},
     )
+    # Prime the in-memory Taiwan holiday cache. Failure here is non-fatal —
+    # the calendar falls back to weekend-only mode and the warning surfaces
+    # in the /health/ready check downstream.
+    try:
+        n = await refresh_holiday_cache()
+        logger.info("holiday_cache.primed", extra={"holiday_count": n})
+    except Exception as e:
+        logger.warning(
+            "holiday_cache.prime_failed",
+            extra={"error": str(e), "fallback": "weekend_only"},
+        )
     yield
     health_router.mark_shutting_down()
     logger.info("restaurant_api.shutting_down")

@@ -35,7 +35,8 @@ from ..schemas.clock import (
     OpenClockResponse,
 )
 from ..services import clock_service
-from ..services.clock_service import IsHolidayFn, default_is_holiday
+from ..services.clock_service import IsHolidayFn
+from ..services.holiday_calendar import get_calendar
 
 router = APIRouter(prefix="/clock", tags=["clock"])
 
@@ -43,10 +44,11 @@ router = APIRouter(prefix="/clock", tags=["clock"])
 def get_is_holiday() -> IsHolidayFn:
     """DI seam for the holiday predicate.
 
-    Default: weekday-based "weekend = holiday" rule. Tests override via
+    Production: looks up the ``public_holidays`` table (cached in-process)
+    with weekend fallback. Tests override via
     ``app.dependency_overrides[get_is_holiday] = lambda: lambda d: True``.
     """
-    return default_is_holiday
+    return get_calendar().is_holiday
 
 
 IsHolidayDep = Annotated[IsHolidayFn, Depends(get_is_holiday)]
