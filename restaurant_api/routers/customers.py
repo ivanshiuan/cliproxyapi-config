@@ -29,6 +29,7 @@ from ..schemas.customers import (
     CustomerPointsLedgerResponse,
     CustomerResponse,
     CustomerUpdate,
+    PointsRedemptionRequest,
 )
 from ..services import customers_service
 
@@ -139,6 +140,23 @@ async def list_points_ledger(
 ) -> list[CustomerPointsLedgerResponse]:
     return await customers_service.list_points_ledger(
         session, customer_id, tenant_id=tenant_id, limit=limit
+    )
+
+
+@router.post(
+    "/{customer_id}/redeem",
+    response_model=CustomerPointsLedgerResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="點數兌換 (寫入負值 ledger, 扣除餘額)",
+)
+async def redeem_points(
+    customer_id: uuid.UUID,
+    payload: PointsRedemptionRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CustomerPointsLedgerResponse:
+    return await customers_service.redeem_points(
+        session, customer_id, payload, tenant_id=tenant_id
     )
 
 

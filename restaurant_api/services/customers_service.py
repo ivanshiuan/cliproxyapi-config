@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +27,7 @@ from ..schemas.customers import (
     CustomerPointsLedgerResponse,
     CustomerResponse,
     CustomerUpdate,
+    PointsRedemptionRequest,
 )
 from .audit_service import audit
 
@@ -249,6 +251,85 @@ async def list_points_ledger(
     return [CustomerPointsLedgerResponse.model_validate(r) for r in rows]
 
 
+async def redeem_points(
+    session: AsyncSession,
+    customer_id: uuid.UUID,
+    payload: PointsRedemptionRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> CustomerPointsLedgerResponse:
+    """Spend points at the counter.
+
+    Writes a NEGATIVE ledger row and decrements the cached
+    ``points_balance``. The customer row is loaded with
+    ``SELECT ... FOR UPDATE`` so two concurrent cashier requests can't
+    both pass the balance check and silently overspend (no double-spend
+    race even under Postgres' default Read Committed isolation).
+    """
+    # Row-level lock — released at transaction commit/rollback.
+    stmt = (
+        select(Customer)
+        .where(Customer.id == customer_id, Customer.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError(
+            message=f"customer {customer_id} not found",
+            details={"customer_id": str(customer_id)},
+        )
+    if row.deleted_at is not None:
+        raise ConflictError(
+            message="cannot redeem points for a deleted customer",
+            details={
+                "customer_id": str(customer_id),
+                "deleted_at": row.deleted_at.isoformat(),
+            },
+        )
+
+    points_decimal = Decimal(payload.points)
+    available = row.points_balance or Decimal("0")
+    if available < points_decimal:
+        raise ConflictError(
+            message="insufficient points balance",
+            details={
+                "requested": payload.points,
+                "available": str(available),
+            },
+        )
+
+    ledger = CustomerPointsLedger(
+        tenant_id=tenant_id,
+        customer_id=row.id,
+        delta=-points_decimal,  # negative for redemptions
+        reason=payload.reason,
+        source_order_id=payload.source_order_id,
+        note=payload.note,
+    )
+    session.add(ledger)
+
+    before_balance = available
+    row.points_balance = available - points_decimal
+    await session.flush()
+    await session.refresh(ledger)
+
+    await audit(
+        session,
+        action="customer.points_redeemed",
+        tenant_id=tenant_id,
+        actor_id=payload.actor_id,
+        target=("customers", row.id),
+        before={"points_balance": str(before_balance)},
+        after={
+            "points_balance": str(row.points_balance),
+            "delta": -payload.points,
+            "reason": payload.reason,
+        },
+        reason=payload.reason,
+    )
+    return CustomerPointsLedgerResponse.model_validate(ledger)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Private helpers
 # ──────────────────────────────────────────────────────────────────────────
@@ -336,5 +417,6 @@ __all__ = [
     "list_customers",
     "list_points_ledger",
     "patch_customer",
+    "redeem_points",
     "soft_delete_customer",
 ]

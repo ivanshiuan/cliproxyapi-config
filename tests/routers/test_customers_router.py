@@ -341,6 +341,200 @@ async def test_points_ledger_endpoint_is_read_only(
 # ──────────────────────────────────────────────────────────────────────────
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Points redemption
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def _create_and_credit(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+    *,
+    display_name: str = "金客",
+) -> str:
+    """Helper: make a customer with some points by closing an order."""
+    cust = await client.post(
+        "/customers", json=_new_customer_body(display_name=display_name)
+    )
+    cid = cust.json()["id"]
+    order_body = {
+        "store_id": str(seed_store.id),
+        "customer_id": cid,
+        "order_no": f"R-{uuid.uuid4().hex[:8]}",
+        "business_date": date.today().isoformat(),
+        "opened_at": datetime.now(UTC).isoformat(),
+        "lines": [
+            {
+                "menu_item_id": str(seed_menu_item.id),
+                "qty": "1",
+                # 5000 TWD * 1% * 1.0 = 50 points
+                "unit_price": "5000.00",
+            }
+        ],
+    }
+    create = await client.post("/orders", json=order_body)
+    assert create.status_code == 201
+    close = await client.post(f"/orders/{create.json()['id']}/close", json={})
+    assert close.status_code == 200
+    return cid
+
+
+async def test_redeem_writes_negative_ledger_row_and_decrements_balance(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+) -> None:
+    cid = await _create_and_credit(
+        client, db_session, seed_store, seed_menu_item
+    )
+    resp = await client.post(
+        f"/customers/{cid}/redeem",
+        json={"points": 30, "reason": "redeem.coupon"},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert Decimal(body["delta"]) == Decimal("-30")
+    assert body["reason"] == "redeem.coupon"
+
+    # Balance: 50 earned → 30 redeemed → 20 remaining.
+    cust = await client.get(f"/customers/{cid}")
+    assert Decimal(cust.json()["points_balance"]) == Decimal("20")
+
+
+async def test_redeem_more_than_balance_returns_409(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+) -> None:
+    cid = await _create_and_credit(
+        client, db_session, seed_store, seed_menu_item
+    )
+    resp = await client.post(
+        f"/customers/{cid}/redeem",
+        json={"points": 100, "reason": "redeem.gift"},
+    )
+    assert resp.status_code == 409
+    body = resp.json()["error"]
+    assert body["code"] == "CONFLICT"
+    assert body["details"]["requested"] == 100
+    assert Decimal(body["details"]["available"]) == Decimal("50")
+
+
+async def test_redeem_zero_points_rejected_at_validation(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+) -> None:
+    cid = await _create_and_credit(
+        client, db_session, seed_store, seed_menu_item
+    )
+    resp = await client.post(
+        f"/customers/{cid}/redeem",
+        json={"points": 0, "reason": "redeem.coupon"},
+    )
+    assert resp.status_code == 422
+
+
+async def test_redeem_bad_reason_namespace_rejected(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+) -> None:
+    cid = await _create_and_credit(
+        client, db_session, seed_store, seed_menu_item
+    )
+    resp = await client.post(
+        f"/customers/{cid}/redeem",
+        json={"points": 10, "reason": "order.earn"},  # wrong namespace
+    )
+    assert resp.status_code == 422
+
+
+async def test_redeem_from_deleted_customer_returns_409(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+) -> None:
+    cid = await _create_and_credit(
+        client, db_session, seed_store, seed_menu_item
+    )
+    await client.delete(f"/customers/{cid}")
+    resp = await client.post(
+        f"/customers/{cid}/redeem",
+        json={"points": 10, "reason": "redeem.coupon"},
+    )
+    assert resp.status_code == 409
+    assert "deleted" in resp.json()["error"]["message"].lower()
+
+
+async def test_redeem_unknown_customer_returns_404(
+    client: httpx.AsyncClient,
+) -> None:
+    resp = await client.post(
+        f"/customers/{uuid.uuid4()}/redeem",
+        json={"points": 10, "reason": "redeem.coupon"},
+    )
+    assert resp.status_code == 404
+
+
+async def test_redeem_shows_up_in_points_ledger(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_store,
+    seed_menu_item,
+) -> None:
+    cid = await _create_and_credit(
+        client, db_session, seed_store, seed_menu_item
+    )
+    await client.post(
+        f"/customers/{cid}/redeem",
+        json={"points": 20, "reason": "redeem.discount", "note": "VIP coupon"},
+    )
+    ledger = await client.get(f"/customers/{cid}/points-ledger")
+    rows = ledger.json()
+    # Newest-first: redemption row should be element 0, earn row element 1.
+    assert len(rows) == 2
+    assert Decimal(rows[0]["delta"]) == Decimal("-20")
+    assert rows[0]["reason"] == "redeem.discount"
+    assert rows[0]["note"] == "VIP coupon"
+    assert Decimal(rows[1]["delta"]) == Decimal("50")  # earn from setup
+    assert rows[1]["reason"] == "order.earn"
+
+
+async def test_redeem_other_tenant_customer_returns_404(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    other = Tenant(name="Other", slug=f"or-{uuid.uuid4().hex[:6]}")
+    db_session.add(other)
+    await db_session.flush()
+    other_cust = Customer(
+        tenant_id=other.id,
+        display_name="他家",
+        tier=CustomerTier.REGULAR,
+        points_balance=Decimal("100"),
+    )
+    db_session.add(other_cust)
+    await db_session.flush()
+    resp = await client.post(
+        f"/customers/{other_cust.id}/redeem",
+        json={"points": 10, "reason": "redeem.coupon"},
+    )
+    assert resp.status_code == 404
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Tenant scoping
+# ──────────────────────────────────────────────────────────────────────────
+
+
 async def test_other_tenant_customer_invisible(
     client: httpx.AsyncClient,
     db_session: AsyncSession,

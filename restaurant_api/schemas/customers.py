@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from ..models import CustomerTier
 
@@ -57,6 +57,36 @@ class CustomerCreate(BaseModel):
     birthdate: date | None = None
     tier: CustomerTier = CustomerTier.REGULAR
     notes: str | None = None
+
+
+class PointsRedemptionRequest(BaseModel):
+    """Spend points at the counter.
+
+    ``points`` is an integer at the API boundary (loyalty programs don't
+    do fractional points) but is stored as ``Decimal`` in the ledger to
+    match the column type. The service writes a NEGATIVE delta row.
+
+    ``reason`` must be in the ``redeem.*`` namespace (e.g. ``redeem.coupon``,
+    ``redeem.discount``, ``redeem.gift``) so analytics joins stay tidy
+    against the earn-side ``order.earn`` rows.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    points: int = Field(gt=0, le=1_000_000)
+    reason: str = Field(min_length=1, max_length=64)
+    source_order_id: UUID | None = None
+    actor_id: UUID | None = None
+    note: str | None = Field(default=None, max_length=255)
+
+    @model_validator(mode="after")
+    def _reason_namespace(self) -> PointsRedemptionRequest:
+        if not self.reason.startswith("redeem."):
+            raise ValueError(
+                "reason must be in the 'redeem.*' namespace "
+                "(e.g. 'redeem.coupon', 'redeem.discount')"
+            )
+        return self
 
 
 class CustomerUpdate(BaseModel):
@@ -128,4 +158,5 @@ __all__ = [
     "CustomerPointsLedgerResponse",
     "CustomerResponse",
     "CustomerUpdate",
+    "PointsRedemptionRequest",
 ]
