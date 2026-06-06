@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -34,6 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
+from ..config import get_settings
 from ..integrations.line import LineMessage
 from ..models import (
     Customer,
@@ -651,12 +652,21 @@ async def _accrue_points_and_notify(
 
     points = _compute_points_earned(net_revenue, customer.tier)
     if points > 0:
+        # Stamp expires_at per the tenant-wide policy. Settings.points_expiry_days
+        # is the lifecycle horizon — 0 means "never expires" (legacy mode);
+        # any positive value sets the cutoff that the nightly points_expire
+        # job sweeps against.
+        expiry_days = get_settings().points_expiry_days
+        expires_at = (
+            closed_dt + timedelta(days=expiry_days) if expiry_days > 0 else None
+        )
         ledger = CustomerPointsLedger(
             tenant_id=order.tenant_id,
             customer_id=customer.id,
             delta=points,
             reason="order.earn",
             source_order_id=order.id,
+            expires_at=expires_at,
             note=f"net_revenue={net_revenue}",
         )
         session.add(ledger)

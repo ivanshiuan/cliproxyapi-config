@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     default_timezone: str = "Asia/Taipei"
     default_currency: str = "TWD"
 
+    # ─── Loyalty ────────────────────────────────────────────────────────
+    # Earned points expire this many days after the closing order. 365 is
+    # the F&B convention (Starbucks TW / FamiMart / 全家 all use 12 months).
+    # Set 0 to mint points that never expire (legacy mode).
+    points_expiry_days: int = Field(default=365, ge=0)
+
     # ─── Logging ────────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 

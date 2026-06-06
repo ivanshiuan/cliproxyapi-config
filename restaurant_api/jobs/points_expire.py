@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_sessionmaker
-from ..models import CustomerPointsLedger
+from ..models import Customer, CustomerPointsLedger
 from ..services.audit_service import audit
 
 logger = logging.getLogger("restaurant_api.jobs.points_expire")
@@ -73,6 +74,25 @@ async def _scan_and_reverse(session: AsyncSession) -> int:
             note=marker,
         )
         session.add(reversal)
+
+        # Decrement the cached customer.points_balance, BUT never let it go
+        # negative: if the customer already redeemed against these points
+        # since they were earned, the redemption already pulled the balance
+        # down — we only zero out what's still standing as an earned credit.
+        # SELECT ... FOR UPDATE so a concurrent /redeem from the cashier
+        # can't race with us.
+        cust = (
+            await session.execute(
+                select(Customer)
+                .where(Customer.id == original.customer_id)
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if cust is not None:
+            current = cust.points_balance or Decimal("0")
+            to_remove = min(original.delta, current)
+            cust.points_balance = current - to_remove
+
         await session.flush()
 
         await audit(
