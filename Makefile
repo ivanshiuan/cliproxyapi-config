@@ -158,6 +158,23 @@ full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smok
 	@echo
 	@echo "✅ Full quality gate green."
 
+.PHONY: coverage
+coverage: install ## Run the suite with line + branch coverage; term-missing summary
+	$(PYTEST) tests/ \
+		--cov=restaurant_api --cov=devswarm \
+		--cov-report=term-missing:skip-covered \
+		--cov-report=html \
+		--cov-branch
+	@echo
+	@echo "📊 HTML report: open htmlcov/index.html"
+
+.PHONY: coverage-quick
+coverage-quick: ## Coverage without re-installing or htmlgen — fastest local loop
+	$(PYTEST) tests/ \
+		--cov=restaurant_api --cov=devswarm \
+		--cov-report=term-missing:skip-covered \
+		--cov-branch -q
+
 .PHONY: api
 api: install ## Run the FastAPI restaurant backend in dev mode (auto-reload)
 	$(VENV)/bin/uvicorn restaurant_api.main:app --reload --host 0.0.0.0 --port 8000
