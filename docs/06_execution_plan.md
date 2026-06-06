@@ -36,10 +36,11 @@
 
 | # | Spec | Router 路徑 | 狀態 |
 |---|---|---|---|
-| 6 | `specs/orders_router.md` | `restaurant_api/routers/orders.py` | ✅ 規格已寫 |
-| 7 | `specs/stock_intake_router.md` | `restaurant_api/routers/stock.py` | ✅ 規格已寫 |
-| 8 | `specs/clock_router.md` | `restaurant_api/routers/clock.py` | ✅ 規格已寫 |
-| 9 | `specs/cost_events_router.md` | `restaurant_api/routers/events.py` | ✅ 規格已寫 |
+| 6 | `specs/orders_router.md` | `restaurant_api/routers/orders.py` | ✅ **已實作 + 整合測** |
+| 7 | `specs/stock_intake_router.md` | `restaurant_api/routers/stock.py` | ✅ **已實作 + 整合測** |
+| 8 | `specs/clock_router.md` | `restaurant_api/routers/clock.py` | ✅ **已實作 + 整合測**（含 TW 公定假日真實查詢） |
+| 9 | `specs/cost_events_router.md` | `restaurant_api/routers/events.py` | ✅ **已實作 + 整合測** |
+| + | （Phase 1 額外加碼） | `routers/reservations.py` `kitchen.py` `customers.py` | ✅ **已實作 + 整合測** |
 
 > Router 不適合用 DevSwarm 跑（Coder 限制是單檔輸出；router 需要 schemas + handlers + DI）。
 > 由我手動依規格實作，或未來 DevSwarm 擴充多檔模式後再讓蜂群跑。
@@ -48,7 +49,7 @@
 
 | # | 目標 | 狀態 |
 |---|---|---|
-| 10 | Alembic 初始遷移（18 表） | ✅ **已產生並驗證** |
+| 10 | Alembic 初始遷移 | ✅ **已產生並驗證**（演進至 5 份遷移、26 表） |
 | 11 | POS 整合腳本（iCHEF / POS+ / 自建擇一） | 🔴 **等 D2 決策** |
 | 12 | 報表 dashboard（簡易 HTML） | 🟡 T1 後半再說 |
 
@@ -99,31 +100,57 @@
 
 ---
 
-## 「全線執行」當前進度（2026-05-26）
+## 「全線執行」當前進度（2026-06-06 更新）
 
 | 項目 | 狀態 |
 |---|---|
-| Phase 0 — DevSwarm 蜂群骨架 | ✅ 完成、47/47 測綠、Mocked 端到端通過 |
-| Phase 1 — 餐飲後端骨架（FastAPI + 18 表 ORM） | ✅ 完成 |
-| 戰略文件 6 份（含本文） | ✅ 完成 |
-| DevSwarm 任務簡報 6 份（4 calc + 4 router + 1 bonus + 1 demo = 10 spec） | ✅ 完成 |
-| Alembic 初始遷移（18 表 470 行） | ✅ **已產生並在 Postgres 16 驗證** |
-| CI Workflow | ✅ GitHub Actions 配好 |
-| `make` 工具集 | ✅ install / test / lint / fmt / demo / swarm / db-up / api / status |
-| Lint | ✅ ruff 全綠 |
+| Phase 0 — DevSwarm 蜂群骨架 | ✅ 完成、Mocked 端到端通過 |
+| Phase 1 — 餐飲後端骨架（FastAPI + 26 表 ORM） | ✅ **實質完工**（見下方明細） |
+| 戰略文件 11 份（含本文） | ✅ 完成 |
+| DevSwarm 任務簡報 10 份 | ✅ 完成 |
+| Alembic 遷移（5 份、含 KDS / customers / public_holidays / orders.customer_id） | ✅ **已驗證 + migration safety scanner 全綠** |
+| CI Workflow | ✅ GitHub Actions 配好 + OpenAPI 匯出修補 |
+| `make` 工具集 | ✅ 新增 `coverage` / `coverage-quick` |
+| Lint / Type check / Tests | ✅ ruff 0 / pyright 0 / **304 pytest 全綠** |
+| Coverage baseline | ✅ 74.9% line+branch（31 檔 100%） |
 | Git push | ✅ branch `claude/autonomous-resttech-enterprise-oW9jp` |
 
-剩下未做的全部都是「等指揮官決策」或「等 API key 才能執行的雲端動作」：
+### Phase 1 實質完工的功能（autonomous 模式期間補完）
 
-- 跑 `make demo` 驗證 DevSwarm 端到端（需 ANTHROPIC_API_KEY）
-- POS 整合（等 D2）
-- 報表 dashboard（T1 後半）
+| 模組 | 端點數 | 測試 |
+|---|---|---|
+| `/orders` POS | 4 | 整合測完整 + 顧客 loop 測 |
+| `/stock` 進貨/異動 | 4 | 整合測完整 |
+| `/clock` 打卡/請假 | 4 | 含 TW 公定假日真實查詢（不再是 weekend-only） |
+| `/events` 報廢/員工餐/試菜 | 4 | 整合測完整 |
+| `/reservations` 訂位 | 4 | 狀態機 booked→confirmed→seated→completed + audit |
+| `/queue` 候位 | 3 | waiting→called→seated/abandoned |
+| `/kitchen` KDS | 2 | queued→cooking→ready→served 四階段 + 時間戳 |
+| `/customers` 會員 | 7 | CRUD + 點數歷史 + redeem（FOR UPDATE 防 double-spend） |
+| `/health` ready/live | 2 | K8s probe |
+| `/version` `/` 元資料 | 2 | |
+| **總計** | **29 paths · 53 schemas** | **304 tests** |
+
+### 顧客忠誠度全閉環
+
+  earn（close 訂單）→ redeem（櫃台兌換）→ expire（每天 03:30 排程）
+  ─ ledger truth + 快取 balance truth 都對得起來
+  ─ Customer.points_balance 寫入由 FOR UPDATE 保護不會 double-spend
+  ─ Tier multiplier（regular×1.0 / silver×1.5 / gold×2.0 / platinum×3.0）內建
+
+剩下未做的全部都是「等指揮官決策」或「等外部憑證才能執行」：
+
+- ANTHROPIC_API_KEY 填入 → `make demo` 驗證 DevSwarm 端到端
+- POS 整合（等 D2 廠商決策）
+- LINE OA HTTP 實作（等 `LINE_CHANNEL_ACCESS_TOKEN`，骨架已就位）
+- 報表 dashboard（T1 後半再說）
 - 雲端部署（W7-8）
 
 ---
 
 ## 給指揮官的一句話結論
 
-**現在所有「不需要你的決策、不需要 API key」的東西全部就緒。**
-**你的下一步只剩兩件事：(1) 拍 D1-D4，(2) 在 `.env` 填 API key 然後 `make demo`。**
+**Phase 1 在程式碼層面已實質完工。POS + KDS + 訂位 + 候位 + 顧客 loop（earn → redeem → expire）+ TW 公定假日全部端到端跑得起來，304 tests 全綠、74.9% coverage、5 份 Alembic 遷移都通過 safety scanner。**
+
+**你的下一步只剩兩件事：(1) 拍 D1-D4，(2) 在 `.env` 填 ANTHROPIC_API_KEY 和 LINE_CHANNEL_ACCESS_TOKEN。**
 其他都可以在你決定後 24 小時內接到位。

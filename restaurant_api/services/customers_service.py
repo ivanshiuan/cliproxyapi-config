@@ -244,7 +244,15 @@ async def list_points_ledger(
         select(CustomerPointsLedger)
         .where(CustomerPointsLedger.customer_id == customer_id)
         .where(CustomerPointsLedger.tenant_id == tenant_id)
-        .order_by(CustomerPointsLedger.created_at.desc())
+        # Sort by created_at DESC, then id DESC as a tiebreaker. uuid7 is
+        # wall-clock-time-ordered (not transaction-start-time like PG's
+        # now()), so when two rows share a created_at — which they will
+        # when written inside the same transaction — id DESC resolves to
+        # actual insertion order.
+        .order_by(
+            CustomerPointsLedger.created_at.desc(),
+            CustomerPointsLedger.id.desc(),
+        )
         .limit(limit)
     )
     rows = (await session.execute(stmt)).scalars().all()
