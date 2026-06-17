@@ -4,6 +4,7 @@ Three jobs run via APScheduler (in-process):
 
   expiry_warning      03:00 daily  — flag ingredients within N days of expiry
   points_expire       03:30 daily  — write reversing rows for expired points
+  campaign_expiry     03:45 daily  — expire wheel-spin vouchers past their window
   cogs_variance_check 04:00 daily  — compare actual vs theoretical COGS by store
 
 The scheduler is intentionally *in-process* (not Celery / arq) for Phase 1.
@@ -27,6 +28,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from ..config import get_settings
 from ..middleware import configure_logging
+from .campaign_expiry import run_campaign_voucher_expiry
 from .cogs_variance import run_cogs_variance_check
 from .expiry_warning import run_expiry_warning
 from .points_expire import run_points_expire
@@ -54,6 +56,14 @@ def _register(scheduler: AsyncIOScheduler) -> None:
         _wrap("points_expire", run_points_expire),
         trigger=CronTrigger(hour=3, minute=30, timezone=tz),
         id="points_expire",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+    scheduler.add_job(
+        _wrap("campaign_expiry", run_campaign_voucher_expiry),
+        trigger=CronTrigger(hour=3, minute=45, timezone=tz),
+        id="campaign_expiry",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=600,
@@ -106,6 +116,7 @@ async def run_scheduler() -> None:
 
 
 __all__ = [
+    "run_campaign_voucher_expiry",
     "run_cogs_variance_check",
     "run_expiry_warning",
     "run_points_expire",

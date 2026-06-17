@@ -184,9 +184,9 @@ jobs: install ## Run the background-job scheduler (expiry warning, points expire
 	$(PY) -m restaurant_api.jobs
 
 .PHONY: jobs-once
-jobs-once: install ## Run all 3 nightly jobs once and exit (for cron-style external schedulers)
-	$(PY) -c "import asyncio; from restaurant_api.jobs import run_expiry_warning, run_points_expire, run_cogs_variance_check; \
-		asyncio.run(run_expiry_warning()); asyncio.run(run_points_expire()); asyncio.run(run_cogs_variance_check())"
+jobs-once: install ## Run all nightly jobs once and exit (for cron-style external schedulers)
+	$(PY) -c "import asyncio; from restaurant_api.jobs import run_expiry_warning, run_points_expire, run_campaign_voucher_expiry, run_cogs_variance_check; \
+		asyncio.run(run_expiry_warning()); asyncio.run(run_points_expire()); asyncio.run(run_campaign_voucher_expiry()); asyncio.run(run_cogs_variance_check())"
 
 .PHONY: openapi
 openapi: install ## Export OpenAPI 3 schema to openapi.json (regenerate any time)
