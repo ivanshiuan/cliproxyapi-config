@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>開幕輪盤抽獎</title>
+<style>
+  :root {
+    --bg: #1b1033;
+    --card: #2a1b4a;
+    --accent: #ffd34e;
+    --accent2: #ff5d8f;
+    --text: #f4f0ff;
+    --muted: #b6a8da;
+    --good: #46d39a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; font-family: "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
+    background: radial-gradient(120% 80% at 50% 0%, #3a1d6e 0%, var(--bg) 60%);
+    color: var(--text); min-height: 100vh; padding: 20px 16px 48px;
+  }
+  .wrap { max-width: 460px; margin: 0 auto; }
+  h1 { font-size: 22px; text-align: center; margin: 6px 0 2px; }
+  .sub { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+  /* Wheel */
+  .stage { position: relative; width: 300px; height: 300px; margin: 0 auto 8px; }
+  .pointer {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
+    width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent;
+    border-top: 26px solid var(--accent); z-index: 5; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5));
+  }
+  .wheel {
+    width: 300px; height: 300px; border-radius: 50%;
+    border: 8px solid #120a26; box-shadow: 0 0 0 4px var(--accent), 0 14px 40px rgba(0,0,0,.5);
+    position: relative; overflow: hidden;
+    transition: transform 4.6s cubic-bezier(.12,.67,.18,1);
+  }
+  .seg-label {
+    position: absolute; left: 50%; top: 50%; transform-origin: 0 0;
+    font-size: 12px; font-weight: 700; white-space: nowrap; color: #1b1033;
+    text-shadow: 0 1px 0 rgba(255,255,255,.25);
+  }
+  .hub {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    width: 56px; height: 56px; border-radius: 50%; background: var(--accent);
+    border: 4px solid #120a26; display: grid; place-items: center; z-index: 4;
+    font-weight: 900; color: #1b1033; font-size: 13px;
+  }
+
+  button {
+    font: inherit; border: 0; border-radius: 999px; cursor: pointer; font-weight: 800;
+  }
+  .spin-btn {
+    display: block; width: 100%; margin: 14px auto 0; padding: 16px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent)); color: #2a0e1f;
+    font-size: 18px; box-shadow: 0 8px 24px rgba(255,93,143,.4);
+  }
+  .spin-btn:disabled { opacity: .5; box-shadow: none; cursor: not-allowed; }
+
+  .card { background: var(--card); border-radius: 16px; padding: 16px; margin-top: 16px; }
+  .field { margin-bottom: 10px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  input {
+    width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid #4a3a72;
+    background: #1c1238; color: var(--text); font: inherit;
+  }
+
+  .result { text-align: center; }
+  .result .prize { font-size: 26px; font-weight: 900; color: var(--accent); margin: 4px 0; }
+  .result .code { font-family: ui-monospace, monospace; font-size: 20px; letter-spacing: 2px;
+    background:#120a26; display:inline-block; padding:6px 14px; border-radius:10px; margin-top:6px; }
+  .result .miss { color: var(--muted); }
+  .valid { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(120%);
+    background: #120a26; color: var(--text); padding: 12px 18px; border-radius: 12px;
+    border: 1px solid var(--accent); max-width: 90%; text-align: center; font-size: 14px;
+    transition: transform .4s ease; z-index: 50; box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  .wallet h2 { font-size: 16px; margin: 0 0 10px; }
+  .voucher {
+    display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px;
+    background: #1c1238; margin-bottom: 8px; border: 1px dashed #4a3a72;
+  }
+  .voucher .v-main { flex: 1; min-width: 0; }
+  .voucher .v-name { font-weight: 800; }
+  .voucher .v-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pill { font-size: 11px; padding: 3px 8px; border-radius: 999px; font-weight: 800; }
+  .pill.active { background: rgba(70,211,154,.18); color: var(--good); }
+  .pill.redeemed { background: rgba(182,168,218,.18); color: var(--muted); }
+  .pill.expired, .pill.void { background: rgba(255,93,143,.18); color: var(--accent2); }
+  .redeem-btn { padding: 8px 12px; background: var(--good); color: #08221a; font-size: 13px; }
+  .redeem-btn:disabled { background: #3a4d46; color: #7e8f88; }
+  .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 8px 0; }
+  .err { color: var(--accent2); font-size: 13px; text-align: center; margin-top: 10px; }
+  .demo-note { font-size: 11px; color: var(--muted); text-align: center; margin-top: 24px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">開幕輪盤抽獎</h1>
+  <div class="sub" id="subtitle">每日一抽 · 抽中即加入會員 · 來店核銷</div>
+
+  <div class="stage">
+    <div class="pointer"></div>
+    <div class="wheel" id="wheel"></div>
+    <div class="hub">GO</div>
+  </div>
+
+  <button class="spin-btn" id="spinBtn">抽獎一次</button>
+
+  <div class="card" id="memberCard">
+    <div class="field">
+      <label>你的 LINE ID 或手機（demo 可留預設）</label>
+      <input id="memberId" placeholder="U1234... 或 0912345678" />
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>暱稱（首抽自動加入會員）</label>
+      <input id="memberName" placeholder="王小明" />
+    </div>
+  </div>
+
+  <div class="card result" id="resultCard" style="display:none"></div>
+
+  <div class="card wallet" id="walletCard" style="display:none">
+    <h2>🎁 我的獎品錢包</h2>
+    <div id="walletList"></div>
+    <div class="demo-note">每次來店只能核銷一張（通常挑最大獎）。逾期券會自動失效。</div>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="demo-note">
+    這是後端引擎的展示頁。門口 QR Code 指向本頁網址（帶 <code>?campaign=&lt;id&gt;</code>）。<br/>
+    抽獎、加入會員、券錢包、核銷全部走真實 API。
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = ""; // same-origin
+const qs = new URLSearchParams(location.search);
+const campaignId = qs.get("campaign");
+let segments = [];           // [{id, name, sort_order}]
+let customerId = null;
+let spinning = false;
+let wheelRotation = 0;
+
+const $ = (id) => document.getElementById(id);
+const PALETTE = ["#ffd34e","#ff5d8f","#46d39a","#7c6cff","#ff9f45","#4ec0ff","#f06292","#9ccc65"];
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3600);
+}
+function showErr(msg) { $("err").textContent = msg || ""; }
+
+// Restore a stable demo member across reloads so "每日一抽" behaves.
+(function initMember() {
+  let saved = localStorage.getItem("wheel_demo_member");
+  if (!saved) { saved = "U" + Math.random().toString(16).slice(2, 18); localStorage.setItem("wheel_demo_member", saved); }
+  $("memberId").value = saved;
+  $("memberName").value = localStorage.getItem("wheel_demo_name") || "輪盤玩家";
+  customerId = localStorage.getItem("wheel_demo_customer_" + campaignId) || null;
+})();
+
+async function api(path, opts) {
+  const res = await fetch(API + path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts));
+  let body = null;
+  try { body = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const msg = body && body.error ? body.error.message : ("HTTP " + res.status);
+    const err = new Error(msg); err.status = res.status; throw err;
+  }
+  return body;
+}
+
+function renderWheel() {
+  const wheel = $("wheel");
+  const n = segments.length || 1;
+  const seg = 360 / n;
+  const stops = segments.map((s, i) => {
+    const c = PALETTE[i % PALETTE.length];
+    return `${c} ${i * seg}deg ${(i + 1) * seg}deg`;
+  }).join(", ");
+  wheel.style.background = n === 1
+    ? PALETTE[0]
+    : `conic-gradient(${stops})`;
+  wheel.innerHTML = segments.map((s, i) => {
+    const mid = i * seg + seg / 2;
+    // place label along the radius, rotated to read outward
+    return `<span class="seg-label" style="transform: rotate(${mid}deg) translate(70px) rotate(90deg)">${escapeHtml(shorten(s.name))}</span>`;
+  }).join("");
+}
+function shorten(s) { return s.length > 7 ? s.slice(0, 6) + "…" : s; }
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c])); }
+
+function spinTo(index) {
+  const n = segments.length || 1;
+  const seg = 360 / n;
+  // pointer is at top (0deg). Segment i center sits at i*seg + seg/2 clockwise.
+  // Rotate so that center aligns under the pointer: target = -(center).
+  const center = index * seg + seg / 2;
+  const turns = 5;
+  wheelRotation = 360 * turns - center + wheelRotation - (wheelRotation % 360);
+  $("wheel").style.transform = `rotate(${wheelRotation}deg)`;
+}
+
+async function loadWheel() {
+  if (!campaignId) { showErr("缺少 campaign 參數。請從門口 QR Code 進入。"); $("spinBtn").disabled = true; return; }
+  try {
+    const w = await api(`/campaigns/${campaignId}/wheel`);
+    $("title").textContent = w.name || "開幕輪盤抽獎";
+    segments = w.segments || [];
+    renderWheel();
+    if (w.status !== "active") { showErr("活動尚未開始或已結束。"); $("spinBtn").disabled = true; }
+    if (customerId) loadWallet();
+  } catch (e) {
+    showErr("讀取活動失敗：" + e.message);
+    $("spinBtn").disabled = true;
+  }
+}
+
+async function doSpin() {
+  if (spinning) return;
+  showErr("");
+  const idVal = $("memberId").value.trim();
+  const name = $("memberName").value.trim() || "輪盤玩家";
+  if (!idVal) { toast("請先填 LINE ID 或手機"); return; }
+  localStorage.setItem("wheel_demo_member", idVal);
+  localStorage.setItem("wheel_demo_name", name);
+
+  const isPhone = /^[0-9+\-\s]{6,}$/.test(idVal);
+  const payload = { display_name: name };
+  if (isPhone) payload.phone = idVal; else payload.line_user_id = idVal;
+
+  spinning = true; $("spinBtn").disabled = true; $("spinBtn").textContent = "抽獎中…";
+  try {
+    const r = await api(`/campaigns/${campaignId}/spin`, { method: "POST", body: JSON.stringify(payload) });
+    customerId = r.customer_id;
+    localStorage.setItem("wheel_demo_customer_" + campaignId, customerId);
+
+    // Animate to the won segment (or a no-win segment).
+    let idx = 0;
+    if (r.won && r.prize) idx = Math.max(0, segments.findIndex(s => s.id === r.prize.prize_id));
+    else { const miss = segments.findIndex(s => /惠顧|沒中|銘謝/.test(s.name)); idx = miss >= 0 ? miss : 0; }
+    spinTo(idx);
+
+    setTimeout(() => {
+      showResult(r);
+      if (r.daily_message) toast("📣 " + r.daily_message);
+      loadWallet();
+      spinning = false; $("spinBtn").textContent = "明天再抽一次";
+    }, 4800);
+  } catch (e) {
+    spinning = false; $("spinBtn").disabled = false; $("spinBtn").textContent = "抽獎一次";
+    if (e.status === 409) toast(e.message.includes("daily") ? "今天已經抽過囉，明天再來！" : e.message);
+    else showErr("抽獎失敗：" + e.message);
+  }
+}
+
+function showResult(r) {
+  const c = $("resultCard"); c.style.display = "block";
+  if (r.won && r.voucher) {
+    c.innerHTML = `
+      <div>🎉 恭喜抽中</div>
+      <div class="prize">${escapeHtml(r.prize.name)}</div>
+      <div class="code">${r.voucher.code}</div>
+      <div class="valid">使用期限：${r.voucher.valid_from} ～ ${r.voucher.valid_until}</div>`;
+  } else {
+    c.innerHTML = `<div class="miss">這次銘謝惠顧，明天再接再厲！🍀</div>`;
+  }
+  c.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+async function loadWallet() {
+  if (!customerId) return;
+  try {
+    const list = await api(`/campaigns/${campaignId}/vouchers?customer_id=${customerId}`);
+    const wc = $("walletCard"); wc.style.display = "block";
+    if (!list.length) { $("walletList").innerHTML = `<div class="empty">還沒有獎品，快去抽一張！</div>`; return; }
+    $("walletList").innerHTML = list.map(v => `
+      <div class="voucher">
+        <div class="v-main">
+          <div class="v-name">${escapeHtml(v.prize_name)} <span class="pill ${v.status}">${statusLabel(v.status)}</span></div>
+          <div class="v-meta">${v.code} · ${v.valid_from}～${v.valid_until}</div>
+        </div>
+        <button class="redeem-btn" ${v.status === "active" ? "" : "disabled"} onclick="redeem('${v.id}')">核銷</button>
+      </div>`).join("");
+  } catch (e) { /* wallet is best-effort */ }
+}
+function statusLabel(s){ return {active:"可用", redeemed:"已核銷", expired:"已過期", void:"作廢"}[s] || s; }
+
+async function redeem(vid) {
+  try {
+    await api(`/campaigns/${campaignId}/vouchers/${vid}/redeem`, { method: "POST", body: "{}" });
+    toast("✅ 核銷成功，請享用！");
+    loadWallet();
+  } catch (e) {
+    if (e.status === 409) toast(e.message.includes("today") || e.message.includes("visit") ? "每次來店只能核銷一張哦" : e.message);
+    else toast("核銷失敗：" + e.message);
+  }
+}
+
+$("spinBtn").addEventListener("click", doSpin);
+loadWheel();
+</script>
+</body>
+</html>

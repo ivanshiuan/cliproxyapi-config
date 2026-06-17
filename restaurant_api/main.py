@@ -12,8 +12,10 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .api import health as health_router
@@ -96,6 +98,12 @@ if not any(getattr(r, "path", "").startswith("/reservations") for r in app.route
 if not any(getattr(r, "path", "").startswith("/queue") for r in app.routes):
     app.include_router(reservations_router.queue_router)
 app.include_router(health_router.router)
+
+# Static wheel-spin demo page (門口 QR Code 指向 /demo/?campaign=<id>). Same-origin
+# with the API so no CORS is needed. Mounted last so it can't shadow API routes.
+_STATIC_DIR = Path(__file__).parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/demo", StaticFiles(directory=str(_STATIC_DIR), html=True), name="demo")
 
 
 @app.get("/version", tags=["meta"])

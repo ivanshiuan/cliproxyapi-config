@@ -144,6 +144,10 @@ seed: install ## Seed demo restaurant data (1 tenant, 1 store, 5 employees, 12 m
 seed-reset: install ## Wipe seed tenant first, then seed fresh
 	$(PY) scripts/seed_demo_data.py --reset
 
+.PHONY: wheel-demo
+wheel-demo: install ## Seed an active 開幕輪盤 campaign and print the demo URL (then `make api`)
+	$(PY) scripts/seed_wheel_campaign.py
+
 .PHONY: demo-flow
 demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳→報廢→員工餐→下班→彙總)
 	$(PY) scripts/demo_flow.py
