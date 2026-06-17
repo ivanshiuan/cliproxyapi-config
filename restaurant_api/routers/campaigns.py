@@ -23,12 +23,16 @@ Wallet / counter:
 
 from __future__ import annotations
 
+import html
 import uuid
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Request, Response, status
+from fastapi.responses import HTMLResponse
 
 from ..api.deps import DbSession, Messenger, TenantId
 from ..models import CampaignStatus, VoucherStatus
+from ..qr import make_qr_svg
 from ..schemas.campaigns import (
     CampaignCreate,
     CampaignResponse,
@@ -258,6 +262,111 @@ async def redeem_voucher(
     return await campaigns_service.redeem_voucher(
         session, campaign_id, voucher_id, payload, tenant_id=tenant_id
     )
+
+
+# ── QR code / printable poster (門口擺放) ───────────────────────────────────
+
+# Brand passthrough params baked into the demo URL (and the poster), so one
+# QR carries the store's theme. All optional; the page has tasteful defaults.
+_BRAND_PARAMS = ("brand", "tagline", "logo", "primary", "accent", "bg")
+
+
+def _demo_url(request: Request, campaign_id: uuid.UUID, base_url: str | None, brand: dict[str, str]) -> str:
+    """Build the player-facing demo URL the QR points at."""
+    root = (base_url or str(request.base_url)).rstrip("/")
+    params = {"campaign": str(campaign_id), **brand}
+    return f"{root}/demo/?{urlencode(params)}"
+
+
+@router.get(
+    "/{campaign_id}/qr.svg",
+    response_class=Response,
+    summary="輪盤抽獎 QR Code (SVG, 可印海報)",
+)
+async def campaign_qr(
+    campaign_id: uuid.UUID,
+    request: Request,
+    session: DbSession,
+    tenant_id: TenantId,
+    base_url: str | None = None,
+    brand: str | None = None,
+    tagline: str | None = None,
+    logo: str | None = None,
+    primary: str | None = None,
+    accent: str | None = None,
+    bg: str | None = None,
+) -> Response:
+    # 404 + tenant scope via the normal loader.
+    await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
+    brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
+    url = _demo_url(request, campaign_id, base_url, brand_params)
+    svg = make_qr_svg(url)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+@router.get(
+    "/{campaign_id}/poster",
+    response_class=HTMLResponse,
+    summary="門口海報 (campaign 名稱 + 標語 + 內嵌 QR, 可列印)",
+)
+async def campaign_poster(
+    campaign_id: uuid.UUID,
+    request: Request,
+    session: DbSession,
+    tenant_id: TenantId,
+    base_url: str | None = None,
+    brand: str | None = None,
+    tagline: str | None = None,
+    logo: str | None = None,
+    primary: str | None = None,
+    accent: str | None = None,
+    bg: str | None = None,
+) -> HTMLResponse:
+    campaign = await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
+    brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
+    url = _demo_url(request, campaign_id, base_url, brand_params)
+    svg = make_qr_svg(url, box_size=8).decode("utf-8")
+
+    title = html.escape(brand or campaign.name)
+    sub = html.escape(tagline or "掃碼抽獎 · 加入會員 · 來店兌換")
+    primary_c = primary or "#ff5d8f"
+    accent_c = accent or "#ffd34e"
+    logo_html = (
+        f'<img src="{html.escape(logo)}" alt="logo" style="max-height:90px;margin-bottom:18px" />'
+        if logo
+        else ""
+    )
+    page = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title} · 開幕輪盤海報</title>
+<style>
+  @page {{ size: A4; margin: 0; }}
+  body {{ margin:0; font-family:"PingFang TC","Noto Sans TC",system-ui,sans-serif;
+    min-height:100vh; display:grid; place-items:center;
+    background:linear-gradient(160deg,{accent_c}22,{primary_c}22); color:#1b1033; }}
+  .poster {{ width:min(92vw,640px); aspect-ratio:1/1.414; background:#fff; border-radius:24px;
+    box-shadow:0 20px 60px rgba(0,0,0,.18); padding:48px 40px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }}
+  .kicker {{ letter-spacing:6px; color:{primary_c}; font-weight:800; font-size:16px; }}
+  h1 {{ font-size:40px; margin:6px 0; line-height:1.15; }}
+  .sub {{ color:#555; font-size:18px; }}
+  .qr {{ width:320px; height:320px; margin:14px auto; padding:16px; border:6px solid {accent_c};
+    border-radius:18px; }}
+  .qr svg {{ width:100%; height:100%; }}
+  .cta {{ font-size:22px; font-weight:900; color:{primary_c}; }}
+  .foot {{ color:#888; font-size:13px; }}
+  @media print {{ body {{ background:#fff; }} .poster {{ box-shadow:none; }} }}
+</style></head>
+<body><div class="poster">
+  {logo_html}
+  <div class="kicker">GRAND OPENING</div>
+  <h1>{title}</h1>
+  <div class="sub">{sub}</div>
+  <div class="qr">{svg}</div>
+  <div class="cta">📱 掃我抽大獎</div>
+  <div class="foot">最大獎 免單四人套餐 · 每日一抽 · 抽中即加入會員</div>
+</div></body></html>"""
+    return HTMLResponse(content=page)
 
 
 __all__ = ["router"]

@@ -103,6 +103,7 @@
 </head>
 <body>
 <div class="wrap">
+  <div id="brandLogo" style="text-align:center"></div>
   <h1 id="title">開幕輪盤抽獎</h1>
   <div class="sub" id="subtitle">每日一抽 · 抽中即加入會員 · 來店核銷</div>
 
@@ -153,6 +154,22 @@ let wheelRotation = 0;
 
 const $ = (id) => document.getElementById(id);
 const PALETTE = ["#ffd34e","#ff5d8f","#46d39a","#7c6cff","#ff9f45","#4ec0ff","#f06292","#9ccc65"];
+
+// ── Branding via query params (?brand=&tagline=&logo=&primary=&accent=&bg=) ──
+const brandName = qs.get("brand");
+(function applyBrand() {
+  const root = document.documentElement.style;
+  const primary = qs.get("primary"), accent = qs.get("accent"), bg = qs.get("bg");
+  if (accent) root.setProperty("--accent", accent);
+  if (primary) root.setProperty("--accent2", primary);
+  if (bg) { root.setProperty("--bg", bg); document.body.style.background =
+    `radial-gradient(120% 80% at 50% 0%, ${bg} 0%, ${bg} 60%)`; }
+  if (brandName) $("title").textContent = brandName;
+  const tagline = qs.get("tagline"); if (tagline) $("subtitle").textContent = tagline;
+  const logo = qs.get("logo");
+  if (logo) $("brandLogo").innerHTML =
+    `<img src="${logo.replace(/"/g, "&quot;")}" alt="" style="max-height:64px;margin-bottom:6px" />`;
+})();
 
 function toast(msg) {
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
@@ -215,7 +232,7 @@ async function loadWheel() {
   if (!campaignId) { showErr("缺少 campaign 參數。請從門口 QR Code 進入。"); $("spinBtn").disabled = true; return; }
   try {
     const w = await api(`/campaigns/${campaignId}/wheel`);
-    $("title").textContent = w.name || "開幕輪盤抽獎";
+    if (!brandName) $("title").textContent = w.name || "開幕輪盤抽獎";
     segments = w.segments || [];
     renderWheel();
     if (w.status !== "active") { showErr("活動尚未開始或已結束。"); $("spinBtn").disabled = true; }

@@ -591,6 +591,40 @@ async def test_spin_unknown_campaign_raises_not_found(
         )
 
 
+async def test_qr_svg_endpoint_returns_svg(client: httpx.AsyncClient) -> None:
+    create = await client.post(
+        "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}
+    )
+    cid = create.json()["id"]
+    resp = await client.get(f"/campaigns/{cid}/qr.svg")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("image/svg+xml")
+    assert "<svg" in resp.text and "<path" in resp.text
+
+
+async def test_qr_unknown_campaign_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get(f"/campaigns/{uuid.uuid4()}/qr.svg")
+    assert resp.status_code == 404
+
+
+async def test_poster_endpoint_renders_brand(client: httpx.AsyncClient) -> None:
+    create = await client.post(
+        "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}
+    )
+    cid = create.json()["id"]
+    resp = await client.get(
+        f"/campaigns/{cid}/poster",
+        params={"brand": "鼎鼎餐酒館", "tagline": "開幕同樂", "base_url": "https://shop.example"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    body = resp.text
+    assert "鼎鼎餐酒館" in body
+    assert "開幕同樂" in body
+    assert "<svg" in body  # QR embedded inline (encodes the branded demo URL)
+    assert "掃我抽大獎" in body
+
+
 async def test_store_scoped_campaign_roundtrips(
     db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
 ) -> None:
