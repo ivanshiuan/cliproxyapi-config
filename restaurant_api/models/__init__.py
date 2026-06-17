@@ -16,6 +16,14 @@ from .base import (
     TimestampedMixin,
     uuid7,
 )
+from .campaigns import (
+    CampaignPrize,
+    CampaignSpin,
+    CampaignStatus,
+    CampaignVoucher,
+    MarketingCampaign,
+    VoucherStatus,
+)
 from .cash import CashDrawerSession
 from .cost_events import StaffMealEvent, TastingEvent, WasteEvent
 from .customers import Customer, CustomerPointsLedger, CustomerTier
@@ -107,6 +115,13 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "Customer",
     "CustomerTier",
     "CustomerPointsLedger",
+    # marketing campaigns (wheel-spin lottery)
+    "MarketingCampaign",
+    "CampaignStatus",
+    "CampaignPrize",
+    "CampaignSpin",
+    "CampaignVoucher",
+    "VoucherStatus",
     # embeddings (AI data asset seed)
     "Embedding",
     "VECTOR_DIM",
