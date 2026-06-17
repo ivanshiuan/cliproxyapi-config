@@ -19,6 +19,7 @@ backstop for "one redemption per member per visit/day".
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import UTC, date, datetime, timedelta
@@ -57,6 +58,8 @@ from ..schemas.campaigns import (
     WheelSegment,
 )
 from .audit_service import audit
+
+logger = logging.getLogger("restaurant_api.services.campaigns")
 
 _TPE = ZoneInfo("Asia/Taipei")
 
@@ -418,13 +421,21 @@ async def spin(
             },
         )
 
-    # Daily pop-up message — best-effort push to the member's LINE.
+    # Daily pop-up message — best-effort push to the member's LINE. A push
+    # failure (LINE outage, HTTP messenger not yet wired) must NOT roll back the
+    # spin and rob the member of their prize, so swallow + log it.
     daily_message = campaign.daily_message
     if messenger is not None and daily_message and customer.line_user_id:
-        await messenger.push(
-            customer.line_user_id,
-            LineMessage(kind="text", text=daily_message),
-        )
+        try:
+            await messenger.push(
+                customer.line_user_id,
+                LineMessage(kind="text", text=daily_message),
+            )
+        except Exception:  # best-effort side channel; never fail the spin
+            logger.warning(
+                "campaign.daily_message_push_failed",
+                extra={"campaign_id": str(campaign_id), "customer_id": str(customer.id)},
+            )
 
     return SpinResponse(
         spin_id=spin_row.id,
@@ -666,14 +677,28 @@ async def _draw_prize(
         )
     ).scalars().all()
 
+    # One grouped query for all daily-capped prizes (vs one per prize) keeps the
+    # locked section short.
+    quota_prize_ids = [p.id for p in prizes if p.daily_quota is not None]
+    daily_counts: dict[uuid.UUID, int] = {}
+    if quota_prize_ids:
+        result = await session.execute(
+            select(CampaignSpin.prize_id, func.count())
+            .where(
+                CampaignSpin.spin_date == today,
+                CampaignSpin.won.is_(True),
+                CampaignSpin.prize_id.in_(quota_prize_ids),
+            )
+            .group_by(CampaignSpin.prize_id)
+        )
+        daily_counts = {pid: cnt for pid, cnt in result.tuples() if pid is not None}
+
     eligible: list[CampaignPrize] = []
     for p in prizes:
         if p.total_quota is not None and p.awarded_count >= p.total_quota:
             continue
-        if p.daily_quota is not None:
-            awarded_today = await _count_prize_awards_today(session, p.id, today)
-            if awarded_today >= p.daily_quota:
-                continue
+        if p.daily_quota is not None and daily_counts.get(p.id, 0) >= p.daily_quota:
+            continue
         eligible.append(p)
 
     if not eligible:
@@ -753,24 +778,6 @@ async def _count_spins_today(
                     CampaignSpin.campaign_id == campaign_id,
                     CampaignSpin.customer_id == customer_id,
                     CampaignSpin.spin_date == today,
-                )
-            )
-        ).scalar_one()
-    )
-
-
-async def _count_prize_awards_today(
-    session: AsyncSession, prize_id: uuid.UUID, today: date
-) -> int:
-    return int(
-        (
-            await session.execute(
-                select(func.count())
-                .select_from(CampaignSpin)
-                .where(
-                    CampaignSpin.prize_id == prize_id,
-                    CampaignSpin.spin_date == today,
-                    CampaignSpin.won.is_(True),
                 )
             )
         ).scalar_one()

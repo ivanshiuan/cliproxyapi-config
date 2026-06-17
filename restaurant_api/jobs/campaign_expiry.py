@@ -50,7 +50,6 @@ async def _expire(session: AsyncSession) -> int:
     expired = 0
     for voucher in rows:
         voucher.status = VoucherStatus.EXPIRED
-        await session.flush()
         await audit(
             session,
             action="campaign.voucher_expired",
@@ -64,6 +63,9 @@ async def _expire(session: AsyncSession) -> int:
             reason="nightly campaign voucher expiry batch",
         )
         expired += 1
+
+    if expired:
+        await session.flush()
 
     logger.info(
         "campaign_voucher_expiry.complete",

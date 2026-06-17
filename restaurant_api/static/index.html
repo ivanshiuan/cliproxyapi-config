@@ -179,11 +179,11 @@ function showErr(msg) { $("err").textContent = msg || ""; }
 
 // Restore a stable demo member across reloads so "每日一抽" behaves.
 (function initMember() {
-  let saved = localStorage.getItem("wheel_demo_member");
-  if (!saved) { saved = "U" + Math.random().toString(16).slice(2, 18); localStorage.setItem("wheel_demo_member", saved); }
+  let saved = sessionStorage.getItem("wheel_demo_member");
+  if (!saved) { saved = "U" + Math.random().toString(16).slice(2, 18); sessionStorage.setItem("wheel_demo_member", saved); }
   $("memberId").value = saved;
-  $("memberName").value = localStorage.getItem("wheel_demo_name") || "輪盤玩家";
-  customerId = localStorage.getItem("wheel_demo_customer_" + campaignId) || null;
+  $("memberName").value = sessionStorage.getItem("wheel_demo_name") || "輪盤玩家";
+  customerId = sessionStorage.getItem("wheel_demo_customer_" + campaignId) || null;
 })();
 
 async function api(path, opts) {
@@ -210,8 +210,11 @@ function renderWheel() {
     : `conic-gradient(${stops})`;
   wheel.innerHTML = segments.map((s, i) => {
     const mid = i * seg + seg / 2;
-    // place label along the radius, rotated to read outward
-    return `<span class="seg-label" style="transform: rotate(${mid}deg) translate(70px) rotate(90deg)">${escapeHtml(shorten(s.name))}</span>`;
+    // Wedge i (conic-gradient) is centred at `mid` clockwise from the TOP, and
+    // the pointer/landing math uses the same frame. A label's local X axis
+    // starts pointing east (+90deg from top), so rotate by (mid - 90) to land it
+    // on its own wedge; the trailing rotate(90deg) makes the text read outward.
+    return `<span class="seg-label" style="transform: rotate(${mid - 90}deg) translate(70px) rotate(90deg)">${escapeHtml(shorten(s.name))}</span>`;
   }).join("");
 }
 function shorten(s) { return s.length > 7 ? s.slice(0, 6) + "…" : s; }
@@ -249,8 +252,8 @@ async function doSpin() {
   const idVal = $("memberId").value.trim();
   const name = $("memberName").value.trim() || "輪盤玩家";
   if (!idVal) { toast("請先填 LINE ID 或手機"); return; }
-  localStorage.setItem("wheel_demo_member", idVal);
-  localStorage.setItem("wheel_demo_name", name);
+  sessionStorage.setItem("wheel_demo_member", idVal);
+  sessionStorage.setItem("wheel_demo_name", name);
 
   const isPhone = /^[0-9+\-\s]{6,}$/.test(idVal);
   const payload = { display_name: name };
@@ -260,7 +263,7 @@ async function doSpin() {
   try {
     const r = await api(`/campaigns/${campaignId}/spin`, { method: "POST", body: JSON.stringify(payload) });
     customerId = r.customer_id;
-    localStorage.setItem("wheel_demo_customer_" + campaignId, customerId);
+    sessionStorage.setItem("wheel_demo_customer_" + campaignId, customerId);
 
     // Animate to the won segment (or a no-win segment).
     let idx = 0;

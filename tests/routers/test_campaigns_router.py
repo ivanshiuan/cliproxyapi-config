@@ -347,6 +347,33 @@ async def test_daily_message_pushed_to_line(
     assert pushes[0]["to"] == "Uabc123"
 
 
+async def test_daily_message_push_failure_does_not_break_spin(
+    db_session: AsyncSession,
+    seed_tenant: Tenant,
+    seed_menu_item: MenuItem,
+) -> None:
+    """A LINE push blowing up must NOT roll back the spin / lose the prize."""
+
+    class _BoomMessenger(StubLineMessenger):
+        async def push(self, *args: object, **kwargs: object) -> None:  # type: ignore[override]
+            raise RuntimeError("LINE channel down")
+
+    cid = await _make_campaign(db_session, seed_tenant.id, daily_message="抽獎囉")
+    await _add_prize(db_session, cid, seed_tenant.id, menu_item_id=seed_menu_item.id)
+
+    res = await campaigns_service.spin(
+        db_session,
+        cid,
+        _spin_req(line_user_id="Uboom"),
+        tenant_id=seed_tenant.id,
+        messenger=_BoomMessenger(),
+        rng=Random(1),
+    )
+    # Spin succeeds and the voucher is minted despite the push raising.
+    assert res.won is True
+    assert res.voucher is not None
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Redemption
 # ──────────────────────────────────────────────────────────────────────────
@@ -460,13 +487,15 @@ async def test_wallet_lists_best_prize_first(
     db_session: AsyncSession, seed_tenant: Tenant, seed_menu_item: MenuItem
 ) -> None:
     cid = await _make_campaign(db_session, seed_tenant.id, daily_spin_limit=2)
+    # total_quota=1 on each forces the two spins to win two *different* prizes,
+    # so the ordering assertion below can't pass trivially on a tie.
     await _add_prize(
         db_session, cid, seed_tenant.id, name="小菜", weight=1, value="50",
-        menu_item_id=seed_menu_item.id, sort_order=0,
+        menu_item_id=seed_menu_item.id, sort_order=0, total_quota=1,
     )
     await _add_prize(
         db_session, cid, seed_tenant.id, name="大獎", weight=1, value="2000",
-        menu_item_id=seed_menu_item.id, sort_order=1,
+        menu_item_id=seed_menu_item.id, sort_order=1, total_quota=1,
     )
     line_id = f"U{uuid.uuid4().hex[:16]}"
     s1 = await campaigns_service.spin(
@@ -481,6 +510,7 @@ async def test_wallet_lists_best_prize_first(
         db_session, cid, tenant_id=seed_tenant.id, customer_id=customer_id
     )
     assert len(wallet) == 2
+    assert {v.value_estimate for v in wallet} == {Decimal("50"), Decimal("2000")}
     # Highest value first.
     assert wallet[0].value_estimate >= wallet[1].value_estimate
 

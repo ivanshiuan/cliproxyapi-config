@@ -81,8 +81,14 @@ POST /campaigns/{id}/prizes
 - 金額一律 `Decimal` / `Numeric(14,4)`；時間 DB 存 UTC、日界用 Asia/Taipei。
 - 稽核：建活動 / 發券 / 核銷都走 `audit_service.audit()`。
 
+## 已實作
+
+- 夜間 job（03:45 Asia/Taipei）批次掃 active 過期券轉 `expired` 並計入稽核
+  （`jobs/campaign_expiry.py`，已註冊排程）；核銷／錢包讀取時仍按日期惰性判斷作雙保險。
+- 前端輪盤 demo 頁（掛載於 `/demo`）＋ QR Code／海報產生器
+  （`GET /campaigns/{id}/qr.svg`、`GET /campaigns/{id}/poster`，支援品牌參數）。
+
 ## 還沒做（之後可接）
 
-- 夜間 job 把過期未核銷的券批次轉 `expired`（目前是核銷時惰性轉 + 錢包讀時按日期判斷）。
 - LINE 真實推播：目前走 `StubLineMessenger`，填 `LINE_CHANNEL_ACCESS_TOKEN` 即切真實通道。
-- 前端輪盤頁 / QR 產生器（本檔只交付後端引擎）。
+  每日訊息推播為 best-effort（失敗只記 log，不影響抽獎與發券）。
