@@ -31,13 +31,14 @@ from ..schemas.customers import (
     CustomerUpdate,
     PointsRedemptionRequest,
 )
+from ..schemas.referral import ReferralCodeResponse, ReferralResponse
 from ..schemas.stored_value import (
     StoredValueBalanceResponse,
     StoredValueLedgerResponse,
     StoredValueSpendRequest,
     StoredValueTopUpRequest,
 )
-from ..services import customers_service, stored_value_service
+from ..services import customers_service, referral_service, stored_value_service
 
 # Module-level Query() singletons (B008 / FastAPI metadata).
 _Q_SEARCH = Query(default=None, max_length=80)
@@ -234,6 +235,44 @@ async def stored_value_ledger(
     return await stored_value_service.list_ledger(
         session, customer_id, tenant_id=tenant_id, limit=limit
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 裂變 (referral)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/{customer_id}/referral-code",
+    response_model=ReferralCodeResponse,
+    summary="會員專屬邀請碼 (首次取用時自動產生)",
+)
+async def get_referral_code(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> ReferralCodeResponse:
+    cid, code = await referral_service.get_or_create_code(
+        session, customer_id, tenant_id=tenant_id
+    )
+    return ReferralCodeResponse(customer_id=cid, referral_code=code)
+
+
+@router.get(
+    "/{customer_id}/referrals",
+    response_model=list[ReferralResponse],
+    summary="此會員推薦的名單 (newest first)",
+)
+async def list_referrals(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+    limit: int = _Q_LIMIT,
+) -> list[ReferralResponse]:
+    rows = await referral_service.list_referrals_for(
+        session, customer_id, tenant_id=tenant_id, limit=limit
+    )
+    return [ReferralResponse.model_validate(r) for r in rows]
 
 
 __all__ = ["router"]

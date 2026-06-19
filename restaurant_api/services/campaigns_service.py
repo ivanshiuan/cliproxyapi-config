@@ -57,7 +57,7 @@ from ..schemas.campaigns import (
     WheelResponse,
     WheelSegment,
 )
-from . import membership_service
+from . import membership_service, referral_service
 from .audit_service import audit
 
 logger = logging.getLogger("restaurant_api.services.campaigns")
@@ -381,6 +381,17 @@ async def spin(
         await membership_service.grant_welcome_bonus(
             session, customer, actor_id=payload.actor_id
         )
+        # 裂變: if the friend arrived via a referral code, record the edge and
+        # gift the new member. Qualification (referrer reward) fires later on
+        # this member's first order close.
+        if payload.ref:
+            await referral_service.attribute_referral(
+                session,
+                referred=customer,
+                code=payload.ref,
+                tenant_id=tenant_id,
+                actor_id=payload.actor_id,
+            )
 
     today = _today_tpe()
     spins_today = await _count_spins_today(session, campaign_id, customer.id, today)

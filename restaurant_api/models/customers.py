@@ -109,6 +109,9 @@ class Customer(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # 裂變 (referral) — each member's unique shareable invite code, generated
+    # lazily on first request. Unique per tenant when populated.
+    referral_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -134,6 +137,13 @@ class Customer(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
             "email",
             unique=True,
             postgresql_where="email IS NOT NULL AND deleted_at IS NULL",
+        ),
+        Index(
+            "uq_customers_referral_code",
+            "tenant_id",
+            "referral_code",
+            unique=True,
+            postgresql_where="referral_code IS NOT NULL",
         ),
         Index("ix_customers_tenant_tier", "tenant_id", "tier"),
         Index("ix_customers_tenant_last_visit", "tenant_id", "last_visit_at"),
@@ -205,6 +215,70 @@ class CustomerPointsLedger(TenantScopedMixin, Base):
     )
 
 
+class ReferralStatus(enum.StrEnum):
+    """裂變 referral lifecycle: created on signup, qualifies on first spend."""
+
+    PENDING = "pending"  # referred member signed up, hasn't spent yet
+    QUALIFIED = "qualified"  # referred member made their first qualifying order
+
+
+class Referral(TenantScopedMixin, TimestampedMixin, Base):
+    """One 推薦 edge: ``referrer`` invited ``referred`` via a referral code.
+
+    Drives the two-sided reward flywheel:
+      - on signup (attribution) the referred member gets a welcome gift
+      - on the referred member's **first qualifying order** the referral flips
+        ``pending → qualified`` and the referrer earns override points.
+
+    A member can be referred **once** — enforced by a unique index on
+    ``referred_id`` — so the bonus can never be double-claimed.
+    """
+
+    __tablename__ = "referrals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid7,
+    )
+    referrer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    referred_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[ReferralStatus] = mapped_column(
+        SQLEnum(ReferralStatus, name="referral_status", native_enum=False, length=16),
+        nullable=False,
+        default=ReferralStatus.PENDING,
+        server_default=ReferralStatus.PENDING.value,
+    )
+    qualifying_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    # Points the referrer earned when this referral qualified (0 until then).
+    referrer_reward_points: Mapped[Decimal] = mapped_column(
+        Money,
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
+    qualified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        # A member can only ever be referred once.
+        Index("uq_referrals_referred", "referred_id", unique=True),
+        Index("ix_referrals_status", "status"),
+    )
+
+
 class CustomerStoredValueLedger(TenantScopedMixin, Base):
     """Append-only 儲值 (stored-value / prepaid wallet) ledger.
 
@@ -256,4 +330,6 @@ __all__ = [
     "CustomerPointsLedger",
     "CustomerStoredValueLedger",
     "CustomerTier",
+    "Referral",
+    "ReferralStatus",
 ]

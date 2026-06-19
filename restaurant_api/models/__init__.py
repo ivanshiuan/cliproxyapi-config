@@ -31,6 +31,8 @@ from .customers import (
     CustomerPointsLedger,
     CustomerStoredValueLedger,
     CustomerTier,
+    Referral,
+    ReferralStatus,
 )
 from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
@@ -121,6 +123,8 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "CustomerTier",
     "CustomerPointsLedger",
     "CustomerStoredValueLedger",
+    "Referral",
+    "ReferralStatus",
     # marketing campaigns (wheel-spin lottery)
     "MarketingCampaign",
     "CampaignStatus",

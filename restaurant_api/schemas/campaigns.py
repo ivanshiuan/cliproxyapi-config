@@ -207,6 +207,9 @@ class SpinRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     display_name: str | None = Field(default=None, min_length=1, max_length=80)
     actor_id: UUID | None = None
+    # 裂變: a friend's referral code, attributed when this spin registers a
+    # brand-new member (ignored for known members / unknown / self codes).
+    ref: str | None = Field(default=None, max_length=16)
 
     @model_validator(mode="after")
     def _need_identity(self) -> SpinRequest:

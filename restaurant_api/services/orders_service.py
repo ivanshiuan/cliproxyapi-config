@@ -67,6 +67,7 @@ from .calc.discount_resolver import (
     DiscountRow,
     resolve_discounts,
 )
+from .referral_service import qualify_referral
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -593,6 +594,15 @@ async def close_order(
             order=order,
             net_revenue=net_revenue,
             closed_dt=closed_dt,
+            messenger=messenger,
+        )
+        # 裂變: if this buyer was referred and hasn't qualified yet, their first
+        # closed order qualifies the referral → referrer earns override points.
+        await qualify_referral(
+            session,
+            referred_id=order.customer_id,
+            tenant_id=order.tenant_id,
+            order_id=order.id,
             messenger=messenger,
         )
 
