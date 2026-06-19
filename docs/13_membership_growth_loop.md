@@ -138,12 +138,28 @@
 - 已串接：輪盤 `spin` 首次建會員 → 自動發歡迎禮
 - 測試：`tests/test_membership_service.py`、`tests/jobs/test_membership_lifecycle.py`
 
-### 🔜 Phase 2 — 裂變飛輪（Referral，下一步）
-需新增 schema：
-- `customers.referral_code`（每人唯一邀請碼，建會員時產生）
-- `referrals` 表：`referrer_id`、`referred_id`、`status`（pending→qualified）、`qualifying_order_id`、`reward_points`
-- 流程：邀請碼帶入 spin/註冊 → 建 referral(pending) + 給被推薦人新客禮 → 被推薦人首次 `close_order` 達標 → referral→qualified + 雙邊發點（`referral.bonus`，帳本 reason 已預留）
-- 端點：`GET /customers/{id}/referral-code`、`GET /campaigns/{id}/spin?ref=CODE` 帶入
+### ✅ Phase 2 — 獲客補洞三件套（本次新增，皆已上線、測試全綠）
+
+對應 §8.3 補洞藍圖的 B / C / A 三項，每項皆 service + migration + wiring + 測試：
+
+**B. 儲值雙倍（Stored Value）** — `services/stored_value_service.py`
+- `CustomerStoredValueLedger`（append-only，DB RULE 擋改刪）+ `Customer.stored_value_balance`
+- `top_up` 依級距加贈（500→10% / 1000→20% / 3000→25%，無條件捨去不超發）
+- `spend` FOR UPDATE 防超扣、餘額不足 409；`get_balance` / `list_ledger`；儲值成功 LINE
+- 端點：`POST /customers/{id}/stored-value/top-up|spend`、`GET .../stored-value|/ledger`
+- 依台灣禮券定型化契約：儲值不設效期
+
+**C. 裂變邀請碼（Referral）** — `services/referral_service.py`
+- `customers.referral_code`（每租戶唯一）+ `referrals` 表（pending→qualified，被推薦人唯一）
+- `attribute_referral`：spin 帶 `ref` 碼 → 綁定 + 被推薦人 100 點；擋未知碼/自薦/重複
+- `qualify_referral`：被推薦人首次 `close_order` → 推薦人 200 點 + LINE（FOR UPDATE 一次性）
+- 端點：`GET /customers/{id}/referral-code|/referrals`；`POST /campaigns/{id}/spin {ref}`
+
+**A. UGC 打卡/評論換獎** — `services/ugc_service.py`
+- `ugc_submissions` 表（pending→approved/rejected）+ 店員審核佇列
+- `submit` 進佇列 → `approve` 依類型發點（Google 評論 100 / IG 80 / 打卡 50）+ LINE；`reject` 不發點
+- 一次性審核（已審回 409）；端點：`/ugc/submissions`（submit/list）、`.../approve|reject`
+- 註：真實貼文無法 100% 自動驗證，故採人工審核（human-in-the-loop）
 
 ### 🔜 Phase 3 — 進階黏著 + 分眾再行銷
 - 連續回訪 Streak 倍率、升等進度條 API

@@ -61,6 +61,7 @@ from .reservations import (
 )
 from .stores import Store
 from .tenants import Tenant
+from .ugc import UgcKind, UgcStatus, UgcSubmission
 
 __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readability
     # base / shared
@@ -125,6 +126,9 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "CustomerStoredValueLedger",
     "Referral",
     "ReferralStatus",
+    "UgcKind",
+    "UgcStatus",
+    "UgcSubmission",
     # marketing campaigns (wheel-spin lottery)
     "MarketingCampaign",
     "CampaignStatus",

@@ -31,6 +31,7 @@ from .routers import kitchen as kitchen_router
 from .routers import orders as orders_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
+from .routers import ugc as ugc_router
 from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
 
 logger = logging.getLogger("restaurant_api")
@@ -91,6 +92,7 @@ _mount_router(events_router, "/events")
 _mount_router(kitchen_router, "/kitchen")
 _mount_router(customers_router, "/customers")
 _mount_router(campaigns_router, "/campaigns")
+_mount_router(ugc_router, "/ugc")
 # Reservations module exports two routers (one per prefix); mount each with
 # the path-based idempotency guard.
 if not any(getattr(r, "path", "").startswith("/reservations") for r in app.routes):
