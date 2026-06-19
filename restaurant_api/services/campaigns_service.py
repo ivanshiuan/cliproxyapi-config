@@ -57,6 +57,7 @@ from ..schemas.campaigns import (
     WheelResponse,
     WheelSegment,
 )
+from . import membership_service
 from .audit_service import audit
 
 logger = logging.getLogger("restaurant_api.services.campaigns")
@@ -374,6 +375,12 @@ async def spin(
     customer, is_new = await _resolve_or_create_customer(
         session, payload, tenant_id=tenant_id
     )
+    # Activate loop: first-touch members get joining points immediately, so the
+    # prospect leaves the wheel already holding wallet value (idempotent).
+    if is_new:
+        await membership_service.grant_welcome_bonus(
+            session, customer, actor_id=payload.actor_id
+        )
 
     today = _today_tpe()
     spins_today = await _count_spins_today(session, campaign_id, customer.id, today)
