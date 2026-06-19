@@ -39,6 +39,7 @@ from typing import NamedTuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import (
@@ -100,6 +101,41 @@ def _tier_for_spend(spend: Decimal) -> CustomerTier:
 def _tpe_today(now: datetime | None = None) -> date:
     """Asia/Taipei calendar date — the key for birthday / dormancy math."""
     return (now or datetime.now(UTC)).astimezone(_TPE).date()
+
+
+async def _grant_once(
+    session: AsyncSession,
+    customer: Customer,
+    *,
+    delta: Decimal,
+    reason: str,
+    note: str,
+) -> bool:
+    """Grant points exactly once, race-safely. Returns ``True`` iff inserted.
+
+    The insert runs inside a SAVEPOINT; the partial unique index on
+    ``customer_points_ledger`` is the race-safe backstop, so a duplicate (already
+    granted) surfaces as ``IntegrityError`` and is reported as a no-op — there's
+    no check-then-insert window, so concurrent runs can't double-credit. (We use
+    the index + ``IntegrityError`` rather than ``ON CONFLICT`` because the ledger
+    carries an append-only DB RULE, which Postgres won't allow ON CONFLICT on.)
+    """
+    try:
+        async with session.begin_nested():
+            session.add(
+                CustomerPointsLedger(
+                    tenant_id=customer.tenant_id,
+                    customer_id=customer.id,
+                    delta=delta,
+                    reason=reason,
+                    note=note,
+                )
+            )
+            await session.flush()
+    except IntegrityError:
+        return False
+    customer.points_balance = (customer.points_balance or Decimal("0")) + delta
+    return True
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -191,30 +227,18 @@ async def grant_welcome_bonus(
 ) -> bool:
     """Drop joining points into a brand-new member's wallet (idempotent).
 
-    No-op (returns ``False``) if the member already has a ``welcome.signup``
-    row — so calling it on every spin is safe.
+    No-op (returns ``False``) if the member already received a welcome bonus —
+    enforced atomically by the DB, so calling it on every spin is safe.
     """
-    already = (
-        await session.execute(
-            select(CustomerPointsLedger.id).where(
-                CustomerPointsLedger.customer_id == customer.id,
-                CustomerPointsLedger.reason == "welcome.signup",
-            )
-        )
-    ).first()
-    if already is not None:
-        return False
-
-    session.add(
-        CustomerPointsLedger(
-            tenant_id=customer.tenant_id,
-            customer_id=customer.id,
-            delta=points,
-            reason="welcome.signup",
-            note="welcome bonus on join",
-        )
+    granted = await _grant_once(
+        session,
+        customer,
+        delta=points,
+        reason="welcome.signup",
+        note="welcome bonus on join",
     )
-    customer.points_balance = (customer.points_balance or Decimal("0")) + points
+    if not granted:
+        return False
     await session.flush()
     await audit(
         session,
@@ -258,27 +282,15 @@ async def grant_birthday_gifts(
     marker = f"birthday.gift:{today.year}"
     gifted: list[Customer] = []
     for customer in candidates:
-        seen = (
-            await session.execute(
-                select(CustomerPointsLedger.id).where(
-                    CustomerPointsLedger.customer_id == customer.id,
-                    CustomerPointsLedger.reason == "birthday.gift",
-                    CustomerPointsLedger.note == marker,
-                )
-            )
-        ).first()
-        if seen is not None:
-            continue
-        session.add(
-            CustomerPointsLedger(
-                tenant_id=customer.tenant_id,
-                customer_id=customer.id,
-                delta=points,
-                reason="birthday.gift",
-                note=marker,
-            )
+        granted = await _grant_once(
+            session,
+            customer,
+            delta=points,
+            reason="birthday.gift",
+            note=marker,
         )
-        customer.points_balance = (customer.points_balance or Decimal("0")) + points
+        if not granted:
+            continue
         gifted.append(customer)
         await audit(
             session,
@@ -328,27 +340,15 @@ async def grant_dormant_winback(
     marker = f"winback.dormant:{today.year}-{today.month:02d}"
     nudged: list[Customer] = []
     for customer in candidates:
-        seen = (
-            await session.execute(
-                select(CustomerPointsLedger.id).where(
-                    CustomerPointsLedger.customer_id == customer.id,
-                    CustomerPointsLedger.reason == "winback.dormant",
-                    CustomerPointsLedger.note == marker,
-                )
-            )
-        ).first()
-        if seen is not None:
-            continue
-        session.add(
-            CustomerPointsLedger(
-                tenant_id=customer.tenant_id,
-                customer_id=customer.id,
-                delta=points,
-                reason="winback.dormant",
-                note=marker,
-            )
+        granted = await _grant_once(
+            session,
+            customer,
+            delta=points,
+            reason="winback.dormant",
+            note=marker,
         )
-        customer.points_balance = (customer.points_balance or Decimal("0")) + points
+        if not granted:
+            continue
         nudged.append(customer)
         await audit(
             session,

@@ -33,6 +33,12 @@ from restaurant_api.services import membership_service
 pytestmark = pytest.mark.asyncio
 
 
+def _safe_birthdate(month: int, day: int) -> date:
+    """A birthdate with the given month/day; leap-safe for Feb 29."""
+    year = 2000 if (month, day) == (2, 29) else 1990
+    return date(year, month, day)
+
+
 async def _make_customer(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -200,7 +206,7 @@ async def test_birthday_gift_grants_once_per_year(
 ) -> None:
     today = membership_service._tpe_today()
     # A birthday today (year doesn't matter — only month/day).
-    bday = date(1990, today.month, today.day)
+    bday = _safe_birthdate(today.month, today.day)
     cust = await _make_customer(db_session, seed_tenant.id, birthdate=bday)
 
     gifted = await membership_service.grant_birthday_gifts(
@@ -222,7 +228,7 @@ async def test_birthday_gift_skips_non_birthday(
     today = membership_service._tpe_today()
     not_today = today + timedelta(days=3)
     cust = await _make_customer(
-        db_session, seed_tenant.id, birthdate=date(1990, not_today.month, not_today.day)
+        db_session, seed_tenant.id, birthdate=_safe_birthdate(not_today.month, not_today.day)
     )
     gifted = await membership_service.grant_birthday_gifts(
         db_session, tenant_id=seed_tenant.id

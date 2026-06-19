@@ -26,6 +26,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -175,6 +176,24 @@ class CustomerPointsLedger(TenantScopedMixin, Base):
     __table_args__ = (
         Index("ix_points_customer_time", "customer_id", "created_at"),
         Index("ix_points_reason", "reason"),
+        # DB-level idempotency backstops for membership-lifecycle grants — make
+        # "grant once" a hard guarantee even under concurrent / multi-instance
+        # job runs. Partial so they never constrain the high-volume reasons
+        # (order.earn / redeem.coupon / expire.batch), which legitimately repeat.
+        Index(
+            "uq_points_welcome_once",
+            "customer_id",
+            unique=True,
+            postgresql_where=text("reason = 'welcome.signup'"),
+        ),
+        Index(
+            "uq_points_periodic_marker",
+            "customer_id",
+            "reason",
+            "note",
+            unique=True,
+            postgresql_where=text("reason IN ('birthday.gift', 'winback.dormant')"),
+        ),
     )
 
 
