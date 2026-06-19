@@ -55,24 +55,24 @@ SID.teams = {
     corners_for: 5.3, corners_against: 3.8,
     style: "高強度壓迫 + 兇悍對抗，Bielsa 體系高耗能" },
   CPV: { name: "維德角", code: "CPV", flag: "🇨🇻", fifa: 70, elo: 1503,
-    xg_for: 1.05, xg_against: 1.40, gf: 1.1, ga: 1.4, form10: [4, 2, 4],
-    squad_value: 0.6, avg_age: 27.5, wc_exp: 30, coach: 58,
+    xg_for: 1.05, xg_against: 1.18, gf: 1.1, ga: 1.0, form10: [4, 3, 3],
+    squad_value: 0.6, avg_age: 27.5, wc_exp: 30, coach: 60,
     possession: 46, ppda: 12.0, directness: 44, set_piece_xg: 0.20,
     corners_for: 4.0, corners_against: 5.1,
-    style: "首次世界盃黑馬，體能與身體素質好，經驗不足" },
+    style: "首戰 0-0 逼平西班牙，防守紀律佳；身體素質好但經驗不足" },
 
-  NZL: { name: "紐西蘭", code: "NZL", flag: "🇳🇿", fifa: 86, elo: 1451,
-    xg_for: 0.92, xg_against: 1.48, gf: 1.0, ga: 1.5, form10: [4, 3, 3],
+  NZL: { name: "紐西蘭", code: "NZL", flag: "🇳🇿", fifa: 85, elo: 1455,
+    xg_for: 0.96, xg_against: 1.44, gf: 1.0, ga: 1.4, form10: [4, 3, 3],
     squad_value: 0.4, avg_age: 27.9, wc_exp: 40, coach: 55,
     possession: 44, ppda: 13.0, directness: 49, set_piece_xg: 0.28,
     corners_for: 3.8, corners_against: 5.3,
     style: "身體流 + 定位球高空優勢，地面組織弱" },
-  EGY: { name: "埃及", code: "EGY", flag: "🇪🇬", fifa: 32, elo: 1654,
-    xg_for: 1.35, xg_against: 1.05, gf: 1.4, ga: 1.0, form10: [5, 3, 2],
-    squad_value: 2.0, avg_age: 27.0, wc_exp: 58, coach: 66,
-    possession: 52, ppda: 11.0, directness: 38, set_piece_xg: 0.26,
-    corners_for: 5.0, corners_against: 4.2,
-    style: "Salah 核心右路爆點，整體中規中矩偏反擊" },
+  EGY: { name: "埃及", code: "EGY", flag: "🇪🇬", fifa: 32, elo: 1672,
+    xg_for: 1.42, xg_against: 0.92, gf: 1.4, ga: 0.8, form10: [6, 3, 1],
+    squad_value: 2.4, avg_age: 27.0, wc_exp: 60, coach: 68,
+    possession: 53, ppda: 10.8, directness: 38, set_piece_xg: 0.26,
+    corners_for: 5.0, corners_against: 4.0,
+    style: "Salah+Marmoush 雙箭頭，預選 6 場零失球、防守扎實，偏反擊" },
 };
 
 /* ---------------------------------------------------------------------
@@ -102,7 +102,7 @@ SID.players = {
   URU: [
     { name: "Federico Valverde", role: "MID", importance: 0.30, status: "ok" },
     { name: "Darwin Núñez", role: "ATT", importance: 0.24, status: "ok" },
-    { name: "Ronald Araújo", role: "DEF", importance: 0.20, status: "doubt" },
+    { name: "Ronald Araújo", role: "DEF", importance: 0.20, status: "ok" },
   ],
   CPV: [
     { name: "Ryan Mendes", role: "ATT", importance: 0.24, status: "ok" },
@@ -111,8 +111,8 @@ SID.players = {
     { name: "Chris Wood", role: "ATT", importance: 0.32, status: "ok" },
   ],
   EGY: [
-    { name: "Mohamed Salah", role: "ATT", importance: 0.38, status: "ok" },
-    { name: "Mohamed Elneny", role: "MID", importance: 0.16, status: "out" },
+    { name: "Mohamed Salah", role: "ATT", importance: 0.36, status: "ok" },
+    { name: "Omar Marmoush", role: "ATT", importance: 0.22, status: "ok" },
   ],
 };
 
@@ -153,8 +153,8 @@ SID.matches = [
     kickoff_utc: "2026-06-21T22:00:00Z", referee: "Ramos (中性)",
     env: { temp: 33, humidity: 78, altitude: 2, roof: false,
       rest_home: 4, rest_away: 4, travel_home: 1700, travel_away: 800, tz_diff: 6 },
-    odds: { home: 1.42, draw: 4.50, away: 8.00, over25: 2.05, under25: 1.78,
-      btts_yes: 2.10, btts_no: 1.70, opening_home: 1.50, sharp: "home steam" },
+    odds: { home: 1.49, draw: 4.00, away: 6.50, over25: 2.00, under25: 1.80,
+      btts_yes: 2.10, btts_no: 1.70, opening_home: 1.55, sharp: "home steam" },
   },
   {
     id: "WC2026-G-NZL-EGY",
@@ -164,14 +164,14 @@ SID.matches = [
     kickoff_utc: "2026-06-22T01:00:00Z", referee: "Taylor (放任流暢)",
     env: { temp: 19, humidity: 50, altitude: 5, roof: true,
       rest_home: 4, rest_away: 4, travel_home: 500, travel_away: 4000, tz_diff: 10 },
-    odds: { home: 4.20, draw: 3.20, away: 1.95, over25: 2.10, under25: 1.74,
-      btts_yes: 2.25, btts_no: 1.62, opening_home: 4.00, sharp: "away supported" },
+    odds: { home: 5.00, draw: 3.60, away: 1.62, over25: 2.15, under25: 1.67,
+      btts_yes: 2.30, btts_no: 1.58, opening_home: 4.50, sharp: "away supported" },
   },
 ];
 
 /* 資料來源標記（畫面顯示用） */
 SID.meta = {
-  source: "FIFA 官方賽程 + FIFA Ranking Jun 2026（內建快照）",
+  source: "FIFA 賽程 + 第1輪實際結果 + 莊家盤口（H/G 組已查證 2026-06-19）",
   snapshot: "2026-06-19",
   live: false,
 };
