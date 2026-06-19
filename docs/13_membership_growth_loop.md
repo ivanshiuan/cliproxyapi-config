@@ -161,10 +161,21 @@
 - 一次性審核（已審回 409）；端點：`/ugc/submissions`（submit/list）、`.../approve|reject`
 - 註：真實貼文無法 100% 自動驗證，故採人工審核（human-in-the-loop）
 
-### 🔜 Phase 3 — 進階黏著 + 分眾再行銷
+### ✅ Phase 3.1 — 成效報表（本次新增，已上線、測試全綠）
+
+**`GET /membership/stats`** — `services/membership_stats_service.py`，唯讀聚合（無新表），
+一次回傳四套系統的決策快照（全 tenant-scoped）：
+- **會員/tier**：總會員數 + 各 tier 分布
+- **點數**：未兌換負債（Σ balance）+ 累計發放/兌換
+- **儲值**：未用餘額負債、持有儲值會員數、**滲透率 %**、累計儲入/加贈
+- **裂變**：總數/pending/qualified、不重複推薦人、**轉換率 %**、**K 因子**
+- **UGC**：pending/approved/rejected、**通過率 %**、各類型分布
+- 百分比皆除零安全；測試涵蓋四系統實際成效 + 空租戶全零
+
+### 🔜 Phase 3.2 — 進階黏著 + 分眾再行銷（下一步）
 - 連續回訪 Streak 倍率、升等進度條 API
 - RFM 分眾 + `LineMessenger.broadcast(audience)` 分眾推播（介面已備）
-- 成效報表：核銷率／連帶客單價／tier 遷移／K 因子 → `mv_*` 視圖或 `/membership/stats`
+- 報表加時間窗（近 7/30 天）+ 物化視圖（`mv_*`）供大量資料
 
 ---
 
