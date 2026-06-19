@@ -31,7 +31,13 @@ from ..schemas.customers import (
     CustomerUpdate,
     PointsRedemptionRequest,
 )
-from ..services import customers_service
+from ..schemas.stored_value import (
+    StoredValueBalanceResponse,
+    StoredValueLedgerResponse,
+    StoredValueSpendRequest,
+    StoredValueTopUpRequest,
+)
+from ..services import customers_service, stored_value_service
 
 # Module-level Query() singletons (B008 / FastAPI metadata).
 _Q_SEARCH = Query(default=None, max_length=80)
@@ -157,6 +163,76 @@ async def redeem_points(
 ) -> CustomerPointsLedgerResponse:
     return await customers_service.redeem_points(
         session, customer_id, payload, tenant_id=tenant_id
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 儲值 (stored-value / prepaid wallet)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{customer_id}/stored-value/top-up",
+    response_model=StoredValueBalanceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="儲值 (寫入 topup + 加贈 ledger, 回傳新餘額)",
+)
+async def stored_value_top_up(
+    customer_id: uuid.UUID,
+    payload: StoredValueTopUpRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> StoredValueBalanceResponse:
+    return await stored_value_service.top_up(
+        session, customer_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/{customer_id}/stored-value/spend",
+    response_model=StoredValueBalanceResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="儲值支付 (寫入負值 ledger, 扣除餘額; 餘額不足回 409)",
+)
+async def stored_value_spend(
+    customer_id: uuid.UUID,
+    payload: StoredValueSpendRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> StoredValueBalanceResponse:
+    return await stored_value_service.spend(
+        session, customer_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.get(
+    "/{customer_id}/stored-value",
+    response_model=StoredValueBalanceResponse,
+    summary="會員儲值餘額",
+)
+async def stored_value_balance(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> StoredValueBalanceResponse:
+    return await stored_value_service.get_balance(
+        session, customer_id, tenant_id=tenant_id
+    )
+
+
+@router.get(
+    "/{customer_id}/stored-value/ledger",
+    response_model=list[StoredValueLedgerResponse],
+    summary="會員儲值歷史 (newest first; append-only)",
+)
+async def stored_value_ledger(
+    customer_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+    limit: int = _Q_LIMIT,
+) -> list[StoredValueLedgerResponse]:
+    return await stored_value_service.list_ledger(
+        session, customer_id, tenant_id=tenant_id, limit=limit
     )
 
 

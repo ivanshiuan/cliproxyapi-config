@@ -97,6 +97,14 @@ class Customer(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         default=Decimal("0"),
         server_default="0",
     )
+    # Cached 儲值 (stored-value / prepaid) wallet balance. Source of truth is
+    # customer_stored_value_ledger; cached here to avoid summing on every read.
+    stored_value_balance: Mapped[Decimal] = mapped_column(
+        Money,
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
     last_visit_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -197,4 +205,55 @@ class CustomerPointsLedger(TenantScopedMixin, Base):
     )
 
 
-__all__ = ["Customer", "CustomerPointsLedger", "CustomerTier"]
+class CustomerStoredValueLedger(TenantScopedMixin, Base):
+    """Append-only 儲值 (stored-value / prepaid wallet) ledger.
+
+    Same discipline as the points ledger — never UPDATE, never DELETE; a
+    DB-level RULE blocks both, corrections are reversing rows. The cached
+    running total lives on ``Customer.stored_value_balance``.
+
+    Stored value carries **no** ``expires_at``: Taiwan's 零售業商品(服務)禮券
+    定型化契約 forbids an expiry date on prepaid value, so unlike points it
+    never lapses.
+    """
+
+    __tablename__ = "customer_stored_value_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid7,
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    # Signed: + for top-up / bonus / refund, - for spend.
+    delta: Mapped[Decimal] = mapped_column(Money, nullable=False)
+    # Dotted reason: "topup", "topup.bonus", "spend", "refund", "manual.adjust".
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_stored_value_customer_time", "customer_id", "created_at"),
+        Index("ix_stored_value_reason", "reason"),
+    )
+
+
+__all__ = [
+    "Customer",
+    "CustomerPointsLedger",
+    "CustomerStoredValueLedger",
+    "CustomerTier",
+]

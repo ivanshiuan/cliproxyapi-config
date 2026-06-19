@@ -26,7 +26,12 @@ from .campaigns import (
 )
 from .cash import CashDrawerSession
 from .cost_events import StaffMealEvent, TastingEvent, WasteEvent
-from .customers import Customer, CustomerPointsLedger, CustomerTier
+from .customers import (
+    Customer,
+    CustomerPointsLedger,
+    CustomerStoredValueLedger,
+    CustomerTier,
+)
 from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
@@ -115,6 +120,7 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "Customer",
     "CustomerTier",
     "CustomerPointsLedger",
+    "CustomerStoredValueLedger",
     # marketing campaigns (wheel-spin lottery)
     "MarketingCampaign",
     "CampaignStatus",

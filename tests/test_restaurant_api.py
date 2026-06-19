@@ -35,7 +35,7 @@ def test_root_endpoint():
 
 def test_models_metadata_has_30_tables():
     """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national
-    + 4 marketing-campaign (wheel-spin lottery) = 30 total."""
+    + 4 marketing-campaign (wheel-spin lottery) + 1 stored-value = 31 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -74,10 +74,12 @@ def test_models_metadata_has_30_tables():
         "campaign_prizes",
         "campaign_spins",
         "campaign_vouchers",
+        # Stored-value (prepaid wallet) (1)
+        "customer_stored_value_ledger",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 30
+    assert len(Base.metadata.tables) == 31
 
 
 def test_money_columns_are_numeric_14_4():
