@@ -1,0 +1,10 @@
+{
+  "name": "Sports Intelligence Desk",
+  "short_name": "SID Terminal",
+  "description": "賽事情報投研終端 — 四場賽事 Alpha 中樞",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14"
+}
