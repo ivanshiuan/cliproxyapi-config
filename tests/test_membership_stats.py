@@ -158,8 +158,51 @@ async def test_stats_empty_tenant_is_all_zero(
     stats = await membership_stats_service.compute_stats(
         db_session, tenant_id=seed_tenant.id
     )
+    assert stats.window_days is None
     assert stats.total_members == 0
     assert stats.stored_value.penetration_pct == Decimal("0")
     assert stats.referral.conversion_pct == Decimal("0")
     assert stats.referral.k_factor == Decimal("0")
     assert stats.ugc.approval_pct == Decimal("0")
+
+
+async def test_stats_time_window_filters_flow_not_snapshot(
+    db_session: AsyncSession, seed_tenant: Tenant
+) -> None:
+    """?days=N windows ledger flow but leaves the balance snapshot intact."""
+    from datetime import UTC, datetime, timedelta
+
+    from restaurant_api.models import CustomerPointsLedger
+
+    tid = seed_tenant.id
+    cust = await _customer(db_session, tid, tier=CustomerTier.REGULAR)
+    cust.points_balance = Decimal("300")  # snapshot liability
+    now = datetime.now(UTC)
+
+    # One old grant (40d ago) + one recent grant (today).
+    db_session.add_all(
+        [
+            CustomerPointsLedger(
+                tenant_id=tid, customer_id=cust.id, delta=Decimal("100"),
+                reason="order.earn", created_at=now - timedelta(days=40),
+            ),
+            CustomerPointsLedger(
+                tenant_id=tid, customer_id=cust.id, delta=Decimal("200"),
+                reason="order.earn", created_at=now,
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    # Lifetime: both grants count.
+    lifetime = await membership_stats_service.compute_stats(db_session, tenant_id=tid)
+    assert lifetime.window_days is None
+    assert lifetime.points.lifetime_granted == Decimal("300")
+
+    # Last 30 days: only the recent grant; snapshot balance unchanged.
+    windowed = await membership_stats_service.compute_stats(
+        db_session, tenant_id=tid, since=now - timedelta(days=30), window_days=30
+    )
+    assert windowed.window_days == 30
+    assert windowed.points.lifetime_granted == Decimal("200")
+    assert windowed.points.outstanding_balance == Decimal("300")  # snapshot intact

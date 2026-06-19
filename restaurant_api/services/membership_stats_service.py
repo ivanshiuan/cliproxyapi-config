@@ -4,9 +4,17 @@ One ``compute_stats`` call fans out a handful of tenant-scoped aggregate
 queries (no new tables) and assembles the dashboard payload. Pure reads — no
 ``flush``/``commit``, no side effects.
 
+Time window:
+- ``since`` (derived from the ``?days=N`` query param) windows the **flow**
+  metrics — points granted/redeemed, stored-value top-ups, referral edges, and
+  UGC submissions are counted only from ``created_at >= since``.
+- **Snapshot** metrics — outstanding balances, tier distribution, members with a
+  wallet balance — are always point-in-time (a window can't change "what we owe
+  right now"). ``window_days`` echoes the filter back to the caller.
+
 Metric definitions worth pinning down:
 - **Points liability** = Σ cached ``points_balance`` (what we'd owe if everyone
-  redeemed today). Lifetime granted/redeemed come from the append-only ledger.
+  redeemed today). Granted/redeemed come from the append-only ledger.
 - **Stored-value penetration** = share of live members holding a positive wallet
   balance — the lock-in reach of the 儲值 mechanic.
 - **Referral conversion** = qualified / total edges. **K-factor** = qualified
@@ -18,10 +26,13 @@ Metric definitions worth pinning down:
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from ..models import (
     Customer,
@@ -55,11 +66,25 @@ def _pct(numerator: Decimal | int, denominator: Decimal | int) -> Decimal:
     )
 
 
+def _sum_when(condition: ColumnElement[bool], value: Any) -> ColumnElement[Any]:
+    """``COALESCE(SUM(CASE WHEN condition THEN value ELSE 0 END), 0)``."""
+    return func.coalesce(func.sum(case((condition, value), else_=_ZERO)), _ZERO)
+
+
+def _count_when(condition: ColumnElement[bool]) -> ColumnElement[Any]:
+    """``COALESCE(SUM(CASE WHEN condition THEN 1 ELSE 0 END), 0)``."""
+    return func.coalesce(func.sum(case((condition, 1), else_=0)), 0)
+
+
 async def compute_stats(
-    session: AsyncSession, *, tenant_id: uuid.UUID
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    since: datetime | None = None,
+    window_days: int | None = None,
 ) -> MembershipStatsResponse:
-    """Assemble the full 成效報表 snapshot for one tenant."""
-    # ── Members + tier distribution ──────────────────────────────────────────
+    """Assemble the 成效報表 snapshot. ``since`` windows the flow metrics."""
+    # ── Members + tier distribution (snapshot) ───────────────────────────────
     tier_rows = (
         await session.execute(
             select(Customer.tier, func.count())
@@ -70,7 +95,7 @@ async def compute_stats(
     tiers = [TierBucket(tier=t, count=c) for t, c in tier_rows]
     total_members = sum(c for _, c in tier_rows)
 
-    # ── Points: outstanding liability + lifetime flow ────────────────────────
+    # ── Points: outstanding (snapshot) + granted/redeemed (flow) ─────────────
     points_outstanding = (
         await session.execute(
             select(func.coalesce(func.sum(Customer.points_balance), _ZERO)).where(
@@ -78,80 +103,41 @@ async def compute_stats(
             )
         )
     ).scalar_one()
-    granted, redeemed = (
-        await session.execute(
-            select(
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (CustomerPointsLedger.delta > 0, CustomerPointsLedger.delta),
-                            else_=_ZERO,
-                        )
-                    ),
-                    _ZERO,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (CustomerPointsLedger.delta < 0, -CustomerPointsLedger.delta),
-                            else_=_ZERO,
-                        )
-                    ),
-                    _ZERO,
-                ),
-            ).where(CustomerPointsLedger.tenant_id == tenant_id)
-        )
-    ).one()
+    points_stmt = select(
+        _sum_when(CustomerPointsLedger.delta > 0, CustomerPointsLedger.delta),
+        _sum_when(CustomerPointsLedger.delta < 0, -CustomerPointsLedger.delta),
+    ).where(CustomerPointsLedger.tenant_id == tenant_id)
+    if since is not None:
+        points_stmt = points_stmt.where(CustomerPointsLedger.created_at >= since)
+    granted, redeemed = (await session.execute(points_stmt)).one()
     points = PointsStats(
         outstanding_balance=points_outstanding,
         lifetime_granted=granted,
         lifetime_redeemed=redeemed,
     )
 
-    # ── Stored value: liability + penetration + lifetime in-flow ─────────────
+    # ── Stored value: balance/penetration (snapshot) + in-flow (flow) ────────
     sv_outstanding, sv_members = (
         await session.execute(
             select(
                 func.coalesce(func.sum(Customer.stored_value_balance), _ZERO),
-                func.coalesce(
-                    func.sum(
-                        case((Customer.stored_value_balance > 0, 1), else_=0)
-                    ),
-                    0,
-                ),
+                _count_when(Customer.stored_value_balance > 0),
             ).where(Customer.tenant_id == tenant_id, Customer.deleted_at.is_(None))
         )
     ).one()
-    sv_topup, sv_bonus = (
-        await session.execute(
-            select(
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                CustomerStoredValueLedger.reason == "topup",
-                                CustomerStoredValueLedger.delta,
-                            ),
-                            else_=_ZERO,
-                        )
-                    ),
-                    _ZERO,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                CustomerStoredValueLedger.reason == "topup.bonus",
-                                CustomerStoredValueLedger.delta,
-                            ),
-                            else_=_ZERO,
-                        )
-                    ),
-                    _ZERO,
-                ),
-            ).where(CustomerStoredValueLedger.tenant_id == tenant_id)
-        )
-    ).one()
+    sv_stmt = select(
+        _sum_when(
+            CustomerStoredValueLedger.reason == "topup",
+            CustomerStoredValueLedger.delta,
+        ),
+        _sum_when(
+            CustomerStoredValueLedger.reason == "topup.bonus",
+            CustomerStoredValueLedger.delta,
+        ),
+    ).where(CustomerStoredValueLedger.tenant_id == tenant_id)
+    if since is not None:
+        sv_stmt = sv_stmt.where(CustomerStoredValueLedger.created_at >= since)
+    sv_topup, sv_bonus = (await session.execute(sv_stmt)).one()
     stored_value = StoredValueStats(
         outstanding_balance=sv_outstanding,
         members_with_balance=sv_members,
@@ -160,26 +146,17 @@ async def compute_stats(
         lifetime_bonus=sv_bonus,
     )
 
-    # ── Referral flywheel ────────────────────────────────────────────────────
+    # ── Referral flywheel (flow) ─────────────────────────────────────────────
+    ref_stmt = select(
+        func.count(),
+        _count_when(Referral.status == ReferralStatus.PENDING),
+        _count_when(Referral.status == ReferralStatus.QUALIFIED),
+        func.count(func.distinct(Referral.referrer_id)),
+    ).where(Referral.tenant_id == tenant_id)
+    if since is not None:
+        ref_stmt = ref_stmt.where(Referral.created_at >= since)
     ref_total, ref_pending, ref_qualified, ref_referrers = (
-        await session.execute(
-            select(
-                func.count(),
-                func.coalesce(
-                    func.sum(
-                        case((Referral.status == ReferralStatus.PENDING, 1), else_=0)
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case((Referral.status == ReferralStatus.QUALIFIED, 1), else_=0)
-                    ),
-                    0,
-                ),
-                func.count(func.distinct(Referral.referrer_id)),
-            ).where(Referral.tenant_id == tenant_id)
-        )
+        await session.execute(ref_stmt)
     ).one()
     referral = ReferralStats(
         total=ref_total,
@@ -196,38 +173,24 @@ async def compute_stats(
         ),
     )
 
-    # ── UGC queue ────────────────────────────────────────────────────────────
-    ugc_pending, ugc_approved, ugc_rejected = (
-        await session.execute(
-            select(
-                func.coalesce(
-                    func.sum(
-                        case((UgcSubmission.status == UgcStatus.PENDING, 1), else_=0)
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case((UgcSubmission.status == UgcStatus.APPROVED, 1), else_=0)
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case((UgcSubmission.status == UgcStatus.REJECTED, 1), else_=0)
-                    ),
-                    0,
-                ),
-            ).where(UgcSubmission.tenant_id == tenant_id)
-        )
-    ).one()
-    ugc_kind_rows = (
-        await session.execute(
-            select(UgcSubmission.kind, func.count())
-            .where(UgcSubmission.tenant_id == tenant_id)
-            .group_by(UgcSubmission.kind)
-        )
-    ).all()
+    # ── UGC queue (flow) ─────────────────────────────────────────────────────
+    ugc_stmt = select(
+        _count_when(UgcSubmission.status == UgcStatus.PENDING),
+        _count_when(UgcSubmission.status == UgcStatus.APPROVED),
+        _count_when(UgcSubmission.status == UgcStatus.REJECTED),
+    ).where(UgcSubmission.tenant_id == tenant_id)
+    if since is not None:
+        ugc_stmt = ugc_stmt.where(UgcSubmission.created_at >= since)
+    ugc_pending, ugc_approved, ugc_rejected = (await session.execute(ugc_stmt)).one()
+
+    kind_stmt = (
+        select(UgcSubmission.kind, func.count())
+        .where(UgcSubmission.tenant_id == tenant_id)
+        .group_by(UgcSubmission.kind)
+    )
+    if since is not None:
+        kind_stmt = kind_stmt.where(UgcSubmission.created_at >= since)
+    ugc_kind_rows = (await session.execute(kind_stmt)).all()
     ugc = UgcStats(
         pending=ugc_pending,
         approved=ugc_approved,
@@ -237,6 +200,7 @@ async def compute_stats(
     )
 
     return MembershipStatsResponse(
+        window_days=window_days,
         total_members=total_members,
         tiers=tiers,
         points=points,

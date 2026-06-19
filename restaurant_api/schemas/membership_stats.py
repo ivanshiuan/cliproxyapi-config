@@ -85,6 +85,9 @@ class MembershipStatsResponse(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    # Echo of the ?days=N filter (None = lifetime). Flow metrics honour it;
+    # snapshot metrics (balances, tier mix) are always point-in-time.
+    window_days: int | None
     total_members: int
     tiers: list[TierBucket]
     points: PointsStats
