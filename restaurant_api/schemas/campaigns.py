@@ -22,6 +22,7 @@ from ..models import CampaignStatus, VoucherStatus
 
 
 def _reject_float(v: Any) -> Any:
+    """Reject ``float`` at the boundary so money stays exact (Decimal/str only)."""
     if isinstance(v, float):
         raise ValueError("float not allowed; use Decimal or string")
     return v
@@ -53,6 +54,7 @@ class CampaignCreate(BaseModel):
 
     @model_validator(mode="after")
     def _check_window(self) -> CampaignCreate:
+        """Reject a campaign window where ``ends_at`` is not after ``starts_at``."""
         if self.starts_at and self.ends_at and self.ends_at <= self.starts_at:
             raise ValueError("ends_at must be after starts_at")
         return self
@@ -74,6 +76,8 @@ class CampaignUpdate(BaseModel):
 
 
 class CampaignResponse(BaseModel):
+    """Campaign as returned to operators (full config + lifecycle timestamps)."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -119,6 +123,8 @@ class PrizeCreate(BaseModel):
 
 
 class PrizeUpdate(BaseModel):
+    """Partial prize update. Only supplied fields are applied."""
+
     model_config = ConfigDict(frozen=True)
 
     name: str | None = Field(default=None, min_length=1, max_length=120)
@@ -132,6 +138,8 @@ class PrizeUpdate(BaseModel):
 
 
 class PrizeResponse(BaseModel):
+    """Prize as returned to operators (weights, quotas, and awarded count)."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -166,6 +174,8 @@ class WheelSegment(BaseModel):
 
 
 class WheelResponse(BaseModel):
+    """Public wheel layout the front-end renders (segments + spin limit)."""
+
     model_config = ConfigDict(frozen=True)
 
     campaign_id: UUID
@@ -200,6 +210,7 @@ class SpinRequest(BaseModel):
 
     @model_validator(mode="after")
     def _need_identity(self) -> SpinRequest:
+        """Require at least one way to identify (or auto-register) the member."""
         if not any((self.customer_id, self.line_user_id, self.phone)):
             raise ValueError(
                 "provide customer_id, or a line_user_id / phone to identify "
@@ -220,6 +231,8 @@ class PrizeWon(BaseModel):
 
 
 class SpinResponse(BaseModel):
+    """Outcome of one spin: win/lose, any prize + voucher, and spins left today."""
+
     model_config = ConfigDict(frozen=True)
 
     spin_id: UUID
@@ -239,6 +252,8 @@ class SpinResponse(BaseModel):
 
 
 class VoucherResponse(BaseModel):
+    """A minted voucher in the member's wallet (code, value, validity, status)."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID

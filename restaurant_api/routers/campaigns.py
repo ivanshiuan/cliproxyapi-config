@@ -73,6 +73,7 @@ async def create_campaign(
     session: DbSession,
     tenant_id: TenantId,
 ) -> CampaignResponse:
+    """Create a wheel-spin campaign (defaults to ``draft`` status)."""
     return await campaigns_service.create_campaign(session, payload, tenant_id=tenant_id)
 
 
@@ -84,6 +85,7 @@ async def list_campaigns(
     include_deleted: bool = _Q_INCLUDE_DELETED,
     limit: int = _Q_LIMIT,
 ) -> list[CampaignResponse]:
+    """List campaigns for the tenant, optionally filtered by status."""
     return await campaigns_service.list_campaigns(
         session,
         tenant_id=tenant_id,
@@ -99,6 +101,7 @@ async def get_campaign(
     session: DbSession,
     tenant_id: TenantId,
 ) -> CampaignResponse:
+    """Fetch a single campaign (404 if missing or soft-deleted)."""
     return await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
 
 
@@ -113,6 +116,7 @@ async def patch_campaign(
     session: DbSession,
     tenant_id: TenantId,
 ) -> CampaignResponse:
+    """Update campaign config / lifecycle status (draft→active→ended)."""
     return await campaigns_service.patch_campaign(
         session, campaign_id, payload, tenant_id=tenant_id
     )
@@ -133,6 +137,7 @@ async def add_prize(
     session: DbSession,
     tenant_id: TenantId,
 ) -> PrizeResponse:
+    """Add a wheel segment / prize to a campaign."""
     return await campaigns_service.add_prize(
         session, campaign_id, payload, tenant_id=tenant_id
     )
@@ -149,6 +154,7 @@ async def list_prizes(
     tenant_id: TenantId,
     include_inactive: bool = _Q_INCLUDE_INACTIVE,
 ) -> list[PrizeResponse]:
+    """List a campaign's prizes / wheel segments."""
     return await campaigns_service.list_prizes(
         session, campaign_id, tenant_id=tenant_id, include_inactive=include_inactive
     )
@@ -166,6 +172,7 @@ async def patch_prize(
     session: DbSession,
     tenant_id: TenantId,
 ) -> PrizeResponse:
+    """Update a prize's weight / quota / value / active flag."""
     return await campaigns_service.patch_prize(
         session, campaign_id, prize_id, payload, tenant_id=tenant_id
     )
@@ -184,6 +191,7 @@ async def get_wheel(
     session: DbSession,
     tenant_id: TenantId,
 ) -> WheelResponse:
+    """Public wheel layout for front-end rendering (labels only, no odds)."""
     return await campaigns_service.get_wheel(session, campaign_id, tenant_id=tenant_id)
 
 
@@ -200,6 +208,7 @@ async def spin(
     tenant_id: TenantId,
     messenger: Messenger,
 ) -> SpinResponse:
+    """Spin the wheel once (daily-limited; auto-joins member on first spin)."""
     return await campaigns_service.spin(
         session, campaign_id, payload, tenant_id=tenant_id, messenger=messenger
     )
@@ -221,6 +230,7 @@ async def list_vouchers(
     voucher_status: VoucherStatus | None = _Q_VOUCHER_STATUS,
     limit: int = _Q_LIMIT,
 ) -> list[VoucherResponse]:
+    """A member's voucher wallet, highest value first."""
     return await campaigns_service.list_vouchers(
         session,
         campaign_id,
@@ -242,6 +252,7 @@ async def get_voucher_by_code(
     session: DbSession,
     tenant_id: TenantId,
 ) -> VoucherResponse:
+    """Look up a voucher by its redemption code (counter scan)."""
     return await campaigns_service.get_voucher_by_code(
         session, campaign_id, code, tenant_id=tenant_id
     )
@@ -259,6 +270,7 @@ async def redeem_voucher(
     session: DbSession,
     tenant_id: TenantId,
 ) -> VoucherResponse:
+    """Redeem one voucher at the counter (one per member per visit/day)."""
     return await campaigns_service.redeem_voucher(
         session, campaign_id, voucher_id, payload, tenant_id=tenant_id
     )
@@ -296,6 +308,7 @@ async def campaign_qr(
     accent: str | None = None,
     bg: str | None = None,
 ) -> Response:
+    """Render the campaign's player URL as a print-ready SVG QR code."""
     # 404 + tenant scope via the normal loader.
     await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
     brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
@@ -322,6 +335,7 @@ async def campaign_poster(
     accent: str | None = None,
     bg: str | None = None,
 ) -> HTMLResponse:
+    """Render a printable A4 door poster with the campaign's embedded QR."""
     campaign = await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
     brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
     url = _demo_url(request, campaign_id, base_url, brand_params)

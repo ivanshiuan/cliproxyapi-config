@@ -78,6 +78,7 @@ def _today_tpe() -> date:
 
 
 def _gen_code(n: int = 8) -> str:
+    """Random voucher code from the unambiguous alphabet (no 0/O, 1/I)."""
     return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(n))
 
 
@@ -93,6 +94,7 @@ async def create_campaign(
     tenant_id: uuid.UUID,
     actor_id: uuid.UUID | None = None,
 ) -> CampaignResponse:
+    """Create a campaign after enforcing per-tenant slug uniqueness; audited."""
     await _reject_duplicate_slug(session, tenant_id=tenant_id, slug=payload.slug)
     row = MarketingCampaign(
         tenant_id=tenant_id,
@@ -123,6 +125,7 @@ async def create_campaign(
 async def get_campaign(
     session: AsyncSession, campaign_id: uuid.UUID, *, tenant_id: uuid.UUID
 ) -> CampaignResponse:
+    """Load one campaign scoped to the tenant (404 if missing/soft-deleted)."""
     return CampaignResponse.model_validate(
         await _load_campaign(session, campaign_id, tenant_id)
     )
@@ -136,6 +139,7 @@ async def list_campaigns(
     include_deleted: bool = False,
     limit: int = 200,
 ) -> list[CampaignResponse]:
+    """List tenant campaigns (newest first), optionally filtered by status."""
     stmt = select(MarketingCampaign).where(MarketingCampaign.tenant_id == tenant_id)
     if not include_deleted:
         stmt = stmt.where(MarketingCampaign.deleted_at.is_(None))
@@ -154,6 +158,7 @@ async def patch_campaign(
     tenant_id: uuid.UUID,
     actor_id: uuid.UUID | None = None,
 ) -> CampaignResponse:
+    """Apply a partial campaign update, validate the window, and audit changes."""
     row = await _load_campaign(session, campaign_id, tenant_id)
     changed: dict[str, object] = {}
     for field in (
@@ -203,6 +208,7 @@ async def add_prize(
     tenant_id: uuid.UUID,
     actor_id: uuid.UUID | None = None,
 ) -> PrizeResponse:
+    """Add a prize / wheel segment to a campaign; audited."""
     await _load_campaign(session, campaign_id, tenant_id)
     row = CampaignPrize(
         tenant_id=tenant_id,
@@ -241,6 +247,7 @@ async def list_prizes(
     tenant_id: uuid.UUID,
     include_inactive: bool = True,
 ) -> list[PrizeResponse]:
+    """List a campaign's prizes in wheel order (active-only when asked)."""
     await _load_campaign(session, campaign_id, tenant_id)
     stmt = (
         select(CampaignPrize)
@@ -266,6 +273,7 @@ async def patch_prize(
     tenant_id: uuid.UUID,
     actor_id: uuid.UUID | None = None,
 ) -> PrizeResponse:
+    """Apply a partial prize update, recording changed fields in the audit log."""
     row = await _load_prize(session, campaign_id, prize_id, tenant_id)
     changed: dict[str, object] = {}
     for field in (
@@ -305,6 +313,7 @@ async def patch_prize(
 async def get_wheel(
     session: AsyncSession, campaign_id: uuid.UUID, *, tenant_id: uuid.UUID
 ) -> WheelResponse:
+    """Build the public wheel layout (active prizes as labelled segments)."""
     campaign = await _load_campaign(session, campaign_id, tenant_id)
     prizes = await list_prizes(
         session, campaign_id, tenant_id=tenant_id, include_inactive=False
@@ -492,6 +501,7 @@ async def get_voucher_by_code(
     *,
     tenant_id: uuid.UUID,
 ) -> VoucherResponse:
+    """Look up a voucher by its (case-insensitive) redemption code; 404 if none."""
     row = (
         await session.execute(
             select(CampaignVoucher).where(
@@ -617,6 +627,7 @@ async def redeem_voucher(
 
 
 def _as_utc(dt: datetime | None) -> datetime | None:
+    """Normalise a datetime to tz-aware UTC for DB storage (naive → assumed UTC)."""
     if dt is None:
         return None
     if dt.tzinfo is None:
@@ -631,6 +642,7 @@ def _is_win(prize: CampaignPrize) -> bool:
 
 
 def _assert_spinnable(campaign: MarketingCampaign) -> None:
+    """Raise ``ConflictError`` unless the campaign is active and within its window."""
     if campaign.status != CampaignStatus.ACTIVE:
         raise ConflictError(
             message="campaign is not active",
@@ -723,6 +735,7 @@ async def _mint_voucher(
     spin_row: CampaignSpin,
     today: date,
 ) -> CampaignVoucher:
+    """Mint an active voucher for a won prize, computing its validity window."""
     valid_from = today + timedelta(days=campaign.voucher_start_offset_days)
     valid_until = valid_from + timedelta(days=campaign.voucher_validity_days)
     voucher = CampaignVoucher(
@@ -769,6 +782,7 @@ async def _count_spins_today(
     customer_id: uuid.UUID,
     today: date,
 ) -> int:
+    """Count a member's spins in this campaign for the given day (limit check)."""
     return int(
         (
             await session.execute(
@@ -846,6 +860,7 @@ async def _resolve_or_create_customer(
 async def _load_campaign(
     session: AsyncSession, campaign_id: uuid.UUID, tenant_id: uuid.UUID
 ) -> MarketingCampaign:
+    """Load a non-deleted campaign scoped to the tenant, or raise ``NotFoundError``."""
     row = (
         await session.execute(
             select(MarketingCampaign).where(
@@ -869,6 +884,7 @@ async def _load_prize(
     prize_id: uuid.UUID,
     tenant_id: uuid.UUID,
 ) -> CampaignPrize:
+    """Load a non-deleted prize scoped to its campaign + tenant, or 404."""
     row = (
         await session.execute(
             select(CampaignPrize).where(
@@ -890,6 +906,7 @@ async def _load_prize(
 async def _reject_duplicate_slug(
     session: AsyncSession, *, tenant_id: uuid.UUID, slug: str
 ) -> None:
+    """Raise ``ConflictError`` if the slug is already used by a live campaign."""
     hit = (
         await session.execute(
             select(MarketingCampaign.id).where(
