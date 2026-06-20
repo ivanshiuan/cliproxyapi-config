@@ -91,11 +91,14 @@ cd sports-intelligence-desk && python3 -m http.server 8080
 
 ---
 
-## 驗證
+## 上線前驗證（QA gate）
 
 ```bash
-node -e 'global.window={};require("./js/data.js");require("./js/engine.js");
-const S=window.SID;const A=S.matches.map(m=>S.analyzeMatch(m));
-A.forEach(a=>console.log(a.home.name,a.grade.grade,a.grade.conf));
-console.log(S.analyzePortfolio(A).score)'
+cd sports-intelligence-desk && node qa.js
 ```
+10 輪復盤、1380 斷言（模組/數學/Monte Carlo/回測/數據準確/時區/UI/邊界/Live/端到端）。
+必須 **🟢 全綠** 才可上線。
+
+## 上線部署（Path C）
+
+完整步驟見 `deploy/README.md`：Cloudflare Worker proxy（藏 key、解 CORS）+ 靜態 App + App 設定頁。

@@ -420,6 +420,64 @@
   }
 
   /* ===================================================================
+   *  設定頁（Live 資料對接）
+   * ================================================================= */
+  function renderSettings() {
+    const c = SID.liveConfig || {};
+    const liveBadge = SID.meta.live
+      ? `<span class="pill g">LIVE: ${SID.meta.source}</span>`
+      : `<span class="pill a">內建快照 ${SID.meta.snapshot}</span>`;
+    return `<div class="wrap">
+      <div class="section-title" style="margin-top:0">資料來源</div>
+      <div class="card">${liveBadge}
+        <div class="tiny" style="margin-top:8px">${SID.meta.source}</div></div>
+
+      <div class="section-title">Live 對接（Path C）</div>
+      <div class="card"><div class="memo">
+        <div class="kv"><b>Provider</b><span>
+          <select id="cfg-provider" style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px">
+            <option value="apifootball"${c.provider==="apifootball"?" selected":""}>API-Football</option>
+            <option value="footballdata"${c.provider==="footballdata"?" selected":""}>football-data.org</option>
+            <option value="thesportsdb"${c.provider==="thesportsdb"?" selected":""}>TheSportsDB</option>
+          </select></span></div>
+        <div class="kv"><b>API Key</b><span><input id="cfg-key" value="${c.key||""}" placeholder="直連時填；用 Worker 則留空"
+          style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px;width:160px"></span></div>
+        <div class="kv"><b>Proxy（解 CORS）</b><span><input id="cfg-proxy" value="${c.proxy||""}" placeholder="https://worker.dev/?u="
+          style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px;width:160px"></span></div>
+        <div class="kv"><b>Season</b><span><input id="cfg-season" value="${c.season||2026}"
+          style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px;width:80px"></span></div>
+      </div>
+      <button class="btn" data-action="refresh" style="width:100%;margin-top:10px">🔄 測試連線並更新</button>
+      <div id="cfg-status" class="tiny" style="margin-top:8px"></div>
+      </div>
+
+      <div class="section-title">說明</div>
+      <div class="card"><div class="memo">
+        <p class="muted">瀏覽器直連多會被 CORS 擋；正式上線請用 deploy/worker.js（Cloudflare Worker）當 proxy，key 藏在 Worker secret。</p>
+        <p class="muted">API 只更新賽程/比分/盤口；球隊評級(Elo/xG) 仍用本系統 curated 先驗。</p>
+        <p class="tiny">完整步驟見 docs/LIVE_DATA.md</p>
+      </div></div>
+    </div>`;
+  }
+
+  async function doRefresh() {
+    const st = document.getElementById("cfg-status");
+    SID.liveConfig = {
+      provider: document.getElementById("cfg-provider").value,
+      key: document.getElementById("cfg-key").value.trim(),
+      proxy: document.getElementById("cfg-proxy").value.trim(),
+      season: +document.getElementById("cfg-season").value || 2026,
+      date: new Date().toISOString().slice(0, 10),
+    };
+    if (st) st.textContent = "抓取中…";
+    const r = await SID.refresh();
+    if (r.ok) { compute(); }
+    if (st) st.textContent = r.ok
+      ? `✅ 成功（抓 ${r.fetched} 場，可用 ${r.usable}）已重算`
+      : `⚠️ ${r.reason}`;
+  }
+
+  /* ===================================================================
    *  路由 / 事件
    * ================================================================= */
   function render() {
@@ -428,6 +486,7 @@
     else if (VIEW === "match") main.innerHTML = renderMatch(CUR);
     else if (VIEW === "portfolio") main.innerHTML = renderPortfolio();
     else if (VIEW === "timeline") main.innerHTML = renderTimeline();
+    else if (VIEW === "settings") main.innerHTML = renderSettings();
     document.querySelectorAll(".tabs button").forEach(b =>
       b.classList.toggle("active", b.dataset.tab === VIEW || (VIEW === "match" && b.dataset.tab === "desk")));
     window.scrollTo(0, 0);
@@ -440,6 +499,8 @@
     const navEl = e.target.closest("[data-nav]");
     const tab = e.target.closest("[data-tab]");
     const memoBtn = e.target.closest("[data-memo]");
+    const action = e.target.closest("[data-action]");
+    if (action && action.dataset.action === "refresh") { doRefresh(); return; }
     if (memoBtn) {
       const a = ANALYSES.find(x => x.match.id === memoBtn.dataset.memo);
       $("#memo-out").innerHTML = `<pre class="mono" style="white-space:pre-wrap;font-size:11.5px;
@@ -460,5 +521,12 @@
     render();
   }
   document.addEventListener("DOMContentLoaded", boot);
+
+  /* 測試導出（供 QA 復盤用，生產環境無副作用） */
+  SID._test = {
+    compute, twTime, hoursUntil,
+    renderDesk, renderMatch, renderPortfolio, renderTimeline, renderSettings, buildMemo, matchRow, scoreHeat,
+    getAnalyses: () => ANALYSES, getPortfolio: () => PORT,
+  };
 
 })(window.SID);
