@@ -229,3 +229,22 @@ A 與 B 補的洞最大、最該先做；C 是原訂 Phase 2，往後遞延一�
 > 你蓋好了一台超強的「留存與回收」機器，現在缺的是「把陌生人灌進來」的進水管。
 > 把 A（UGC）與 B（儲值）接上後，獲客端與留存端同時發力，飛輪才會真正開始加速。
 
+---
+
+## 9. 已知技術債（待協調修復）
+
+### 9.1 Enum `server_default` 大小寫（全庫 dormant）
+
+所有 `SQLEnum(X, native_enum=False)` 欄位**儲存的是 enum 的 name**（如 `"PENDING"`／`"OPEN"`），
+但歷史慣例把 `server_default` 設成 `.value`（小寫 `"pending"`／`"open"`）。兩者不一致：
+
+- **本 PR 新增的 `referrals.status`、`ugc_submissions.status` 已修**（`server_default` 改用 `.name`，並加回歸測試）。
+- **既有 6 個 enum 仍是舊寫法**：`orders.status`、`orders.invoice_status`、`orders.kitchen_status`、
+  `customers.tier`、`marketing_campaigns.status`、`campaign_vouchers.status`。
+
+**影響**：目前 **dormant**——ORM 寫入一律帶 Python `default=`，永遠不會用到 server_default；
+只有「省略 status 的 raw SQL / 資料回填」才會寫出小寫值，而小寫值對 `status == X` 查詢隱形。
+
+**建議**：之後開一支獨立 migration，統一把這 6 個欄位的 `server_default` 改成 `.name`
+（或全庫導入 `values_callable` 改存 value，但需資料轉換）。屬跨表變更，不併入本獲客 PR 以降風險。
+
