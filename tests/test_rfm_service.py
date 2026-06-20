@@ -163,3 +163,20 @@ async def test_broadcast_empty_segment_delivers_zero(
     )
     assert result.audience_size == 0
     assert result.delivered == 0
+
+
+async def test_future_dated_order_ignored_member_is_new(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """An order dated after as_of must not count (no negative recency)."""
+    tid, sid = seed_tenant.id, seed_store.id
+    m = await _member(db_session, tid)
+    await _orders_on(
+        db_session, tenant_id=tid, store_id=sid, customer_id=m.id,
+        days=[_AS_OF + timedelta(days=5)],  # future relative to as_of
+    )
+    res = await rfm_service.segment_counts(db_session, tenant_id=tid, as_of=_AS_OF)
+    counts = {b.segment: b.count for b in res.segments}
+    # The only member has no qualifying order on/before as_of → NEW.
+    assert counts[RfmSegment.NEW] == 1
+    assert sum(counts.values()) == 1

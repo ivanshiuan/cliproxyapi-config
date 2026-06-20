@@ -105,6 +105,11 @@ async def _scored_members(
                 Order.customer_id == Customer.id,
                 Order.status == OrderStatus.CLOSED,
                 Order.deleted_at.is_(None),
+                # Bound to the as-of date so a (test or back-dated) future order
+                # can't yield negative recency or inflate frequency. In the
+                # JOIN — not WHERE — so members with no qualifying order still
+                # appear (as NEW) instead of being filtered out.
+                Order.business_date <= as_of,
             ),
         )
         .where(Customer.tenant_id == tenant_id, Customer.deleted_at.is_(None))
