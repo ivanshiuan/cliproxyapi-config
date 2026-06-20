@@ -64,7 +64,7 @@ async def _orders_on(
 # ── pure classification ──────────────────────────────────────────────────────
 
 
-def test_classify_decision_tree() -> None:
+async def test_classify_decision_tree() -> None:
     c = rfm_service.classify
     assert c(recency_days=None, frequency=0, monetary=Decimal("0")) == RfmSegment.NEW
     # gone quiet but high value -> at risk; low value -> dormant

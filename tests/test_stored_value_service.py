@@ -35,7 +35,7 @@ async def _customer(session: AsyncSession, tenant_id: uuid.UUID, **kw) -> Custom
 # ── bonus schedule ───────────────────────────────────────────────────────────
 
 
-def test_bonus_schedule_brackets() -> None:
+async def test_bonus_schedule_brackets() -> None:
     assert stored_value_service.bonus_for(Decimal("300")) == Decimal("0")
     assert stored_value_service.bonus_for(Decimal("500")) == Decimal("50")  # 10%
     assert stored_value_service.bonus_for(Decimal("1000")) == Decimal("200")  # 20%

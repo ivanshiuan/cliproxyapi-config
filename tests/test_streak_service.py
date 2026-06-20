@@ -62,7 +62,7 @@ async def _closed_order_on(
 # ── multiplier schedule ──────────────────────────────────────────────────────
 
 
-def test_multiplier_schedule() -> None:
+async def test_multiplier_schedule() -> None:
     assert streak_service.streak_multiplier(1) == Decimal("1.0")
     assert streak_service.streak_multiplier(2) == Decimal("1.0")
     assert streak_service.streak_multiplier(3) == Decimal("1.1")
