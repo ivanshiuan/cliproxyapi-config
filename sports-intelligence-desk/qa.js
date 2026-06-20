@@ -168,6 +168,7 @@ function round10_e2e() {
   ok(A.every(a => a.mc && a.mc.homeCI), "每場有 MC 區間");
   ok(A.every(a => a.ens && near(a.ens.home + a.ens.draw + a.ens.away, 1, 1e-6)), "每場集成1X2正規化");
   ok(typeof S.ENS_W === "number" && S.ENS_W >= 0 && S.ENS_W <= 1, "集成權重有效");
+  ok(A.every(a => a.tacScore && num(a.tacScore.score) && a.tacScore.score >= -1 && a.tacScore.score <= 1), "A4 戰術分範圍");
 }
 
 /* ================= 執行：全套跑 10 次（抓隨機性/穩定性） ================= */

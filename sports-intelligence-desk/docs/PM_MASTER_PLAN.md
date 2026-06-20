@@ -166,7 +166,7 @@
 | A2 Monte Carlo | 10k 模擬引擎 + 信賴區間 | 與解析差 <1% | ✅ 已完成（mean-preserving）|
 | A1 Bayesian | 機率區間輸出 | 覆蓋率 ≈90% | ⏳（MC 的 CV 已是雛形）|
 | A3 球員校正 xG | StatsBomb 接入 + finishing 校正 | 賽後 Brier ↓ | ⏳（需資料源，網路受限）|
-| A4 戰術量化 | 對位分數化 | 進入 Rating | ⏳ |
+| A4 戰術量化 | 對位分數化 | 進入 Rating | ✅ 已完成（tacticalScore，量化分入 memo/UI）|
 | A5 Ensemble | 加權集成 + 回測學權重 | Brier < 單模型 | ✅ 已完成（w=0.4，回測證實優於模型與市場）|
 | 機率校準 | temperature scaling | 可靠度對齊 | ✅ 已完成（γ=1.25）|
 

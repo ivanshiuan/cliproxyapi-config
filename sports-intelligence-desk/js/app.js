@@ -204,12 +204,16 @@
       </div>`;
     }
 
-    // 戰術對位
-    h += `<div class="card"><div class="section-title" style="margin-top:0">戰術對位</div>
+    // 戰術對位（A4 量化）
+    const ts = a.tacScore;
+    h += `<div class="card"><div class="section-title" style="margin-top:0">戰術對位（A4 量化）</div>
       <div class="memo">
+      <div class="kv"><b>戰術分</b><span>${ts.score>0?'+':''}${ts.score.toFixed(2)}（利 ${ts.favors}）</span></div>
       <p class="muted">${a.home.name}：${a.home.style}</p>
       <p class="muted">${a.away.name}：${a.away.style}</p>
-      <ul>` + a.tac.map(t => `<li>${t}</li>`).join("") + `</ul></div></div>`;
+      <ul>` + a.tac.map(t => `<li>${t}</li>`).join("") +
+      (ts.drivers.length ? `</ul><div class="tiny">量化因子：${ts.drivers.join("；")}</div>` : `</ul>`) +
+      `</div></div>`;
 
     // 歷史交手 + 大賽戰績
     if (a.hist) {
@@ -290,6 +294,7 @@
     L.push(``);
     L.push(`一、投資摘要`);
     L.push(`　主結論：${g.best.mkt}　模型 ${P(g.best.model)} vs 市場 ${P(g.best.market)}　Edge ${sign(g.maxEdge)}`);
+    if (a.ens) L.push(`　集成最佳估計(模型${Math.round(SID.ENS_W*100)}%+市場)：主 ${P(a.ens.home)} / 和 ${P(a.ens.draw)} / 客 ${P(a.ens.away)}`);
     L.push(`　信心等級：${g.conf}/100（${g.grade} 級）　納入四場：${g.grade==='X'?'否':g.grade==='C'?'觀望':g.grade==='B'?'低權重':'可以'}`);
     L.push(``);
     L.push(`二、球隊基本面`);
@@ -299,8 +304,13 @@
     L.push(``);
     L.push(`三、球員資產負債表`);
     L.push(`　缺陣/存疑：${injuries.length?injuries.join('；'):'無重大缺陣'}`);
+    if (a.hist) {
+      L.push(`　歷史交手：${a.hist.h2h.summary}`);
+      if (a.hist.homePedigree && a.hist.awayPedigree)
+        L.push(`　大賽底蘊：${a.home.name} ${a.hist.homePedigree.pedigree}（${a.hist.homePedigree.best}）/ ${a.away.name} ${a.hist.awayPedigree.pedigree}（${a.hist.awayPedigree.best}）`);
+    }
     L.push(``);
-    L.push(`四、戰術對位`);
+    L.push(`四、戰術對位（A4 量化分 ${a.tacScore.score>0?'+':''}${a.tacScore.score.toFixed(2)}，利 ${a.tacScore.favors}）`);
     a.tac.forEach(t => L.push(`　・${t}`));
     L.push(``);
     L.push(`五、環境與水土`);
@@ -308,6 +318,7 @@
     L.push(``);
     L.push(`六、模型輸出`);
     L.push(`　A勝 ${P(mo.home)}　和 ${P(mo.draw)}　B勝 ${P(mo.away)}`);
+    if (a.mc) L.push(`　Monte Carlo（${a.mc.n}次）主勝 ${P(a.mc.home)}（90%CI ${P(a.mc.homeCI[0])}–${P(a.mc.homeCI[1])}）`);
     L.push(`　大2.5 ${P(mo.overs[2.5])}　小2.5 ${P(1-mo.overs[2.5])}　BTTS ${P(mo.btts)}`);
     L.push(`　預期進球 ${a.lamH.toFixed(2)} - ${a.lamA.toFixed(2)}　總角球 ${a.cor.total.toFixed(1)}`);
     L.push(``);

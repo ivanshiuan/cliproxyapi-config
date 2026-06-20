@@ -216,6 +216,27 @@
     return out;
   }
 
+  /* ---------- A4 戰術對位量化 ----------
+   * 把 M5 的文字對位轉成數值：score∈[-1,1]（正=利主隊），magnitude=決定性。
+   * 純資訊/評等用，不改動已校準的機率（避免重新校準）。 */
+  function tacticalScore(home, away) {
+    let s = 0; const drivers = [];
+    const add = (v, txt) => { s += v; drivers.push(`${v > 0 ? "+" : ""}${v.toFixed(2)} ${txt}`); };
+    // 高壓 vs 弱出球
+    if (home.ppda < 10 && away.directness < 35) add(0.18, `${home.name}高壓壓制${away.name}出球`);
+    if (away.ppda < 10 && home.directness < 35) add(-0.18, `${away.name}高壓壓制${home.name}出球`);
+    // 控球 vs 低位（控球方稍利但易膠著）
+    if (home.possession - away.possession > 12) add(0.10, `${home.name}控球壓制`);
+    if (away.possession - home.possession > 12) add(-0.10, `${away.name}控球壓制`);
+    // 定位球威脅差
+    add(clamp((home.set_piece_xg - away.set_piece_xg) * 0.8, -0.12, 0.12), "定位球威脅差");
+    // 直接性 vs 高位（快反打高防線）
+    if (home.directness > 42 && away.ppda < 10) add(0.10, `${home.name}快反克${away.name}高防線`);
+    if (away.directness > 42 && home.ppda < 10) add(-0.10, `${away.name}快反克${home.name}高防線`);
+    s = clamp(s, -1, 1);
+    return { score: s, magnitude: Math.abs(s), favors: s > 0.05 ? home.name : s < -0.05 ? away.name : "中性", drivers };
+  }
+
   /* ---------- M8 市場：去抽水隱含機率 + Edge ---------- */
   function marketImplied(odds) {
     const raw = { home: 1 / odds.home, draw: 1 / odds.draw, away: 1 / odds.away };
@@ -343,6 +364,7 @@
     const grade = gradeMatch(model, mkt, eg, m);
     const cor = corners(m, home, away, model);
     const tac = tactical(home, away);
+    const tacScore = tacticalScore(home, away);
     const scoreClass = classifyScores(model.scores, mkt);
 
     // A2：資料不確定度 → 缺資料/有傷病/環境壓力時 CV 加大（誠實放寬區間）
@@ -368,7 +390,7 @@
     ens.over25 = w * model.overs[2.5] + (1 - w) * mkt.over25;
 
     return {
-      match: m, home, away, eg, model, mkt, grade, cor, tac, scoreClass, matrix: M, mc, hist, ens,
+      match: m, home, away, eg, model, mkt, grade, cor, tac, tacScore, scoreClass, matrix: M, mc, hist, ens,
       lamH: eg.lamH, lamA: eg.lamA,
     };
   };

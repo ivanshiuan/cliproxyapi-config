@@ -69,6 +69,10 @@ cd sports-intelligence-desk && python3 -m http.server 8080
 | **A2 Monte Carlo** | `engine.js` | 對 λ 加入不確定性、萬次模擬 → 機率 **90% 信賴區間**（mean-preserving，不偏離解析）。資料越糊 CV 越大、區間越寬 → 提醒保守 size |
 | **歷史交手 + 大賽戰績** | `js/history.js` | 歷屆世界盃交手、各隊底蘊 pedigree、首次交手據實標示（不杜撰）|
 | **回測與校準** | `js/backtest.js` | 賽後算 **Brier / Log Loss / 命中率 / 可靠度圖**，對比 0.667 均勻基準證明是否有 Alpha |
+| **機率校準** | `engine.js` | temperature scaling（γ=1.25，回測擬合）修正 Poisson 對熱門的低估，可靠度對齊 |
+| **A4 戰術量化** | `engine.js` | 對位轉數值分（-1~1，利哪隊），進 memo/UI |
+| **A5 集成** | `engine.js` | 模型 40% + 市場 60% → 最準的「真實機率估計」（8000 場回測證實優於模型與市場）|
+| **大規模回測** | `backtest_sim.js` | 數千場異構模擬，量化校準度/Edge/集成增益，種子固定可複現 |
 
 回測用法：賽後在 `js/data.js` 的 `SID.results` 填 `{ "<match_id>": { gh, ga } }`，
 時間軸頁自動顯示 Brier/Log Loss/可靠度。完整規劃見 `docs/PM_MASTER_PLAN.md`。
