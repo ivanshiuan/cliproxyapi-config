@@ -154,6 +154,30 @@ function round9_live() {
     // 降級後核心仍可用
     const A = S.matches.map(m => S.analyzeMatch(m));
     ok(A.length === 4 && A[0].grade.grade, "降級後分析正常");
+
+    // Live 傷病同步：mock fetch，驗證「只動 curated 名單、依姓氏比對、不造新球員」
+    const snap = JSON.parse(JSON.stringify(S.players));     // 用後還原，免污染其餘輪
+    const origFetch = global.fetch;
+    global.fetch = async (u) => ({
+      json: async () => {
+        if (/\/injuries/.test(u)) return { response: [
+          { team: { name: "Spain" }, player: { name: "Lamine Yamal", type: "Missing Fixture" } },  // → out
+          { team: { name: "Egypt" }, player: { name: "Mohamed Salah", type: "Questionable" } },     // → doubt
+          { team: { name: "Spain" }, player: { name: "Nobody Unknown", type: "Missing" } },          // 不在名單 → 略過
+          { team: { name: "Mars" },  player: { name: "X Y", type: "Missing" } },                     // 無對映隊 → 略過
+        ] };
+        return { response: [] };   // fixtures 空
+      },
+    });
+    S.liveConfig = { provider: "apifootball", key: "X", season: 2026 };
+    const r3 = await S.refresh();
+    ok(r3.ok === true && r3.injuriesApplied === 2, `傷病同步 2 筆 (${r3.injuriesApplied})`);
+    ok(S.players.ESP.find(p => p.name.includes("Yamal")).status === "out", "Yamal → out");
+    ok(S.players.EGY.find(p => p.name.includes("Salah")).status === "doubt", "Salah → doubt");
+    ok(!S.players.ESP.some(p => p.name.includes("Nobody")), "未造出名單外球員");
+    global.fetch = origFetch;
+    S.players = snap;                                        // 還原 curated 狀態
+    S.meta.live = false;
   });
 }
 

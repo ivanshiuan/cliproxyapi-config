@@ -62,11 +62,14 @@ www.thesportsdb.com            （免費 key=3）
 | 函式 | 作用 |
 |---|---|
 | `SID.liveConfig` | 設 provider / key / season / proxy |
-| `SID.refresh()` | 抓 live → 更新賽程 + 賽後比分(→回測) → 標 `meta.live=true` |
+| `SID.refresh()` | 抓 live → 更新賽程 + 賽後比分(→回測) + **傷病同步** → 標 `meta.live=true` |
 | `SID.fetchFixtures()` | 包裝 refresh，回傳 matches/teams/meta/status |
 
-> 注意：API 只更新**賽程/比分/盤口**；球隊評級(Elo/xG/ppda…)仍用本系統 curated 先驗
-> ——那是模型的核心智慧，不是 API 給得了的。這是設計，不是缺陷。
+> **傷病同步（API-Football）**：refresh 會抓 `/injuries`，**只比對 curated 名單裡已存在的球員**
+> （依姓氏比對），把狀態改 out/doubt，回傳 `injuriesApplied` 筆數。**絕不無中生有新增球員、
+> 不亂造傷病** —— 守住「未查證傷病不復活」鐵律。其餘 provider 暫不抓傷病。
+>
+> 球隊評級(Elo/xG/ppda…)仍用本系統 curated 先驗 —— 那是模型核心智慧，不是 API 給得了的。這是設計，不是缺陷。
 
 ---
 

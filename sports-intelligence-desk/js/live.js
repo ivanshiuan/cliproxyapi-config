@@ -47,6 +47,18 @@
           score: f.goals.home != null ? { gh: f.goals.home, ga: f.goals.away } : null,
         }));
       },
+      /* 傷病：回傳 [{ code, name, status }]，只給 refresh 比對 curated 名單用 */
+      async injuries(cfg) {
+        const r = await fetch(url(`https://v3.football.api-sports.io/injuries?league=1&season=${cfg.season}`),
+          { headers: { "x-apisports-key": cfg.key } });
+        const j = await r.json();
+        return (j.response || []).map(e => ({
+          code: codeOf(e.team && e.team.name),
+          name: (e.player && e.player.name) || "",
+          // type 含 "Questionable"/"Doubtful" → doubt；其餘（Missing/Injury/Suspended）→ out
+          status: /quest|doubt/i.test(e.player && e.player.type || "") ? "doubt" : "out",
+        })).filter(x => x.code && x.name);
+      },
     },
     /* football-data.org v4（免費 token） */
     footballdata: {
@@ -66,7 +78,9 @@
     /* TheSportsDB（免費 key=3，無盤口） */
     thesportsdb: {
       async fixtures(cfg) {
-        const r = await fetch(url(`https://www.thesportsdb.com/api/v1/json/${cfg.key || 3}/eventsday.php?d=${cfg.date}&s=Soccer`));
+        // cfg.date 未設時退回今天（避免 d=undefined 打壞查詢）
+        const day = cfg.date || new Date().toISOString().slice(0, 10);
+        const r = await fetch(url(`https://www.thesportsdb.com/api/v1/json/${cfg.key || 3}/eventsday.php?d=${day}&s=Soccer`));
         const j = await r.json();
         return (j.events || []).map(e => ({
           id: "TSD-" + e.idEvent, competition: e.strLeague, group: "",
@@ -96,10 +110,29 @@
           if (f.score) SID.results[existing.id] = f.score;   // 賽後比分 → 回測
         }
       }
+      // 傷病：只「比對」curated 名單裡已存在的球員（守鐵律：不無中生有、不亂造傷病）。
+      let injApplied = 0;
+      const provider = providers[cfg.provider];
+      if (provider.injuries) {
+        try {
+          const surname = (n) => (n || "").trim().split(/\s+/).pop().toLowerCase();
+          const inj = await provider.injuries(cfg);
+          const byTeam = {};
+          for (const x of inj) (byTeam[x.code] = byTeam[x.code] || []).push(x);
+          for (const [code, list] of Object.entries(SID.players)) {
+            const feed = byTeam[code]; if (!feed) continue;
+            for (const p of list) {
+              const hit = feed.find(f => surname(f.name) === surname(p.name));
+              if (hit && p.status !== hit.status) { p.status = hit.status; injApplied++; }
+            }
+          }
+        } catch (_) { /* 傷病端點失敗不影響賽程更新 */ }
+      }
+
       SID.meta.live = true;
       SID.meta.source = `LIVE: ${cfg.provider}`;
       SID.meta.snapshot = new Date().toISOString().slice(0, 10);
-      return { ok: true, live: true, fetched: fixtures.length, usable: usable.length };
+      return { ok: true, live: true, fetched: fixtures.length, usable: usable.length, injuriesApplied: injApplied };
     } catch (e) {
       return { ok: false, reason: "抓取失敗（CORS/網路/key）：" + e.message, live: false };
     }

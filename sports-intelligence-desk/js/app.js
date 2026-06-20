@@ -476,7 +476,7 @@
       <div class="section-title">說明</div>
       <div class="card"><div class="memo">
         <p class="muted">瀏覽器直連多會被 CORS 擋；正式上線請用 deploy/worker.js（Cloudflare Worker）當 proxy，key 藏在 Worker secret。</p>
-        <p class="muted">API 只更新賽程/比分/盤口；球隊評級(Elo/xG) 仍用本系統 curated 先驗。</p>
+        <p class="muted">API-Football 更新賽程/比分 + 同步傷病（僅比對 curated 名單，不造假）；球隊評級(Elo/xG) 仍用本系統 curated 先驗。</p>
         <p class="tiny">完整步驟見 docs/LIVE_DATA.md</p>
       </div></div>
     </div>`;

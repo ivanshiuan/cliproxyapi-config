@@ -281,9 +281,8 @@
     let conf = 50 + maxEdge * 220 + (conviction - 0.4) * 40 - risk;
     conf = Math.round(clamp(conf, 5, 97));
 
-    // 評級
+    // 評級（best.edge = model − market，>0 已隱含 model > market，故無需另設 agree 旗標）
     let grade;
-    const agree = (best.edge > 0.03 && best.model > mkt[gradeKey(best.mkt)] && risk < 18);
     if (maxEdge >= 0.06 && risk <= 12 && conviction >= 0.5) grade = "S";
     else if (maxEdge >= 0.035 && risk <= 20) grade = "A";
     else if (maxEdge >= 0.02) grade = "B";
@@ -292,9 +291,6 @@
     if (risk >= 30) grade = "X";
 
     return { edges, best, maxEdge, conviction, risk, riskNotes, conf, grade };
-  }
-  function gradeKey(label) {
-    return { "主勝": "home", "和局": "draw", "客勝": "away", "大 2.5": "over25", "小 2.5": "under25" }[label];
   }
 
   /* ---------- 比分分層（核心 / 黑馬 / 陷阱） ---------- */
