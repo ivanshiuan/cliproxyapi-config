@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from restaurant_api.integrations.line import StubLineMessenger
@@ -21,6 +21,7 @@ from restaurant_api.models import (
     CustomerPointsLedger,
     Order,
     OrderStatus,
+    Referral,
     ReferralStatus,
 )
 from restaurant_api.services import referral_service
@@ -216,3 +217,66 @@ async def test_qualify_without_referral_is_noop(
         order_id=uuid.uuid4(),
     )
     assert ref is None
+
+
+async def test_two_friends_credit_referrer_without_clobber(
+    db_session: AsyncSession, seed_tenant, seed_store
+) -> None:
+    """One referrer credited by two qualifying friends: cache == ledger == 400.
+
+    Guards the FOR UPDATE'd referrer read-modify-write — the cached
+    points_balance must equal the summed ledger, not lose one grant.
+    """
+    referrer = await _customer(db_session, seed_tenant.id)
+    code = await referral_service.ensure_referral_code(
+        db_session, referrer, tenant_id=seed_tenant.id
+    )
+    for _ in range(2):
+        friend = await _customer(db_session, seed_tenant.id)
+        await referral_service.attribute_referral(
+            db_session, referred=friend, code=code, tenant_id=seed_tenant.id
+        )
+        order = await _bare_order(
+            db_session, tenant_id=seed_tenant.id, store_id=seed_store.id
+        )
+        await referral_service.qualify_referral(
+            db_session,
+            referred_id=friend.id,
+            tenant_id=seed_tenant.id,
+            order_id=order.id,
+        )
+
+    expected = 2 * referral_service.REFERRER_REWARD_POINTS
+    assert await _points(db_session, referrer.id, "referral.bonus") == expected
+    await db_session.refresh(referrer)
+    assert referrer.points_balance == expected  # cache agrees with ledger
+
+
+async def test_db_default_status_visible_to_pending_query(
+    db_session: AsyncSession, seed_tenant
+) -> None:
+    """A row inserted without status (DB server_default) must be a real PENDING.
+
+    Regression: native_enum=False stores the enum *name* ("PENDING"); a
+    server_default of "pending" would be invisible to status==PENDING filters.
+    """
+    a = await _customer(db_session, seed_tenant.id)
+    b = await _customer(db_session, seed_tenant.id)
+    rid = uuid.uuid4()
+    await db_session.execute(
+        text(
+            "INSERT INTO referrals (id, tenant_id, referrer_id, referred_id) "
+            "VALUES (:i, :t, :a, :b)"
+        ),
+        {"i": str(rid), "t": str(seed_tenant.id), "a": str(a.id), "b": str(b.id)},
+    )
+    await db_session.flush()
+
+    found = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(Referral)
+            .where(Referral.id == rid, Referral.status == ReferralStatus.PENDING)
+        )
+    ).scalar_one()
+    assert found == 1

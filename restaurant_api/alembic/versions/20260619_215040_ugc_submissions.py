@@ -39,7 +39,7 @@ def upgrade() -> None:
             sa.Enum(
                 "PENDING", "APPROVED", "REJECTED", name="ugc_status", native_enum=False, length=16
             ),
-            server_default="pending",
+            server_default="PENDING",
             nullable=False,
         ),
         sa.Column(

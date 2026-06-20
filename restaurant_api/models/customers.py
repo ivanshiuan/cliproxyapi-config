@@ -254,7 +254,10 @@ class Referral(TenantScopedMixin, TimestampedMixin, Base):
         SQLEnum(ReferralStatus, name="referral_status", native_enum=False, length=16),
         nullable=False,
         default=ReferralStatus.PENDING,
-        server_default=ReferralStatus.PENDING.value,
+        # native_enum=False stores the enum *name* ("PENDING"), so the
+        # server_default must be the name too — using .value ("pending") would
+        # make any DB-default row invisible to ``status == PENDING`` queries.
+        server_default=ReferralStatus.PENDING.name,
     )
     qualifying_order_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("orders.id", ondelete="RESTRICT"),

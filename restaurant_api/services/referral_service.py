@@ -202,12 +202,20 @@ async def qualify_referral(
     if referral is None:
         return None
 
+    # Lock the referrer row FOR UPDATE before the read-modify-write on its
+    # cached points_balance — two *different* friends qualifying concurrently
+    # both credit the same referrer, and without the lock the second grant's
+    # cached-balance bump would clobber the first (ledger stays correct, cache
+    # drifts). Tenant-scoped for consistency with the rest of the service.
     referrer = (
         await session.execute(
-            select(Customer).where(
+            select(Customer)
+            .where(
                 Customer.id == referral.referrer_id,
+                Customer.tenant_id == tenant_id,
                 Customer.deleted_at.is_(None),
             )
+            .with_for_update()
         )
     ).scalar_one_or_none()
 

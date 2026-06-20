@@ -76,7 +76,10 @@ class UgcSubmission(TenantScopedMixin, TimestampedMixin, Base):
         SQLEnum(UgcStatus, name="ugc_status", native_enum=False, length=16),
         nullable=False,
         default=UgcStatus.PENDING,
-        server_default=UgcStatus.PENDING.value,
+        # native_enum=False stores the enum *name* ("PENDING"); the
+        # server_default must match the name, not the value ("pending"), or a
+        # DB-default row would be invisible to ``status == PENDING`` queries.
+        server_default=UgcStatus.PENDING.name,
     )
     # Points granted on approval (0 until approved).
     reward_points: Mapped[Decimal] = mapped_column(

@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column(
             "status",
             sa.Enum("PENDING", "QUALIFIED", name="referral_status", native_enum=False, length=16),
-            server_default="pending",
+            server_default="PENDING",
             nullable=False,
         ),
         sa.Column("qualifying_order_id", sa.UUID(), nullable=True),

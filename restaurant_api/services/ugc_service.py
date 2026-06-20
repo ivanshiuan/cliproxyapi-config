@@ -123,7 +123,16 @@ async def approve(
     sub.reviewed_at = datetime.now(UTC)
     sub.note = payload.note
 
-    customer = await session.get(Customer, sub.customer_id)
+    # Lock the customer row before the cached points_balance read-modify-write
+    # (two submissions for the same member approved back-to-back must not clobber
+    # each other's balance bump). Tenant-scoped for safety.
+    customer = (
+        await session.execute(
+            select(Customer)
+            .where(Customer.id == sub.customer_id, Customer.tenant_id == tenant_id)
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
     if customer is not None and reward > 0:
         session.add(
             CustomerPointsLedger(
