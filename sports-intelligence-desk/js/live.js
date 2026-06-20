@@ -29,14 +29,21 @@
     return p ? p + encodeURIComponent(path) : path;   // proxy 解 CORS
   }
 
+  /* 非 2xx（無效 key / 額度 / 403）視為失敗，避免被當成「成功零結果」 */
+  async function fetchJson(input, init) {
+    const r = await fetch(input, init);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error((j && (j.error || j.message)) || `HTTP ${r.status}`);
+    return j;
+  }
+
   /* ---------- 三家 Provider 的 fetch + 映射 ---------- */
   const providers = {
     /* API-Football (v3.football.api-sports.io)，league 1 = World Cup */
     apifootball: {
       async fixtures(cfg) {
-        const r = await fetch(url(`https://v3.football.api-sports.io/fixtures?league=1&season=${cfg.season}`),
+        const j = await fetchJson(url(`https://v3.football.api-sports.io/fixtures?league=1&season=${cfg.season}`),
           { headers: { "x-apisports-key": cfg.key } });
-        const j = await r.json();
         return (j.response || []).map(f => ({
           id: "API-" + f.fixture.id,
           competition: "FIFA World Cup", group: (f.league.round || "").replace("Group ", ""),
@@ -49,9 +56,8 @@
       },
       /* 傷病：回傳 [{ code, name, status }]，只給 refresh 比對 curated 名單用 */
       async injuries(cfg) {
-        const r = await fetch(url(`https://v3.football.api-sports.io/injuries?league=1&season=${cfg.season}`),
+        const j = await fetchJson(url(`https://v3.football.api-sports.io/injuries?league=1&season=${cfg.season}`),
           { headers: { "x-apisports-key": cfg.key } });
-        const j = await r.json();
         return (j.response || []).map(e => ({
           code: codeOf(e.team && e.team.name),
           name: (e.player && e.player.name) || "",
@@ -63,9 +69,8 @@
     /* football-data.org v4（免費 token） */
     footballdata: {
       async fixtures(cfg) {
-        const r = await fetch(url("https://api.football-data.org/v4/competitions/WC/matches"),
+        const j = await fetchJson(url("https://api.football-data.org/v4/competitions/WC/matches"),
           { headers: { "X-Auth-Token": cfg.key } });
-        const j = await r.json();
         return (j.matches || []).map(m => ({
           id: "FD-" + m.id, competition: "FIFA World Cup", group: m.group || "",
           stage: m.stage, home: codeOf(m.homeTeam.name), away: codeOf(m.awayTeam.name),
@@ -80,8 +85,7 @@
       async fixtures(cfg) {
         // cfg.date 未設時退回今天（避免 d=undefined 打壞查詢）
         const day = cfg.date || new Date().toISOString().slice(0, 10);
-        const r = await fetch(url(`https://www.thesportsdb.com/api/v1/json/${cfg.key || 3}/eventsday.php?d=${day}&s=Soccer`));
-        const j = await r.json();
+        const j = await fetchJson(url(`https://www.thesportsdb.com/api/v1/json/${cfg.key || 3}/eventsday.php?d=${day}&s=Soccer`));
         return (j.events || []).map(e => ({
           id: "TSD-" + e.idEvent, competition: e.strLeague, group: "",
           home: codeOf(e.strHomeTeam), away: codeOf(e.strAwayTeam),

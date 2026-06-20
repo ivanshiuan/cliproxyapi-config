@@ -5,8 +5,8 @@
   --green:#1dd882; --red:#ff5a6a; --amber:#ffb84d; --blue:#4da3ff;
   --gold:#ffd24a; --purple:#b388ff;
   --S:#1dd882; --A:#7fd84a; --B:#ffb84d; --C:#8b98a9; --X:#ff5a6a;
-  --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",Roboto,sans-serif;
+  --mono:"SF Mono",ui-monospace,"JetBrains Mono","Menlo","Consolas",monospace;
+  --sans:-apple-system,"BlinkMacSystemFont","Segoe UI","Noto Sans TC","Roboto",sans-serif;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:var(--sans);

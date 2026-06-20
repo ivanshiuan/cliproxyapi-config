@@ -6,6 +6,10 @@
   const U = SID.util, $ = (s) => document.querySelector(s);
   let ANALYSES = [], PORT = null, VIEW = "desk", CUR = null;
 
+  /* HTML escape — 防止 live/provider 字串(隊名/場地/裁判等)注入 innerHTML */
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
   /* ---------- 台灣時間 ---------- */
   function twTime(iso) {
     const d = new Date(iso);
@@ -38,13 +42,13 @@
   function renderDesk() {
     const alerts = [];
     for (const a of ANALYSES) {
-      const nm = a.home.name + " vs " + a.away.name;
+      const nm = esc(a.home.name) + " vs " + esc(a.away.name);
       if (a.eg.avail_h.notes.length || a.eg.avail_a.notes.length)
         alerts.push({ t: "warn", txt: `🩹 ${nm}：` + [...a.eg.avail_h.notes, ...a.eg.avail_a.notes].join("；") });
       if (a.eg.env.wetBulb >= 27)
         alerts.push({ t: "warn", txt: `🌡️ ${nm}：濕球溫度 ${a.eg.env.wetBulb.toFixed(1)}°C，高溫壓制節奏` });
       if (a.mkt.movement < -0.06)
-        alerts.push({ t: "warn", txt: `📉 ${nm}：盤口反向移動（${a.match.odds.sharp}）` });
+        alerts.push({ t: "warn", txt: `📉 ${nm}：盤口反向移動（${esc(a.match.odds.sharp)}）` });
       if (a.grade.grade === "X")
         alerts.push({ t: "x", txt: `⛔ ${nm}：評級 X — 資訊衝突/風險偏高，建議不碰` });
     }
@@ -73,7 +77,7 @@
     if (!high.length) h += `<div class="muted" style="padding:0 4px 8px">目前無顯著 Edge（市場定價接近模型）</div>`;
     for (const a of high) {
       h += `<div class="card tap" data-id="${a.match.id}">
-        <div class="row-between"><b>${a.home.flag} ${a.home.name} vs ${a.away.name} ${a.away.flag}</b>
+        <div class="row-between"><b>${a.home.flag} ${esc(a.home.name)} vs ${esc(a.away.name)} ${a.away.flag}</b>
         <span class="pill g">${a.grade.best.mkt} ${sign(a.grade.maxEdge)}</span></div>
         <div class="tiny" style="margin-top:5px">模型 ${P(a.grade.best.model)} ｜ 市場 ${P(a.grade.best.market)} ｜ 信心 ${a.grade.conf}</div>
       </div>`;
@@ -92,11 +96,11 @@
     const kt = hrs > 0 ? `T-${hrs.toFixed(0)}h` : "已開賽";
     return `<div class="card tap mrow" data-id="${a.match.id}">
       <div class="teams">
-        <div class="tt"><span class="flag">${a.home.flag}</span>${a.home.name}
+        <div class="tt"><span class="flag">${a.home.flag}</span>${esc(a.home.name)}
           <span class="tiny" style="margin-left:auto">${a.lamH.toFixed(2)}</span></div>
-        <div class="tt"><span class="flag">${a.away.flag}</span>${a.away.name}
+        <div class="tt"><span class="flag">${a.away.flag}</span>${esc(a.away.name)}
           <span class="tiny" style="margin-left:auto">${a.lamA.toFixed(2)}</span></div>
-        <div class="meta">🕐 ${twTime(a.match.kickoff_utc)} ・ ${kt} ・ ${a.match.group}組 ・ ${a.match.city}</div>
+        <div class="meta">🕐 ${twTime(a.match.kickoff_utc)} ・ ${kt} ・ ${esc(a.match.group)}組 ・ ${esc(a.match.city)}</div>
         <div style="margin-top:6px">
           <span class="pill ${a.grade.best.edge>=0.02?'g':''}">${a.grade.best.mkt}</span>
           <span class="pill">信心 ${a.grade.conf}</span>
@@ -119,10 +123,10 @@
 
     // Header
     h += `<div class="card">
-      <div class="row-between"><h2 style="font-size:18px">${a.home.flag} ${a.home.name} <span class="muted">vs</span> ${a.away.name} ${a.away.flag}</h2>
+      <div class="row-between"><h2 style="font-size:18px">${a.home.flag} ${esc(a.home.name)} <span class="muted">vs</span> ${esc(a.away.name)} ${a.away.flag}</h2>
       <div class="grade ${g.grade}">${g.grade}</div></div>
-      <div class="tiny" style="margin-top:6px">🏆 ${m.competition}・${m.group}組 ${m.stage}</div>
-      <div class="tiny">🕐 ${twTime(m.kickoff_utc)}（台灣）・🏟️ ${m.stadium}, ${m.city}・👨‍⚖️ ${m.referee}</div>
+      <div class="tiny" style="margin-top:6px">🏆 ${esc(m.competition)}・${esc(m.group)}組 ${esc(m.stage)}</div>
+      <div class="tiny">🕐 ${twTime(m.kickoff_utc)}（台灣）・🏟️ ${esc(m.stadium)}, ${esc(m.city)}・👨‍⚖️ ${esc(m.referee)}</div>
     </div>`;
 
     // 投資摘要
@@ -232,7 +236,7 @@
       <div class="kv"><b>即時盤（主／和／客）</b><span>${m.odds.home} / ${m.odds.draw} / ${m.odds.away}</span></div>
       <div class="kv"><b>盤口移動</b><span style="color:${mk.movement>0?'var(--green)':'var(--red)'}">${mk.movement>0?'主隊被壓低':'主隊走高'} (${mk.movement.toFixed(2)})</span></div>
       <div class="kv"><b>抽水(1X2)</b><span>${(mk.overround1x2*100).toFixed(1)}%</span></div>
-      <div class="kv"><b>資金訊號</b><span>${m.odds.sharp}</span></div>
+      <div class="kv"><b>資金訊號</b><span>${esc(m.odds.sharp)}</span></div>
       </div></div>`;
 
     // 風險清單
@@ -366,7 +370,7 @@
       const verdict = a.grade.grade === 'X' ? '該刪 ⛔' : a.grade.grade === 'C' ? '只可觀望' : a.grade.grade === 'B' ? '低權重' : '可當主場 ✓';
       h += `<div class="card tap" data-id="${a.match.id}">
         <div class="row-between">
-          <div><b>${i}. ${a.home.flag} ${a.home.name} vs ${a.away.name} ${a.away.flag}</b>
+          <div><b>${i}. ${a.home.flag} ${esc(a.home.name)} vs ${esc(a.away.name)} ${a.away.flag}</b>
           <div class="tiny" style="margin-top:4px">${a.grade.best.mkt}・Edge ${sign(a.grade.maxEdge)}・${verdict}</div></div>
           <div style="text-align:right">
             <div class="grade ${a.grade.grade}" style="width:36px;height:36px;font-size:17px;display:inline-flex">${a.grade.grade}</div>
@@ -403,9 +407,10 @@
       ["賽後", "記錄預測 vs 實際、算 Brier / Log Loss、檢查錯因、更新模型權重", false],
     ];
     // 依最近一場 kickoff 判斷目前處於哪個階段
-    const nearest = Math.min(...ANALYSES.map(a => hoursUntil(a.match.kickoff_utc)).filter(x => x > -2));
+    const upcoming = ANALYSES.map(a => hoursUntil(a.match.kickoff_utc)).filter(x => x > -2);
+    const nearest = upcoming.length ? Math.min(...upcoming) : null;
     let h = `<div class="wrap"><div class="section-title" style="margin-top:0">賽前投研時間軸</div>
-      <div class="card"><div class="muted" style="margin-bottom:6px">最近一場開賽倒數：<b style="color:var(--amber)">${nearest>0?'T-'+nearest.toFixed(0)+'h':'已開賽'}</b></div>
+      <div class="card"><div class="muted" style="margin-bottom:6px">最近一場開賽倒數：<b style="color:var(--amber)">${nearest == null ? '—' : (nearest > 0 ? 'T-' + nearest.toFixed(0) + 'h' : '已開賽')}</b></div>
       <ul class="timeline">`;
     for (const [t, d, done] of stages) {
       h += `<li class="${done ? 'done' : ''}"><div class="t">${t} ${done ? '✓ 已完成' : '待辦'}</div><div>${d}</div></li>`;
@@ -494,6 +499,7 @@
     if (st) st.textContent = "抓取中…";
     const r = await SID.refresh();
     if (r.ok) { compute(); }
+    syncMetaLine();   // refresh 後同步表頭來源/快照，避免顯示過時資訊
     if (st) st.textContent = r.ok
       ? `✅ 成功（抓 ${r.fetched} 場，可用 ${r.usable}）已重算`
       : `⚠️ ${r.reason}`;
@@ -527,7 +533,7 @@
       const a = ANALYSES.find(x => x.match.id === memoBtn.dataset.memo);
       $("#memo-out").innerHTML = `<pre class="mono" style="white-space:pre-wrap;font-size:11.5px;
         background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;
-        overflow-x:auto">${buildMemo(a).replace(/</g,"&lt;")}</pre>`;
+        overflow-x:auto">${esc(buildMemo(a))}</pre>`;
       return;
     }
     if (tab) { nav(tab.dataset.tab); return; }
@@ -536,9 +542,12 @@
   });
 
   /* ---------- 啟動 ---------- */
+  function syncMetaLine() {
+    const el = $("#meta-line");
+    if (el) el.textContent = `${SID.meta.source}・快照 ${SID.meta.snapshot}・${SID.matches.length} 場標的`;
+  }
   function boot() {
-    $("#meta-line").textContent =
-      `${SID.meta.source}・快照 ${SID.meta.snapshot}・${SID.matches.length} 場標的`;
+    syncMetaLine();
     compute();
     render();
   }

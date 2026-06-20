@@ -172,8 +172,12 @@ console.log("  區間      預測   實際   樣本");
 for (let i = 0; i < 10; i++) { const b = relBins[i]; if (b.n > 30) console.log(`  ${(i * 10).toString().padStart(2)}-${i * 10 + 10}%   ${(b.sp / b.n * 100).toFixed(1).padStart(5)}  ${(b.hit / b.n * 100).toFixed(1).padStart(5)}  ${String(b.n).padStart(5)}`); }
 
 console.log(`\nEdge 偵測有效性（模型聲稱 1X2 edge>3% 共 ${edgeN} 場）：`);
-console.log(`  模型機率比市場更接近真相之比例：${(edgeModelCloser / edgeN * 100).toFixed(1)}%（>50% = Edge 有資訊量）`);
-console.log(`  該方向實際命中率：${(edgeHit / edgeN * 100).toFixed(1)}%`);
+if (edgeN > 0) {
+  console.log(`  模型機率比市場更接近真相之比例：${(edgeModelCloser / edgeN * 100).toFixed(1)}%（>50% = Edge 有資訊量）`);
+  console.log(`  該方向實際命中率：${(edgeHit / edgeN * 100).toFixed(1)}%`);
+} else {
+  console.log("  無符合條件樣本（edge>3%）。");
+}
 
 console.log(`\n分級平均 Brier（應隨 S→X 遞增＝越高級越準）：`);
 for (const g of ["S", "A", "B", "C", "X"]) if (byGrade[g]) console.log(`  ${g}: ${(byGrade[g].brier / byGrade[g].n).toFixed(4)}  (n=${byGrade[g].n})`);

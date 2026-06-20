@@ -339,13 +339,17 @@
       totG += t;
       if (++bc === batch) { homeWinBoot.push(bh / batch); bh = 0; bc = 0; }
     }
+    if (bc > 0) homeWinBoot.push(bh / bc);   // 收尾不足一批的殘量，避免 n<500 時 CI 為空
     homeWinBoot.sort((x, y) => x - y);
+    const homeCI = homeWinBoot.length
+      ? [quantile(homeWinBoot, 0.05), quantile(homeWinBoot, 0.95)]
+      : [h / n, h / n];
     return {
       n, cv,
       home: h / n, draw: d / n, away: a / n, btts: btts / n,
       over: { 1.5: o15 / n, 2.5: o25 / n, 3.5: o35 / n },
       avgGoals: totG / n,
-      homeCI: [quantile(homeWinBoot, 0.05), quantile(homeWinBoot, 0.95)],
+      homeCI,
     };
   };
 

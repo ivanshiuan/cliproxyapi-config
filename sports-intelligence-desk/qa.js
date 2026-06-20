@@ -159,6 +159,7 @@ function round9_live() {
     const snap = JSON.parse(JSON.stringify(S.players));     // 用後還原，免污染其餘輪
     const origFetch = global.fetch;
     global.fetch = async (u) => ({
+      ok: true, status: 200,
       json: async () => {
         if (/\/injuries/.test(u)) return { response: [
           { team: { name: "Spain" }, player: { name: "Lamine Yamal", type: "Missing Fixture" } },  // → out

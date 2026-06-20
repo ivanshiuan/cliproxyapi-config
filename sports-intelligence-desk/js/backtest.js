@@ -52,7 +52,7 @@
     const relPoints = [];   // 蒐集所有 1X2 機率點做校準
     for (const a of analyses) {
       const r = results[a.match.id];
-      if (!r || r.gh == null) continue;
+      if (!r || r.gh == null || r.ga == null) continue;
       const oc = outcomeOf(r.gh, r.ga);
       const mo = a.model;
       const brier = brierMulti(mo, oc);

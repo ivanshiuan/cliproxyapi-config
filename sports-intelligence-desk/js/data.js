@@ -196,5 +196,9 @@ SID.fetchFixtures = async function () {
   // const r = await fetch("https://v3.football.api-sports.io/fixtures?...",
   //   { headers: { "x-apisports-key": KEY } });
   // const j = await r.json(); return mapApiFootball(j);
-  return { matches: SID.matches, teams: SID.teams, meta: SID.meta };
+  // 注意：live.js 載入後會覆寫本函式（走真實 refresh）。此為無 live 時的快照回退。
+  return {
+    matches: SID.matches, teams: SID.teams, meta: SID.meta,
+    status: { ok: false, live: false, reason: "內建快照（未載入 live 對接層）" },
+  };
 };

@@ -17,11 +17,16 @@ const ALLOW_HOSTS = new Set([
 
 export default {
   async fetch(request, env) {
+    // 設了 ALLOWED_ORIGIN 就鎖來源（避免第三方網站盜用你的 API 額度）；未設則維持開放。
+    const allowedOrigin = (env && env.ALLOWED_ORIGIN) || "";
+    const origin = request.headers.get("origin") || "";
     const cors = {
-      "access-control-allow-origin": "*",
+      "access-control-allow-origin": allowedOrigin || "*",
       "access-control-allow-headers": "*",
       "access-control-allow-methods": "GET,OPTIONS",
     };
+    if (allowedOrigin && origin && origin !== allowedOrigin)
+      return json({ error: "origin not allowed" }, 403, cors);
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
 
     const target = new URL(request.url).searchParams.get("u");
@@ -29,6 +34,7 @@ export default {
 
     let t;
     try { t = new URL(target); } catch { return json({ error: "bad url" }, 400, cors); }
+    if (t.protocol !== "https:") return json({ error: "https required" }, 400, cors);
     if (!ALLOW_HOSTS.has(t.hostname)) return json({ error: "host not allowed: " + t.hostname }, 403, cors);
 
     // 依目標注入對應 key（key 存在 Worker secret，前端永遠看不到）
