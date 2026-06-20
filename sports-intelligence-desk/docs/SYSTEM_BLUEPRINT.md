@@ -430,7 +430,7 @@ DOM 最小 shim 後載入全部模組，跑 10 輪（預設）共驗 10 面向�
 - [ ] 五頁 + 單場頁 + Memo 渲染 **無 undefined/NaN/[object**
 - [ ] 邊界：極端 Elo 錯配、缺球員、極小 λ 不崩
 - [ ] Live 未設定→降級；傷病同步只動 curated、不造假
-- [ ] 評級 ∈ {S,A,B,C,X}、組合分 0–100、每場有 hist/mc/ens/tacScore
+- [ ] 評級 ∈ {S,A,B,C,X}、組合分 0–100、每場有 hist/ens/tacScore；`mc` 僅在未關閉 Monte Carlo（預設路徑、非 `{mc:false}`）時要求存在
 - [ ] 多輪壓測（`node qa.js 30`）FAIL=0（無狀態污染）
 
 **部署**

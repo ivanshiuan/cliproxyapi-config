@@ -44,7 +44,7 @@
     for (const a of ANALYSES) {
       const nm = esc(a.home.name) + " vs " + esc(a.away.name);
       if (a.eg.avail_h.notes.length || a.eg.avail_a.notes.length)
-        alerts.push({ t: "warn", txt: `🩹 ${nm}：` + [...a.eg.avail_h.notes, ...a.eg.avail_a.notes].join("；") });
+        alerts.push({ t: "warn", txt: `🩹 ${nm}：` + [...a.eg.avail_h.notes, ...a.eg.avail_a.notes].map(esc).join("；") });
       if (a.eg.env.wetBulb >= 27)
         alerts.push({ t: "warn", txt: `🌡️ ${nm}：濕球溫度 ${a.eg.env.wetBulb.toFixed(1)}°C，高溫壓制節奏` });
       if (a.mkt.movement < -0.06)

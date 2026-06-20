@@ -15,7 +15,7 @@
 # 1) 取得程式碼
 git clone <REPO_URL>
 cd <repo>/sports-intelligence-desk
-git checkout claude/sports-intelligence-desk-dayved
+git checkout <branch>          # 本專案開發分支：claude/sports-intelligence-desk-dayved
 
 # 2) 驗證（零依賴，需 Node ≥ 18）
 node qa.js            # 必須印出 "PASS 1490 / FAIL 0"
@@ -150,6 +150,7 @@ node backtest_sim.js  # 5000 場合成回測，可複現
 
 ### 方法 B — wrangler CLI（一行）
 ```bash
+cd sports-intelligence-desk    # 確保 dist/site 相對路徑正確（可複製貼上）
 node build.js
 export CLOUDFLARE_API_TOKEN=<具 Pages:Edit 權限的 token>
 npx wrangler@latest pages deploy dist/site --project-name <project> --commit-dirty=true
@@ -164,7 +165,7 @@ Cloudflare → Pages → **Connect to Git** → 選倉庫 → 設定：
 
 | 欄位 | 值 |
 |---|---|
-| Production branch | `claude/sports-intelligence-desk-dayved`（或合併後的 main） |
+| Production branch | `<branch>`（本專案：`claude/sports-intelligence-desk-dayved`，或合併後的 main） |
 | Framework preset | `None` |
 | Root directory (Advanced) | `sports-intelligence-desk` |
 | Build command | `node build.js` |
