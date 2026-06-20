@@ -177,12 +177,38 @@
     }
     h += `</div>`;
 
+    // Monte Carlo（A2：參數不確定性模擬 → 信賴區間）
+    if (a.mc) {
+      const ci = a.mc.homeCI;
+      h += `<div class="card"><div class="section-title" style="margin-top:0">Monte Carlo（${a.mc.n.toLocaleString()} 次模擬）</div>
+        <div class="memo">
+        <div class="kv"><b>主勝</b><span>${P(a.mc.home)}　<span class="tiny">解析 ${P(mo.home)}</span></span></div>
+        <div class="kv"><b>和局 / 客勝</b><span>${P(a.mc.draw)} / ${P(a.mc.away)}</span></div>
+        <div class="kv"><b>主勝 90% 信賴區間</b><span>${P(ci[0])} – ${P(ci[1])}</span></div>
+        <div class="kv"><b>平均總進球</b><span>${a.mc.avgGoals.toFixed(2)}</span></div>
+        <div class="kv"><b>大 2.5 / BTTS</b><span>${P(a.mc.over[2.5])} / ${P(a.mc.btts)}</span></div>
+        <div class="kv"><b>不確定度 CV</b><span>${(a.mc.cv*100).toFixed(0)}%（越高=資訊越糊）</span></div>
+        </div>
+        <div class="tiny" style="margin-top:6px">模擬對 λ 加入不確定性，區間越寬代表賽前資訊越不足、越該保守 size</div>
+      </div>`;
+    }
+
     // 戰術對位
     h += `<div class="card"><div class="section-title" style="margin-top:0">戰術對位</div>
       <div class="memo">
       <p class="muted">${a.home.name}：${a.home.style}</p>
       <p class="muted">${a.away.name}：${a.away.style}</p>
       <ul>` + a.tac.map(t => `<li>${t}</li>`).join("") + `</ul></div></div>`;
+
+    // 歷史交手 + 大賽戰績
+    if (a.hist) {
+      h += `<div class="card"><div class="section-title" style="margin-top:0">歷史交手 + 大賽戰績</div>
+        <div class="memo">
+        <div class="kv"><b>歷史交手</b><span style="text-align:right;max-width:60%">${a.hist.h2h.summary}</span></div>`;
+      if (a.hist.homePedigree) h += `<div class="kv"><b>${a.home.name} 世界盃</b><span>${a.hist.homePedigree.best}・底蘊 ${a.hist.homePedigree.pedigree}</span></div>`;
+      if (a.hist.awayPedigree) h += `<div class="kv"><b>${a.away.name} 世界盃</b><span>${a.hist.awayPedigree.best}・底蘊 ${a.hist.awayPedigree.pedigree}</span></div>`;
+      h += `<ul>` + a.hist.notes.map(n => `<li>${n}</li>`).join("") + `</ul></div></div>`;
+    }
 
     // 市場盤口
     h += `<div class="card"><div class="section-title" style="margin-top:0">市場盤口分析</div>
@@ -362,12 +388,34 @@
     for (const [t, d, done] of stages) {
       h += `<li class="${done ? 'done' : ''}"><div class="t">${t} ${done ? '✓ 已完成' : '待辦'}</div><div>${d}</div></li>`;
     }
-    h += `</ul></div>
-    <div class="card"><div class="section-title" style="margin-top:0">回測欄位（賽後自動填）</div>
-      <table class="tbl"><tr><th>場次</th><th>模型主判斷</th><th>實際</th><th>Brier</th></tr>`;
-    for (const a of ANALYSES)
-      h += `<tr><td>${a.home.code}-${a.away.code}</td><td>${a.grade.best.mkt}</td><td class="muted">待填</td><td class="muted">—</td></tr>`;
-    h += `</table><div class="tiny" style="margin-top:8px">賽後把實際比分填入 data.js → 引擎自動計算 Brier / Log Loss 並校準權重</div></div></div>`;
+    h += `</ul></div>`;
+
+    // 回測（接通：有 SID.results 即自動計算）
+    const bt = SID.runBacktest ? SID.runBacktest(ANALYSES) : null;
+    h += `<div class="card"><div class="section-title" style="margin-top:0">回測與校準</div>`;
+    if (bt && bt.settled) {
+      h += `<div class="kpis" style="margin-bottom:10px">
+        <div class="kpi"><div class="v" style="color:${bt.beatsBaseline?'var(--green)':'var(--red)'}">${bt.avgBrier.toFixed(3)}</div><div class="k">Brier（基準0.667）</div></div>
+        <div class="kpi"><div class="v">${bt.avgLogLoss.toFixed(3)}</div><div class="k">Log Loss</div></div>
+        <div class="kpi"><div class="v">${(bt.pickHitRate*100).toFixed(0)}%</div><div class="k">主判斷命中</div></div>
+      </div>
+      <div class="alert ${bt.beatsBaseline?'ok':'warn'}">${bt.beatsBaseline?'✅ 優於均勻基準 → 模型有資訊量(Alpha)':'⚠️ 未優於基準 → 需檢查模型'}</div>
+      <table class="tbl"><tr><th>場次</th><th>主判斷</th><th>實際</th><th>命中</th><th>Brier</th></tr>`;
+      for (const r of bt.rows)
+        h += `<tr><td>${r.label}</td><td>${r.pick}</td><td>${r.score}</td><td>${r.pickHit?'✅':'❌'}</td><td>${r.brier.toFixed(3)}</td></tr>`;
+      h += `</table>
+      <div class="section-title">可靠度（說X%的事是否真發生X%）</div>
+      <table class="tbl"><tr><th>預測區間</th><th>平均預測</th><th>實際發生</th><th>樣本</th></tr>`;
+      for (const b of bt.reliability) if (b.n)
+        h += `<tr><td>${b.range}</td><td>${(b.predicted*100).toFixed(0)}%</td><td>${(b.actual*100).toFixed(0)}%</td><td>${b.n}</td></tr>`;
+      h += `</table>`;
+    } else {
+      h += `<table class="tbl"><tr><th>場次</th><th>模型主判斷</th><th>實際</th><th>Brier</th></tr>`;
+      for (const a of ANALYSES)
+        h += `<tr><td>${a.home.code}-${a.away.code}</td><td>${a.grade.best.mkt}</td><td class="muted">待填</td><td class="muted">—</td></tr>`;
+      h += `</table><div class="tiny" style="margin-top:8px">賽後把實際比分填入 <b>data.js → SID.results</b>（如 "${ANALYSES[0]?ANALYSES[0].match.id:'id'}":{gh:1,ga:0}）→ 自動計算 Brier/Log Loss/可靠度</div>`;
+    }
+    h += `</div></div>`;
     return h;
   }
 

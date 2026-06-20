@@ -272,8 +272,57 @@
     return { core, dark };
   }
 
+  /* ---------- A2 Monte Carlo（參數不確定性模擬） ----------
+   * 不只從固定 λ 抽比分（那只會重現解析解），而是先對 λ 加入不確定性
+   * （反映「賽前資訊不完整、樣本小」），每次迭代抽一組 (λH,λA) 再抽比分，
+   * 聚合 n 次 → 得到誠實的機率「區間」而非單點。CV 越大代表越不確定。
+   */
+  function samplePoisson(lambda) {           // Knuth
+    const L = Math.exp(-lambda); let k = 0, p = 1;
+    do { k++; p *= Math.random(); } while (p > L);
+    return k - 1;
+  }
+  function randNorm() {                       // Box-Muller
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function quantile(sorted, q) {
+    const i = clamp(Math.floor(q * (sorted.length - 1)), 0, sorted.length - 1);
+    return sorted[i];
+  }
+  SID.monteCarlo = function (lamH, lamA, cv, n) {
+    cv = cv || 0.18;            // λ 不確定度（資料越糊 → 越大）
+    n = n || 10000;
+    let h = 0, d = 0, a = 0, btts = 0, o15 = 0, o25 = 0, o35 = 0, totG = 0;
+    const homeWinBoot = [];     // 分批估計，產生勝率信賴區間
+    const batch = 500; let bh = 0, bc = 0;
+    const drift = cv * cv / 2;   // mean-preserving：使 E[λ·e^(Nσ-σ²/2)] = λ，不偏離解析期望
+    for (let it = 0; it < n; it++) {
+      const lh = lamH * Math.exp(randNorm() * cv - drift);
+      const la = lamA * Math.exp(randNorm() * cv - drift);
+      const gi = samplePoisson(lh), gj = samplePoisson(la);
+      if (gi > gj) { h++; bh++; } else if (gi === gj) d++; else a++;
+      if (gi >= 1 && gj >= 1) btts++;
+      const t = gi + gj;
+      if (t > 1.5) o15++; if (t > 2.5) o25++; if (t > 3.5) o35++;
+      totG += t;
+      if (++bc === batch) { homeWinBoot.push(bh / batch); bh = 0; bc = 0; }
+    }
+    homeWinBoot.sort((x, y) => x - y);
+    return {
+      n, cv,
+      home: h / n, draw: d / n, away: a / n, btts: btts / n,
+      over: { 1.5: o15 / n, 2.5: o25 / n, 3.5: o35 / n },
+      avgGoals: totG / n,
+      homeCI: [quantile(homeWinBoot, 0.05), quantile(homeWinBoot, 0.95)],
+    };
+  };
+
   /* ---------- 單場完整分析 ---------- */
-  SID.analyzeMatch = function (m) {
+  SID.analyzeMatch = function (m, opts) {
+    opts = opts || {};
     const home = SID.teams[m.home], away = SID.teams[m.away];
     const eg = expectedGoals(m, home, away);
     const M = scoreMatrix(eg.lamH, eg.lamA);
@@ -284,11 +333,22 @@
     const tac = tactical(home, away);
     const scoreClass = classifyScores(model.scores, mkt);
 
+    // A2：資料不確定度 → 缺資料/有傷病/環境壓力時 CV 加大（誠實放寬區間）
+    let cv = 0.16;
+    if (eg.avail_h.notes.length || eg.avail_a.notes.length) cv += 0.04;
+    if (eg.env.confPenalty) cv += 0.03;
+    if (home.wc_exp < 40 || away.wc_exp < 40) cv += 0.03;   // 黑馬/小樣本
+    const mc = opts.mc === false ? null : SID.monteCarlo(eg.lamH, eg.lamA, cv, opts.n || 10000);
+
+    // 歷史交手/大賽戰績（若 history.js 載入）
+    const hist = SID.history ? SID.history.lookup(m, home, away) : null;
+
     return {
-      match: m, home, away, eg, model, mkt, grade, cor, tac, scoreClass, matrix: M,
+      match: m, home, away, eg, model, mkt, grade, cor, tac, scoreClass, matrix: M, mc, hist,
       lamH: eg.lamH, lamA: eg.lamA,
     };
   };
+
 
   /* ---------- 四場組合評分（Portfolio Construction） ---------- */
   SID.analyzePortfolio = function (analyses) {

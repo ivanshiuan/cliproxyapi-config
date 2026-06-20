@@ -161,13 +161,20 @@
 | 真實 Elo 接入 | eloratings 同步 | 每隊 Elo as_of 標記 |
 
 ### Phase 2 — 模型升級（10–21 天）
-| 任務 | 交付 | AC |
+| 任務 | 交付 | AC | 狀態 |
+|---|---|---|---|
+| A2 Monte Carlo | 10k 模擬引擎 + 信賴區間 | 與解析差 <1% | ✅ 已完成（mean-preserving）|
+| A1 Bayesian | 機率區間輸出 | 覆蓋率 ≈90% | ⏳（MC 的 CV 已是雛形）|
+| A3 球員校正 xG | StatsBomb 接入 + finishing 校正 | 賽後 Brier ↓ | ⏳ |
+| A4 戰術量化 | 對位分數化 | 進入 Rating | ⏳ |
+| A5 Ensemble | 加權集成 + 回測學權重 | Brier < 單模型 | ⏳ |
+
+### 額外已完成（本輪）
+| 任務 | 交付 | 狀態 |
 |---|---|---|
-| A2 Monte Carlo | 10k 模擬引擎 | 與解析差 <1% |
-| A1 Bayesian | 機率區間輸出 | 覆蓋率 ≈90% |
-| A3 球員校正 xG | StatsBomb 接入 + finishing 校正 | 賽後 Brier ↓ |
-| A4 戰術量化 | 對位分數化 | 進入 Rating |
-| A5 Ensemble | 加權集成 + 回測學權重 | Brier < 單模型 |
+| 回測校準引擎 | `js/backtest.js`：Brier/Log Loss/可靠度/基準對比 | ✅ |
+| 歷史交手 + 大賽戰績庫 | `js/history.js`：H2H + pedigree（8 隊查證）| ✅ |
+| 時間軸頁回測接通 | 有結果自動算分、可靠度表 | ✅ |
 
 ### Phase 3 — 投研自動化 + 即時源（21–30 天）
 | 任務 | 交付 | AC |

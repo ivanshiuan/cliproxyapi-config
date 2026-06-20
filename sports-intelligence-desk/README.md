@@ -62,6 +62,17 @@ cd sports-intelligence-desk && python3 -m http.server 8080
 **評級**：S 三方一致核心場｜A 優勢明確｜B 有方向變數多｜C 觀望｜X 不碰
 **組合分**：平均信心 − 相關性 − 過熱 − 資訊不完整懲罰
 
+### 進階模組（v2）
+
+| 模組 | 檔案 | 作用 |
+|---|---|---|
+| **A2 Monte Carlo** | `engine.js` | 對 λ 加入不確定性、萬次模擬 → 機率 **90% 信賴區間**（mean-preserving，不偏離解析）。資料越糊 CV 越大、區間越寬 → 提醒保守 size |
+| **歷史交手 + 大賽戰績** | `js/history.js` | 歷屆世界盃交手、各隊底蘊 pedigree、首次交手據實標示（不杜撰）|
+| **回測與校準** | `js/backtest.js` | 賽後算 **Brier / Log Loss / 命中率 / 可靠度圖**，對比 0.667 均勻基準證明是否有 Alpha |
+
+回測用法：賽後在 `js/data.js` 的 `SID.results` 填 `{ "<match_id>": { gh, ga } }`，
+時間軸頁自動顯示 Brier/Log Loss/可靠度。完整規劃見 `docs/PM_MASTER_PLAN.md`。
+
 ---
 
 ## P0 對照（已全部實作）

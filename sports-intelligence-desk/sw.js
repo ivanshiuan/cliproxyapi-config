@@ -1,8 +1,9 @@
 /* SID Terminal — offline cache (PWA) */
-const CACHE = "sid-v1";
+const CACHE = "sid-v2";
 const ASSETS = [
   "./", "./index.html", "./manifest.webmanifest",
-  "./css/terminal.css", "./js/data.js", "./js/engine.js", "./js/app.js",
+  "./css/terminal.css", "./js/data.js", "./js/history.js",
+  "./js/engine.js", "./js/backtest.js", "./js/app.js",
 ];
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
