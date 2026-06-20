@@ -9,6 +9,22 @@
 
 ## ✅ 我已完成（不需要你動手）
 
+### 🆕 獲客成長飛輪 + Phase 3（本 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
+
+> 五道 gate 全綠（ruff / pyright / 381 pytest / alembic check / db-smoke），migration down→base→up round-trip OK，app 開機 + OpenAPI 正常。經 9 輪副盤檢查 + 對抗式 code-review 並修完所有缺陷。
+
+- **儲值雙倍**（`stored_value_service`）：append-only 儲值帳本 + 級距加贈（500→10%／1000→20%／3000→25%，無條件捨去）+ FOR UPDATE 防超扣 + LINE 推播；4 端點。
+- **裂變邀請碼**（`referral_service`）：唯一邀請碼、雙邊獎勵（新客 100／推薦人 200）、一人只被推薦一次、首消達標自動發點；接入 spin(`ref`) + close_order。
+- **UGC 換獎**（`ugc_service`）：打卡／評論人工審核佇列，依類型發點（Google 100／IG 80／打卡 50），一次性審核。
+- **連續回訪 Streak**（`streak_service`）：依連續回訪天數加碼點數（3+ 天 1.1～1.5x），從訂單史計算、無儲存計數器。
+- **成效報表**（`GET /membership/stats?days=N`）：四系統聚合快照 + 時間窗（流量型過濾、存量型快照）。
+- **RFM 分眾 + 分眾推播**（`rfm_service`）：六分眾分類 + `POST /membership/segments/{seg}/broadcast`。
+- **一鍵示範**：`make growth-demo`（灌示範資料並印出儀表板）。
+- **文件**：`docs/14_store_ops_playbook.md`（店長 SOP）、`docs/13` §7–§9（實作狀態 + 技術債）。
+- **round-7 修復**：referrer/ugc 點數授予補 `FOR UPDATE` + tenant 範圍（並發快取競爭）；新 enum `server_default` 大小寫修正（dormant，附回歸測試）。
+- **待你決策的技術債**：既有 6 個 enum 的 `server_default` 大小寫同樣 dormant 不一致，建議獨立 migration 統一修（見 `docs/13` §9）。
+
+
 ### 初版交付（前期）
 - DevSwarm 4-agent LangGraph 蜂群骨架（PM/Architect/Coder/QA + self-heal）
 - Phase 1 餐飲後端：26 表 SQLAlchemy + 5 套 Alembic 遷移
