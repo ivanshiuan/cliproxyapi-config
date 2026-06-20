@@ -148,6 +148,10 @@ seed-reset: install ## Wipe seed tenant first, then seed fresh
 wheel-demo: install ## Seed an active 開幕輪盤 campaign and print the demo URL (then `make api`)
 	$(PY) scripts/seed_wheel_campaign.py
 
+.PHONY: growth-demo
+growth-demo: install ## Seed the full 成長飛輪 demo (儲值/裂變/UGC/RFM) and print the dashboards
+	$(PY) scripts/seed_growth_demo.py
+
 .PHONY: demo-flow
 demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳→報廢→員工餐→下班→彙總)
 	$(PY) scripts/demo_flow.py
