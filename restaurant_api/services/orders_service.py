@@ -665,14 +665,22 @@ async def _accrue_points_and_notify(
     # 連續回訪 streak bonus — multiply the tier-rated points by the member's
     # consecutive visit-day streak (1.0x for a 1-2 day streak, so single-visit
     # points stay exact). Streak counts this just-closed order's business date.
-    streak = await compute_visit_streak(
-        session,
-        customer_id=customer.id,
-        tenant_id=order.tenant_id,
-        as_of=order.business_date,
-    )
-    streak_mult = streak_multiplier(streak)
-    points = (base_points * streak_mult).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+    # Skip the streak query entirely when there are no base points to scale
+    # (comped / zero-revenue orders) — defaults keep the LINE message safe.
+    streak = 0
+    streak_mult = Decimal("1.0")
+    points = base_points
+    if base_points > 0:
+        streak = await compute_visit_streak(
+            session,
+            customer_id=customer.id,
+            tenant_id=order.tenant_id,
+            as_of=order.business_date,
+        )
+        streak_mult = streak_multiplier(streak)
+        points = (base_points * streak_mult).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
     if points > 0:
         # Stamp expires_at per the tenant-wide policy. Settings.points_expiry_days
         # is the lifecycle horizon — 0 means "never expires" (legacy mode);

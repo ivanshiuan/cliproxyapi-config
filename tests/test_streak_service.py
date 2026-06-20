@@ -203,3 +203,48 @@ async def test_close_applies_streak_multiplier(
         )
     ).scalar_one()
     assert earn_row == Decimal("11")
+
+
+async def test_zero_revenue_order_writes_no_points(
+    db_session: AsyncSession,
+    seed_tenant: Tenant,
+    seed_store: Store,
+    seed_menu_item: MenuItem,
+) -> None:
+    """A fully-comped (0 TWD) order earns no points — and skips the streak path."""
+    cust = await _customer(db_session, seed_tenant.id)
+    order = Order(
+        tenant_id=seed_tenant.id,
+        store_id=seed_store.id,
+        customer_id=cust.id,
+        order_no=f"S{uuid.uuid4().hex[:10]}",
+        business_date=date(2026, 6, 19),
+        opened_at=datetime.now(UTC),
+        status=OrderStatus.OPEN,
+    )
+    db_session.add(order)
+    await db_session.flush()
+    db_session.add(
+        OrderLine(
+            tenant_id=seed_tenant.id,
+            order_id=order.id,
+            menu_item_id=seed_menu_item.id,
+            qty=Decimal("1"),
+            unit_price=Decimal("0"),
+            line_total=Decimal("0"),
+        )
+    )
+    await db_session.flush()
+
+    await orders_service.close_order(
+        db_session, order.id, seed_tenant.id, datetime.now(UTC)
+    )
+
+    n = (
+        await db_session.execute(
+            select(func.count()).select_from(CustomerPointsLedger).where(
+                CustomerPointsLedger.source_order_id == order.id
+            )
+        )
+    ).scalar_one()
+    assert n == 0
