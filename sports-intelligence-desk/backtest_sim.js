@@ -69,7 +69,7 @@ function ll3(p, oc) { return -Math.log(clamp(p[oc], 1e-9, 1)); }
 const N = parseInt(process.argv[2] || "5000", 10);
 
 /* 累計器 */
-let bModel = 0, bMarket = 0, bUniform = 0, bTrue = 0;
+let bModel = 0, bMarket = 0, bUniform = 0, bTrue = 0, bEns = 0;
 let lModel = 0, lMarket = 0;
 const relBins = Array.from({ length: 10 }, () => ({ sp: 0, hit: 0, n: 0 }));
 // Edge 有效性：模型聲稱有 edge 的標的，是否真的比市場接近真相
@@ -105,7 +105,7 @@ for (let it = 0; it < N; it++) {
   S.teams.SIMH = teamFrom(aH, dH, randn() * 120);
   S.teams.SIMA = teamFrom(aA, dA, randn() * 120);
   S.teams.SIMH.code = "SIMH"; S.teams.SIMA.code = "SIMA";
-  const odds = makeOdds(tp, 0.06, 0.03);
+  const odds = makeOdds(tp, 0.06, 0.07);   // biasNoise=0.07：真實低效市場（非神諭）
   const m = {
     id: "SIM" + it, competition: "sim", group: "X", stage: "sim",
     home: "SIMH", away: "SIMA", neutral: true, stadium: "s", city: "s",
@@ -122,6 +122,7 @@ for (let it = 0; it < N; it++) {
   const oc = gi > gj ? "home" : gi === gj ? "draw" : "away";
 
   bModel += brier3(mp, oc); bMarket += brier3(mk, oc);
+  bEns += brier3({ home: a.ens.home, draw: a.ens.draw, away: a.ens.away }, oc);   // A5 集成
   bUniform += brier3({ home: 1 / 3, draw: 1 / 3, away: 1 / 3 }, oc);
   bTrue += brier3({ home: tp.home, draw: tp.draw, away: tp.away }, oc);
   lModel += ll3(mp, oc); lMarket += ll3(mk, oc);
@@ -152,10 +153,12 @@ const secs = ((Date.now() - t0) / 1000).toFixed(1);
 
 console.log(`\n===== 大規模回測：${N} 場（種子固定可複現，耗時 ${secs}s）=====\n`);
 console.log("平均 Brier（越低越準，理論下限=真相機率）：");
-console.log(`  真相(上帝視角) : ${(bTrue / N).toFixed(4)}`);
-console.log(`  模型 (engine)  : ${(bModel / N).toFixed(4)}`);
-console.log(`  市場 (含抽水)  : ${(bMarket / N).toFixed(4)}`);
-console.log(`  均勻亂猜       : ${(bUniform / N).toFixed(4)}`);
+console.log(`  真相(上帝視角)   : ${(bTrue / N).toFixed(4)}`);
+console.log(`  ★集成(模型+市場): ${(bEns / N).toFixed(4)}  ← A5`);
+console.log(`  模型 (engine)    : ${(bModel / N).toFixed(4)}`);
+console.log(`  市場 (含抽水)    : ${(bMarket / N).toFixed(4)}`);
+console.log(`  均勻亂猜         : ${(bUniform / N).toFixed(4)}`);
+console.log(`  → 集成優於模型 ${bEns < bModel ? "✅" : "❌"}、優於市場 ${bEns < bMarket ? "✅" : "❌"}`);
 console.log(`\n平均 Log Loss：模型 ${(lModel / N).toFixed(4)} ｜ 市場 ${(lMarket / N).toFixed(4)}`);
 
 const skill = (1 - (bModel / N) / (bUniform / N)) * 100;     // 相對均勻的資訊增益

@@ -166,18 +166,21 @@ function round10_e2e() {
   ok(P.verdict && P.ranked.length === A.length, "組合結論完整");
   ok(A.every(a => a.hist && a.hist.h2h), "每場有歷史");
   ok(A.every(a => a.mc && a.mc.homeCI), "每場有 MC 區間");
+  ok(A.every(a => a.ens && near(a.ens.home + a.ens.draw + a.ens.away, 1, 1e-6)), "每場集成1X2正規化");
+  ok(typeof S.ENS_W === "number" && S.ENS_W >= 0 && S.ENS_W <= 1, "集成權重有效");
 }
 
 /* ================= 執行：全套跑 10 次（抓隨機性/穩定性） ================= */
 (async () => {
-  const ITER = 10;
+  const ITER = parseInt(process.argv[2] || "10", 10);
   console.log(`\n===== 上線前復盤：全套 ${ITER} 次 =====\n`);
   for (let i = 1; i <= ITER; i++) {
     const before = FAIL;
     round1_modules(); round2_math(); round3_montecarlo(); round4_backtest();
     round5_data(); round6_timezone(); round7_ui(); round8_edge();
     await round9_live(); round10_e2e();
-    console.log(`第 ${String(i).padStart(2)} 輪：${FAIL === before ? "✅ 全過" : "❌ 新增失敗 " + (FAIL - before)}`);
+    if (ITER <= 20 || i % 50 === 0 || FAIL !== before)
+      console.log(`第 ${String(i).padStart(3)} 輪：${FAIL === before ? "✅ 全過" : "❌ 新增失敗 " + (FAIL - before)}`);
   }
   console.log(`\n===== 總計 PASS ${PASS} / FAIL ${FAIL} =====`);
   if (FAIL) { console.log("\n不可上線，失敗項："); [...new Set(fails)].forEach(f => console.log("  ✗ " + f)); process.exit(1); }

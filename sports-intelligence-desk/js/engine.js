@@ -160,6 +160,7 @@
   /* 校準係數：temperature scaling，修正 Poisson 對熱門勝率的壓縮。
      由大規模回測 (backtest_sim.js) 樣本內外擬合所得 γ≈1.25（兩種子一致）。 */
   const CALIB_GAMMA = 1.25;
+  SID.ENS_W = SID.ENS_W != null ? SID.ENS_W : 0.4;   // A5 集成：模型權重（其餘給市場）
   function calibrate1x2(home, draw, away) {
     const h = Math.pow(home, CALIB_GAMMA), d = Math.pow(draw, CALIB_GAMMA), a = Math.pow(away, CALIB_GAMMA);
     const s = h + d + a || 1;
@@ -354,8 +355,20 @@
     // 歷史交手/大賽戰績（若 history.js 載入）
     const hist = SID.history ? SID.history.lookup(m, home, away) : null;
 
+    // A5 Ensemble：模型(校準後) + 市場 加權 = 最佳「真實機率」估計。
+    // 權重 ENS_W 由大規模回測樣本內外擬合（w_model≈0.4，兩種子一致，集成 Brier 低於模型與市場）。
+    const w = SID.ENS_W;
+    const ens = {
+      home: w * model.home + (1 - w) * mkt.home,
+      draw: w * model.draw + (1 - w) * mkt.draw,
+      away: w * model.away + (1 - w) * mkt.away,
+    };
+    const es = ens.home + ens.draw + ens.away || 1;
+    ens.home /= es; ens.draw /= es; ens.away /= es;
+    ens.over25 = w * model.overs[2.5] + (1 - w) * mkt.over25;
+
     return {
-      match: m, home, away, eg, model, mkt, grade, cor, tac, scoreClass, matrix: M, mc, hist,
+      match: m, home, away, eg, model, mkt, grade, cor, tac, scoreClass, matrix: M, mc, hist, ens,
       lamH: eg.lamH, lamA: eg.lamA,
     };
   };

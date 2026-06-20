@@ -147,7 +147,18 @@
       </div>
       <div class="lbl3"><span>主勝 ${a.home.name}</span><span>和</span><span>客勝 ${a.away.name}</span></div>`;
 
-    // Edge table
+    // A5 Ensemble — 最佳真實機率估計（模型+市場，回測證實優於兩者）
+    if (a.ens) {
+      h += `<div style="margin-top:12px;padding:10px;background:var(--bg2);border:1px solid var(--line);border-radius:10px">
+        <div class="tiny" style="margin-bottom:4px">🎯 集成估計（模型 ${Math.round(SID.ENS_W*100)}% + 市場 ${Math.round((1-SID.ENS_W)*100)}%）— 最準的機率估計</div>
+        <div class="row-between" style="font-family:var(--mono);font-size:13px">
+          <span>主 <b style="color:var(--green)">${P(a.ens.home)}</b></span>
+          <span>和 <b>${P(a.ens.draw)}</b></span>
+          <span>客 <b style="color:var(--blue)">${P(a.ens.away)}</b></span>
+        </div></div>`;
+    }
+
+    // Edge table（純模型 vs 市場 = 投機 Alpha 訊號，高風險）
     h += `<table class="tbl" style="margin-top:12px"><tr><th>市場</th><th>模型</th><th>盤口隱含</th><th>Edge</th></tr>`;
     for (const e of g.edges)
       h += `<tr><td>${e.mkt}</td><td>${P(e.model)}</td><td>${P(e.market)}</td><td>${edgeCell(e.edge)}</td></tr>`;
