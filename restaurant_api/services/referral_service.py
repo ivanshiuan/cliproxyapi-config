@@ -222,9 +222,12 @@ async def qualify_referral(
     referral.status = ReferralStatus.QUALIFIED
     referral.qualifying_order_id = order_id
     referral.qualified_at = datetime.now(UTC)
-    referral.referrer_reward_points = REFERRER_REWARD_POINTS
 
     if referrer is not None:
+        # Only record the reward we actually paid — a soft-deleted referrer
+        # gets nothing, so the row must not claim a 200-point grant that never
+        # hit the ledger.
+        referral.referrer_reward_points = REFERRER_REWARD_POINTS
         await _grant_points(
             session,
             referrer,
