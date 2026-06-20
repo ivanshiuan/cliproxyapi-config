@@ -157,6 +157,15 @@
     return M;
   }
 
+  /* 校準係數：temperature scaling，修正 Poisson 對熱門勝率的壓縮。
+     由大規模回測 (backtest_sim.js) 樣本內外擬合所得 γ≈1.25（兩種子一致）。 */
+  const CALIB_GAMMA = 1.25;
+  function calibrate1x2(home, draw, away) {
+    const h = Math.pow(home, CALIB_GAMMA), d = Math.pow(draw, CALIB_GAMMA), a = Math.pow(away, CALIB_GAMMA);
+    const s = h + d + a || 1;
+    return { home: h / s, draw: d / s, away: a / s };
+  }
+
   /* 由矩陣導出所有市場 */
   function deriveMarkets(M) {
     let home = 0, draw = 0, away = 0, btts = 0;
@@ -173,7 +182,9 @@
       scores.push({ s: `${i}:${j}`, i, j, p });
     }
     scores.sort((a, b) => b.p - a.p);
-    return { home, draw, away, btts, overs, scores };
+    const raw = { home, draw, away };
+    const cal = calibrate1x2(home, draw, away);   // 校準後的 1X2（供評級/Edge/顯示）
+    return { home: cal.home, draw: cal.draw, away: cal.away, raw, btts, overs, scores };
   }
 
   /* ---------- M4 角球模型 ---------- */

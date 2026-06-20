@@ -182,7 +182,7 @@
       const ci = a.mc.homeCI;
       h += `<div class="card"><div class="section-title" style="margin-top:0">Monte Carlo（${a.mc.n.toLocaleString()} 次模擬）</div>
         <div class="memo">
-        <div class="kv"><b>主勝</b><span>${P(a.mc.home)}　<span class="tiny">解析 ${P(mo.home)}</span></span></div>
+        <div class="kv"><b>主勝（原始模擬）</b><span>${P(a.mc.home)}　<span class="tiny">校準後 ${P(mo.home)}</span></span></div>
         <div class="kv"><b>和局 / 客勝</b><span>${P(a.mc.draw)} / ${P(a.mc.away)}</span></div>
         <div class="kv"><b>主勝 90% 信賴區間</b><span>${P(ci[0])} – ${P(ci[1])}</span></div>
         <div class="kv"><b>平均總進球</b><span>${a.mc.avgGoals.toFixed(2)}</span></div>

@@ -57,7 +57,8 @@ function round3_montecarlo() {
   for (const m of S.matches) {
     const a = S.analyzeMatch(m);
     ok(near(a.mc.avgGoals, a.lamH + a.lamA, 0.12), `MC avgG≈解析 ${m.home}`);
-    ok(near(a.mc.home, a.model.home, 0.05), `MC 主勝≈解析 ${m.home}`);
+    ok(near(a.mc.home, a.model.raw.home, 0.05), `MC 主勝≈原始模型 ${m.home}`);  // MC 為原始,model 為校準後
+    ok(a.model.raw && near(a.model.raw.home + a.model.raw.draw + a.model.raw.away, 1, 1e-6), `原始1X2正規化 ${m.home}`);
     ok(a.mc.homeCI[0] <= a.mc.home && a.mc.home <= a.mc.homeCI[1], `MC 區間含點估計 ${m.home}`);
     ok(near(a.mc.home + a.mc.draw + a.mc.away, 1, 0.01), `MC 1X2 和≈1 ${m.home}`);
   }
