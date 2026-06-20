@@ -279,12 +279,12 @@ async def _seed() -> None:
     print("\n啟動 API 後可打:  GET /membership/stats   GET /membership/segments")
 
 
-def main() -> None:
+async def _main() -> None:
     try:
-        asyncio.run(_seed())
+        await _seed()
     finally:
-        asyncio.run(dispose_engine())
+        await dispose_engine()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(_main())
