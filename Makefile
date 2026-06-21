@@ -226,6 +226,13 @@ docker-prod-up: ## Bring up production-shape stack (requires .env.production)
 docker-prod-down: ## Tear down production-shape stack
 	docker compose -f restaurant_api/docker-compose.production.yml down
 
+# ----- file ingest -------------------------------------------------------
+
+.PHONY: to-md
+to-md: ## Convert a file to Markdown for token-cheap reading (usage: make to-md FILE=x.pdf [OUT=y.md])
+	@test -n "$(FILE)" || (echo "usage: make to-md FILE=<path> [OUT=<path>]" && exit 1)
+	uv run scripts/to_md.py "$(FILE)" $(if $(OUT),-o "$(OUT)",)
+
 # ----- info --------------------------------------------------------------
 
 .PHONY: status

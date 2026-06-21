@@ -114,6 +114,8 @@ ignore = ["E501"]  # line length handled by formatter
 # Demo + seed scripts deliberately use 中文標點 in user-facing prints.
 "scripts/demo_flow.py" = ["RUF001"]
 "scripts/seed_demo_data.py" = ["RUF001"]
+# to_md.py 的 docstring/註解刻意用中文標點寫給 Ivan 看。
+"scripts/to_md.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"

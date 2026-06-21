@@ -16,6 +16,8 @@
       "Bash(make db-check:*)",
       "Bash(make demo-flow:*)",
       "Bash(make full-check:*)",
+      "Bash(make to-md:*)",
+      "Bash(uv run scripts/to_md.py:*)",
       "Bash(.venv/bin/pytest:*)",
       "Bash(.venv/bin/ruff:*)",
       "Bash(.venv/bin/pyright:*)",
