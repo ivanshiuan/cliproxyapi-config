@@ -16,9 +16,8 @@ Two infrastructure overrides live at the top of this file:
     different loop" error. We use ``httpx.AsyncClient`` + ``ASGITransport``
     so HTTP calls and the DB session share a single asyncio loop.
 
-The ``stock`` router is also registered onto ``main.app`` here — once
-``main.py`` mounts it for real, the guarded ``include_router`` becomes a
-no-op.
+The ``stock`` router is mounted by ``main.py`` (executed on import of
+``restaurant_api.main``), so this file no longer self-mounts.
 """
 
 from __future__ import annotations
@@ -38,12 +37,6 @@ from restaurant_api.api.deps import get_current_tenant_id, get_db
 from restaurant_api.config import get_settings
 from restaurant_api.main import app
 from restaurant_api.models import Ingredient, StockMovement, Tenant
-from restaurant_api.routers import stock as stock_router_module
-
-# Ensure the router is mounted exactly once for the whole test session.
-if not any(getattr(r, "path", "").startswith("/stock") for r in app.routes):
-    app.include_router(stock_router_module.router)
-
 
 # ──────────────────────────────────────────────────────────────────────────
 # Fixture overrides (see module docstring for rationale)

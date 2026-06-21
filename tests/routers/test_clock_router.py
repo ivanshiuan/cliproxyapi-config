@@ -34,7 +34,6 @@ from restaurant_api.config import get_settings
 from restaurant_api.main import app
 from restaurant_api.models import Employee, LeaveRequest, Store, TimeClock
 from restaurant_api.routers.clock import get_is_holiday
-from restaurant_api.routers.clock import router as clock_router
 
 
 # Override the session-scoped ``_engine`` fixture from conftest with a
@@ -75,32 +74,18 @@ async def client(db_session: AsyncSession):
 # ──────────────────────────────────────────────────────────────────────────
 
 
-_MOUNTED = False
-
-
 @pytest.fixture(autouse=True)
-def _mount_router() -> Iterator[None]:
-    """Idempotently attach ``/clock`` (+ the shared error handler) to the app.
+def _holiday_override() -> Iterator[None]:
+    """Default holiday override: never a holiday — most tests want the
+    regular/OT bucketing path. Specific tests override per-test below.
 
-    ``main.py`` now mounts the clock router in prod wiring. This fixture
-    predates that — it stays as a defensive no-op for environments where
-    main hasn't run, but it must check route paths first to avoid a
-    duplicate include (which would trigger FastAPI's "Duplicate Operation
-    ID" warnings).
+    Router mounting + the shared DomainError handler are owned by
+    ``main.py`` (executed on ``from restaurant_api.main import app``), so this
+    fixture no longer self-mounts — doing so duplicated routes under
+    FastAPI 0.138 (``include_router`` wraps children in ``_IncludedRouter``,
+    which the old path-prefix guard couldn't see), triggering "Duplicate
+    Operation ID" warnings.
     """
-    global _MOUNTED
-    if not _MOUNTED:
-        from restaurant_api.api.errors import DomainError, domain_error_handler
-
-        already_mounted = any(
-            getattr(r, "path", "").startswith("/clock") for r in app.routes
-        )
-        if not already_mounted:
-            app.include_router(clock_router)
-        app.add_exception_handler(DomainError, domain_error_handler)  # type: ignore[arg-type]
-        _MOUNTED = True
-    # Default holiday override: never a holiday — most tests want the
-    # regular/OT bucketing path. Specific tests override per-test below.
     app.dependency_overrides[get_is_holiday] = lambda: (lambda d: False)
     yield
     app.dependency_overrides.pop(get_is_holiday, None)

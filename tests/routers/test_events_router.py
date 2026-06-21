@@ -50,12 +50,6 @@ from restaurant_api.models import (
     Store,
     WasteEvent,
 )
-from restaurant_api.routers import events as events_router_module
-
-# Mount the router onto the app once for the test session. ``main.py``
-# doesn't include it yet (mounting is the deploy-time orchestrator's job).
-if not any(getattr(r, "path", "").startswith("/events") for r in app.routes):
-    app.include_router(events_router_module.router)
 
 
 # Override the session-scoped ``_engine`` fixture from ``tests/conftest.py``
