@@ -4,7 +4,9 @@ Three jobs run via APScheduler (in-process):
 
   expiry_warning      03:00 daily  — flag ingredients within N days of expiry
   points_expire       03:30 daily  — write reversing rows for expired points
+  campaign_expiry     03:45 daily  — expire wheel-spin vouchers past their window
   cogs_variance_check 04:00 daily  — compare actual vs theoretical COGS by store
+  membership_lifecycle 04:15 daily — tier recompute + birthday + dormant win-back
 
 The scheduler is intentionally *in-process* (not Celery / arq) for Phase 1.
 Single-instance restaurant scale doesn't need distributed workers. Phase 2
@@ -27,8 +29,10 @@ from apscheduler.triggers.cron import CronTrigger
 
 from ..config import get_settings
 from ..middleware import configure_logging
+from .campaign_expiry import run_campaign_voucher_expiry
 from .cogs_variance import run_cogs_variance_check
 from .expiry_warning import run_expiry_warning
+from .membership_lifecycle import run_membership_lifecycle
 from .points_expire import run_points_expire
 
 logger = logging.getLogger("restaurant_api.jobs")
@@ -59,9 +63,25 @@ def _register(scheduler: AsyncIOScheduler) -> None:
         misfire_grace_time=600,
     )
     scheduler.add_job(
+        _wrap("campaign_expiry", run_campaign_voucher_expiry),
+        trigger=CronTrigger(hour=3, minute=45, timezone=tz),
+        id="campaign_expiry",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+    scheduler.add_job(
         _wrap("cogs_variance_check", run_cogs_variance_check),
         trigger=CronTrigger(hour=4, minute=0, timezone=tz),
         id="cogs_variance_check",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+    scheduler.add_job(
+        _wrap("membership_lifecycle", run_membership_lifecycle),
+        trigger=CronTrigger(hour=4, minute=15, timezone=tz),
+        id="membership_lifecycle",
         max_instances=1,
         coalesce=True,
         misfire_grace_time=600,
@@ -106,8 +126,10 @@ async def run_scheduler() -> None:
 
 
 __all__ = [
+    "run_campaign_voucher_expiry",
     "run_cogs_variance_check",
     "run_expiry_warning",
+    "run_membership_lifecycle",
     "run_points_expire",
     "run_scheduler",
 ]

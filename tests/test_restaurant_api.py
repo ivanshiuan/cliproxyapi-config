@@ -33,8 +33,10 @@ def test_root_endpoint():
 # to /health/ready and tested there.
 
 
-def test_models_metadata_has_26_tables():
-    """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national = 26 total."""
+def test_models_metadata_has_30_tables():
+    """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national
+    + 4 marketing-campaign (wheel-spin lottery) + 1 stored-value + 1 referral
+    + 1 UGC = 33 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -68,10 +70,21 @@ def test_models_metadata_has_26_tables():
         "walk_in_queue",
         # National-scope reference data (1) — not tenant-scoped
         "public_holidays",
+        # Marketing campaigns — wheel-spin lottery (4)
+        "marketing_campaigns",
+        "campaign_prizes",
+        "campaign_spins",
+        "campaign_vouchers",
+        # Stored-value (prepaid wallet) (1)
+        "customer_stored_value_ledger",
+        # Referral flywheel (1)
+        "referrals",
+        # UGC (打卡 / 評論換獎) (1)
+        "ugc_submissions",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 26
+    assert len(Base.metadata.tables) == 33
 
 
 def test_money_columns_are_numeric_14_4():

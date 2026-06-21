@@ -26,6 +26,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -96,10 +97,21 @@ class Customer(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         default=Decimal("0"),
         server_default="0",
     )
+    # Cached 儲值 (stored-value / prepaid) wallet balance. Source of truth is
+    # customer_stored_value_ledger; cached here to avoid summing on every read.
+    stored_value_balance: Mapped[Decimal] = mapped_column(
+        Money,
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
     last_visit_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
+    # 裂變 (referral) — each member's unique shareable invite code, generated
+    # lazily on first request. Unique per tenant when populated.
+    referral_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
@@ -125,6 +137,13 @@ class Customer(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
             "email",
             unique=True,
             postgresql_where="email IS NOT NULL AND deleted_at IS NULL",
+        ),
+        Index(
+            "uq_customers_referral_code",
+            "tenant_id",
+            "referral_code",
+            unique=True,
+            postgresql_where="referral_code IS NOT NULL",
         ),
         Index("ix_customers_tenant_tier", "tenant_id", "tier"),
         Index("ix_customers_tenant_last_visit", "tenant_id", "last_visit_at"),
@@ -175,7 +194,145 @@ class CustomerPointsLedger(TenantScopedMixin, Base):
     __table_args__ = (
         Index("ix_points_customer_time", "customer_id", "created_at"),
         Index("ix_points_reason", "reason"),
+        # DB-level idempotency backstops for membership-lifecycle grants — make
+        # "grant once" a hard guarantee even under concurrent / multi-instance
+        # job runs. Partial so they never constrain the high-volume reasons
+        # (order.earn / redeem.coupon / expire.batch), which legitimately repeat.
+        Index(
+            "uq_points_welcome_once",
+            "customer_id",
+            unique=True,
+            postgresql_where=text("reason = 'welcome.signup'"),
+        ),
+        Index(
+            "uq_points_periodic_marker",
+            "customer_id",
+            "reason",
+            "note",
+            unique=True,
+            postgresql_where=text("reason IN ('birthday.gift', 'winback.dormant')"),
+        ),
     )
 
 
-__all__ = ["Customer", "CustomerPointsLedger", "CustomerTier"]
+class ReferralStatus(enum.StrEnum):
+    """裂變 referral lifecycle: created on signup, qualifies on first spend."""
+
+    PENDING = "pending"  # referred member signed up, hasn't spent yet
+    QUALIFIED = "qualified"  # referred member made their first qualifying order
+
+
+class Referral(TenantScopedMixin, TimestampedMixin, Base):
+    """One 推薦 edge: ``referrer`` invited ``referred`` via a referral code.
+
+    Drives the two-sided reward flywheel:
+      - on signup (attribution) the referred member gets a welcome gift
+      - on the referred member's **first qualifying order** the referral flips
+        ``pending → qualified`` and the referrer earns override points.
+
+    A member can be referred **once** — enforced by a unique index on
+    ``referred_id`` — so the bonus can never be double-claimed.
+    """
+
+    __tablename__ = "referrals"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid7,
+    )
+    referrer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    referred_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    status: Mapped[ReferralStatus] = mapped_column(
+        SQLEnum(ReferralStatus, name="referral_status", native_enum=False, length=16),
+        nullable=False,
+        default=ReferralStatus.PENDING,
+        # native_enum=False stores the enum *name* ("PENDING"), so the
+        # server_default must be the name too — using .value ("pending") would
+        # make any DB-default row invisible to ``status == PENDING`` queries.
+        server_default=ReferralStatus.PENDING.name,
+    )
+    qualifying_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    # Points the referrer earned when this referral qualified (0 until then).
+    referrer_reward_points: Mapped[Decimal] = mapped_column(
+        Money,
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
+    qualified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    __table_args__ = (
+        # A member can only ever be referred once.
+        Index("uq_referrals_referred", "referred_id", unique=True),
+        Index("ix_referrals_status", "status"),
+    )
+
+
+class CustomerStoredValueLedger(TenantScopedMixin, Base):
+    """Append-only 儲值 (stored-value / prepaid wallet) ledger.
+
+    Same discipline as the points ledger — never UPDATE, never DELETE; a
+    DB-level RULE blocks both, corrections are reversing rows. The cached
+    running total lives on ``Customer.stored_value_balance``.
+
+    Stored value carries **no** ``expires_at``: Taiwan's 零售業商品(服務)禮券
+    定型化契約 forbids an expiry date on prepaid value, so unlike points it
+    never lapses.
+    """
+
+    __tablename__ = "customer_stored_value_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid7,
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    # Signed: + for top-up / bonus / refund, - for spend.
+    delta: Mapped[Decimal] = mapped_column(Money, nullable=False)
+    # Dotted reason: "topup", "topup.bonus", "spend", "refund", "manual.adjust".
+    reason: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_stored_value_customer_time", "customer_id", "created_at"),
+        Index("ix_stored_value_reason", "reason"),
+    )
+
+
+__all__ = [
+    "Customer",
+    "CustomerPointsLedger",
+    "CustomerStoredValueLedger",
+    "CustomerTier",
+    "Referral",
+    "ReferralStatus",
+]

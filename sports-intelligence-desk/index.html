@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SID Terminal">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Sports Intelligence Desk｜賽事投研終端</title>
+<link rel="stylesheet" href="css/terminal.css">
+</head>
+<body>
+  <header class="appbar">
+    <h1>MATCH INTELLIGENCE TERMINAL <span class="badge-live">SNAPSHOT</span></h1>
+    <div class="sub" id="meta-line">loading…</div>
+  </header>
+
+  <main id="main"><div class="wrap"><div class="muted">計算中…</div></div></main>
+
+  <nav class="tabs">
+    <button data-tab="desk" class="active"><span class="ic">📊</span>主控台</button>
+    <button data-tab="portfolio"><span class="ic">🎯</span>四場組合</button>
+    <button data-tab="timeline"><span class="ic">⏱️</span>時間軸</button>
+    <button data-tab="settings"><span class="ic">⚙️</span>設定</button>
+  </nav>
+
+  <script src="js/data.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/backtest.js"></script>
+  <script src="js/live.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http"))
+      navigator.serviceWorker.register("sw.js").catch(()=>{});
+  </script>
+</body>
+</html>

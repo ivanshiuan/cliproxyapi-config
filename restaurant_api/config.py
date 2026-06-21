@@ -46,6 +46,30 @@ class Settings(BaseSettings):
     multi_tenant_enabled: bool = False
     default_tenant_id: str = "00000000-0000-0000-0000-000000000000"
 
+    # ─── Admin console auth ─────────────────────────────────────────────
+    # 店長後台 (/demo/admin.html) is gated by a single shared passcode that
+    # mints a short-lived HMAC-signed session cookie. Both MUST be overridden
+    # in production (RESTO_ADMIN_PASSCODE / RESTO_SESSION_SECRET); the defaults
+    # below are dev-only and intentionally obvious.
+    admin_passcode: str = "changeme-admin"
+    session_secret: str = "dev-insecure-session-secret-change-me"
+    admin_session_ttl_seconds: int = Field(default=43_200, ge=60)  # 12h
+
+    # ─── LINE Messaging API ─────────────────────────────────────────────
+    # When the channel access token is set, the app switches from the
+    # in-memory stub to the real LINE Messaging API (see
+    # integrations/line/messenger.py::get_messenger). These use the LINE
+    # community-standard env names (no RESTO_ prefix) via validation_alias,
+    # so dropping LINE_CHANNEL_ACCESS_TOKEN into .env "just works".
+    # The secret is only needed for inbound webhook signature validation;
+    # outbound push/reply/multicast need the token alone.
+    line_channel_access_token: str = Field(
+        default="", validation_alias="LINE_CHANNEL_ACCESS_TOKEN"
+    )
+    line_channel_secret: str = Field(
+        default="", validation_alias="LINE_CHANNEL_SECRET"
+    )
+
     # ─── Locale ─────────────────────────────────────────────────────────
     default_timezone: str = "Asia/Taipei"
     default_currency: str = "TWD"

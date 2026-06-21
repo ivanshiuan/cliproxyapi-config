@@ -67,6 +67,8 @@ from .calc.discount_resolver import (
     DiscountRow,
     resolve_discounts,
 )
+from .referral_service import qualify_referral
+from .streak_service import compute_visit_streak, streak_multiplier
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -595,6 +597,15 @@ async def close_order(
             closed_dt=closed_dt,
             messenger=messenger,
         )
+        # 裂變: if this buyer was referred and hasn't qualified yet, their first
+        # closed order qualifies the referral → referrer earns override points.
+        await qualify_referral(
+            session,
+            referred_id=order.customer_id,
+            tenant_id=order.tenant_id,
+            order_id=order.id,
+            messenger=messenger,
+        )
 
     logger.info(
         "order.closed order_id=%s net_revenue=%s closed_at=%s",
@@ -650,7 +661,26 @@ async def _accrue_points_and_notify(
         )
         return
 
-    points = _compute_points_earned(net_revenue, customer.tier)
+    base_points = _compute_points_earned(net_revenue, customer.tier)
+    # 連續回訪 streak bonus — multiply the tier-rated points by the member's
+    # consecutive visit-day streak (1.0x for a 1-2 day streak, so single-visit
+    # points stay exact). Streak counts this just-closed order's business date.
+    # Skip the streak query entirely when there are no base points to scale
+    # (comped / zero-revenue orders) — defaults keep the LINE message safe.
+    streak = 0
+    streak_mult = Decimal("1.0")
+    points = base_points
+    if base_points > 0:
+        streak = await compute_visit_streak(
+            session,
+            customer_id=customer.id,
+            tenant_id=order.tenant_id,
+            as_of=order.business_date,
+        )
+        streak_mult = streak_multiplier(streak)
+        points = (base_points * streak_mult).quantize(
+            Decimal("1"), rounding=ROUND_HALF_UP
+        )
     if points > 0:
         # Stamp expires_at per the tenant-wide policy. Settings.points_expiry_days
         # is the lifecycle horizon — 0 means "never expires" (legacy mode);
@@ -667,7 +697,7 @@ async def _accrue_points_and_notify(
             reason="order.earn",
             source_order_id=order.id,
             expires_at=expires_at,
-            note=f"net_revenue={net_revenue}",
+            note=f"net_revenue={net_revenue} streak={streak} x{streak_mult}",
         )
         session.add(ledger)
 
@@ -685,10 +715,16 @@ async def _accrue_points_and_notify(
     # (we identified them by phone / member card), in which case we skip.
     if messenger is not None and customer.line_user_id:
         try:
+            streak_line = (
+                f"連續回訪 {streak} 天 點數 x{streak_mult}!\n"
+                if streak_mult > Decimal("1.0")
+                else ""
+            )
             text = (
                 f"感謝您的光臨!\n"
                 f"訂單 {order.order_no}\n"
                 f"消費金額 NT${net_revenue}\n"
+                f"{streak_line}"
                 f"本次累積點數 {points}\n"
                 f"目前點數餘額 {customer.points_balance}"
             )

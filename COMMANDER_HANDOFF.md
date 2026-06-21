@@ -9,6 +9,31 @@
 
 ## ✅ 我已完成（不需要你動手）
 
+### 🆕 開幕輪盤行銷程式收尾（本 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
+
+> 398 pytest 全綠 + ruff + pyright clean，且三項皆以真實伺服器端到端驗證過（login → 建活動 → 抽獎 → 看成效 / 改賠率）。
+
+- **店長後台登入閘門**（`restaurant_api/api/auth.py`）：單一共享通行碼 → HMAC 簽章、httpOnly、12h 短效 session cookie。`POST /admin/login`、`/admin/logout`、`/admin/session`。後台與櫃台端點（建/查/改活動、增/查/改獎項、券查碼、櫃台核銷）全部上鎖；顧客面（輪盤、抽獎、自己的錢包、QR、海報）維持公開。顧客頁不再自助核銷，改為「至櫃台出示券碼」。
+- **店長成效儀表板**（`GET /campaigns/{id}/stats` + admin.html 即時面板）：抽獎數 / 參與人數 / 中獎率 / 核銷率、已核銷獎品價值 vs 未核銷負債、券漏斗（已核銷／可用／已過期）、各獎項已發/配額分佈。
+- **賠率即時微調**：後台獎項表格的權重／價值／配額改為可直接編輯 → `PATCH /prizes/{id}`（活動進行中可調大獎中獎率）。
+- **🔴 部署前必做**：設 `RESTO_ADMIN_PASSCODE` 與 `RESTO_SESSION_SECRET`（dev 預設值很明顯，務必覆蓋；`openssl rand -hex 32` 產 secret）。見 `.env.example` 新增區塊與下方「你要做的」清單。
+
+### 獲客成長飛輪 + Phase 3（前一 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
+
+> 五道 gate 全綠（ruff / pyright / 381 pytest / alembic check / db-smoke），migration down→base→up round-trip OK，app 開機 + OpenAPI 正常。經 9 輪副盤檢查 + 對抗式 code-review 並修完所有缺陷。
+
+- **儲值雙倍**（`stored_value_service`）：append-only 儲值帳本 + 級距加贈（500→10%／1000→20%／3000→25%，無條件捨去）+ FOR UPDATE 防超扣 + LINE 推播；4 端點。
+- **裂變邀請碼**（`referral_service`）：唯一邀請碼、雙邊獎勵（新客 100／推薦人 200）、一人只被推薦一次、首消達標自動發點；接入 spin(`ref`) + close_order。
+- **UGC 換獎**（`ugc_service`）：打卡／評論人工審核佇列，依類型發點（Google 100／IG 80／打卡 50），一次性審核。
+- **連續回訪 Streak**（`streak_service`）：依連續回訪天數加碼點數（3+ 天 1.1～1.5x），從訂單史計算、無儲存計數器。
+- **成效報表**（`GET /membership/stats?days=N`）：四系統聚合快照 + 時間窗（流量型過濾、存量型快照）。
+- **RFM 分眾 + 分眾推播**（`rfm_service`）：六分眾分類 + `POST /membership/segments/{seg}/broadcast`。
+- **一鍵示範**：`make growth-demo`（灌示範資料並印出儀表板）。
+- **文件**：`docs/14_store_ops_playbook.md`（店長 SOP）、`docs/13` §7–§9（實作狀態 + 技術債）。
+- **round-7 修復**：referrer/ugc 點數授予補 `FOR UPDATE` + tenant 範圍（並發快取競爭）；新 enum `server_default` 大小寫修正（dormant，附回歸測試）。
+- **待你決策的技術債**：既有 6 個 enum 的 `server_default` 大小寫同樣 dormant 不一致，建議獨立 migration 統一修（見 `docs/13` §9）。
+
+
 ### 初版交付（前期）
 - DevSwarm 4-agent LangGraph 蜂群骨架（PM/Architect/Coder/QA + self-heal）
 - Phase 1 餐飲後端：26 表 SQLAlchemy + 5 套 Alembic 遷移
@@ -74,6 +99,19 @@ cp .env.example .env
 
 從 https://console.anthropic.com/settings/keys 拿。
 （這個只影響 DevSwarm；FastAPI 後端不需要它。）
+
+### 2b. 🔴 設店長後台通行碼與 session secret（公開上線前必做）
+
+開幕輪盤後台（`/demo/admin.html`）目前用「店長共享通行碼」上鎖。dev 預設值（`changeme-admin` / 明顯的 secret）只能在本機用，**對外開放前一定要覆蓋**：
+
+```bash
+# 寫進部署環境（或 .env）：
+RESTO_ADMIN_PASSCODE=<發給店長的通行碼>
+RESTO_SESSION_SECRET=$(openssl rand -hex 32)
+# 可選：RESTO_ADMIN_SESSION_TTL_SECONDS=43200  # 預設 12h
+```
+
+沒設＝任何人輸入預設密碼就能進後台改活動／核銷。`.env.example` 已有對應區塊。
 
 ---
 
