@@ -31,6 +31,14 @@ dependencies = [
     "qrcode>=7.4,<9.0",
 ]
 
+[project.optional-dependencies]
+# Dev-only quality gates. `make install` pulls these in so `make full-check`
+# (ruff + pyright) works on a fresh checkout without manual `pip install`.
+dev = [
+    "ruff>=0.6",
+    "pyright>=1.1.380",
+]
+
 [project.scripts]
 devswarm = "devswarm.cli:main"
 

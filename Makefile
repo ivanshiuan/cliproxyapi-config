@@ -26,8 +26,8 @@ $(VENV)/bin/python:
 	$(PIP) install --upgrade pip
 
 .PHONY: install
-install: $(VENV)/bin/python ## Create venv and install DevSwarm in editable mode
-	$(PIP) install -e .
+install: $(VENV)/bin/python ## Create venv and install DevSwarm (+ dev tools) in editable mode
+	$(PIP) install -e ".[dev]"
 
 .PHONY: clean
 clean: ## Remove caches and build artifacts (keeps venv and workspace)
