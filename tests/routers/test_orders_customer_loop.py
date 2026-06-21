@@ -238,8 +238,14 @@ async def test_close_without_customer_skips_points_path(
     close = await client.post(f"/orders/{create.json()['id']}/close", json={})
     assert close.status_code == 200
 
+    # Scope to this tenant — a bare full-table scan trips over seed/demo or
+    # other-tenant ledger rows (per the house rule in CLAUDE.md).
     n_ledger = (
-        await db_session.execute(select(CustomerPointsLedger))
+        await db_session.execute(
+            select(CustomerPointsLedger).where(
+                CustomerPointsLedger.tenant_id == seed_store.tenant_id
+            )
+        )
     ).scalars().all()
     assert n_ledger == []
 

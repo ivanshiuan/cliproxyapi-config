@@ -84,8 +84,13 @@ def test_line_message_is_frozen():
 def test_get_messenger_returns_stub_when_no_env():
     reset_messenger()
     get_settings.cache_clear()
-    with patch.dict(os.environ, {}, clear=False):
-        os.environ.pop("LINE_CHANNEL_ACCESS_TOKEN", None)
+    # ``get_messenger`` only reads ``.line_channel_access_token``; stub it empty so
+    # the assertion holds regardless of any real LINE creds in the local env/.env
+    # (which otherwise leak in via os.environ AND the dotenv file).
+    from types import SimpleNamespace
+
+    no_line = SimpleNamespace(line_channel_access_token="")
+    with patch("restaurant_api.config.get_settings", return_value=no_line):
         m = get_messenger()
         assert isinstance(m, StubLineMessenger)
     reset_messenger()

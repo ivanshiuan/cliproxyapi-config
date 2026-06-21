@@ -19,7 +19,9 @@ from restaurant_api.api.auth import (
 from restaurant_api.config import get_settings
 from tests.conftest import needs_db
 
-PASSCODE = "changeme-admin"  # the dev default in Settings
+# Read the configured passcode rather than hard-coding the dev default, so the
+# suite passes whether or not a local .env overrides RESTO_ADMIN_PASSCODE.
+PASSCODE = get_settings().admin_passcode
 
 
 # ── Token primitives (no DB / no HTTP) ──────────────────────────────────────

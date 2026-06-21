@@ -21,8 +21,12 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import delete, select
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import CursorResult
 
 from restaurant_api.config import get_settings
 from restaurant_api.database import dispose_engine, get_sessionmaker
@@ -61,17 +65,17 @@ async def _reset(slug: str) -> None:
             return
 
         cid = campaign.id
-        # 1. purge test vouchers + spins (not append-only; safe to delete)
-        v_del = (
-            await session.execute(
-                delete(CampaignVoucher).where(CampaignVoucher.campaign_id == cid)
-            )
-        ).rowcount
-        s_del = (
-            await session.execute(
-                delete(CampaignSpin).where(CampaignSpin.campaign_id == cid)
-            )
-        ).rowcount
+        # 1. purge test vouchers + spins (not append-only; safe to delete).
+        # ``execute(delete(...))`` returns a CursorResult whose ``rowcount`` the
+        # base ``Result`` stub doesn't expose — cast for a clean type-check.
+        v_res = cast("CursorResult[Any]", await session.execute(
+            delete(CampaignVoucher).where(CampaignVoucher.campaign_id == cid)
+        ))
+        v_del = v_res.rowcount
+        s_res = cast("CursorResult[Any]", await session.execute(
+            delete(CampaignSpin).where(CampaignSpin.campaign_id == cid)
+        ))
+        s_del = s_res.rowcount
 
         # 2 + 3. reset counts and apply caps
         prizes = (
