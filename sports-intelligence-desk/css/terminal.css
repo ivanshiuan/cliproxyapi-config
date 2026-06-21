@@ -25,7 +25,7 @@
 ::selection{background:rgba(84,168,255,.3);color:#fff}
 html{scroll-behavior:smooth}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font-family:var(--sans);
-  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;text-rendering:optimizelegibility}
 /* 細緻網格底紋，增添「終端」質感 */
 body{position:relative;padding-bottom:80px;max-width:760px;margin:0 auto;min-height:100vh;
   background-image:radial-gradient(circle at 50% -10%,rgba(84,168,255,.06),transparent 55%);}
@@ -167,7 +167,7 @@ pre.mono{border-radius:var(--r)!important;line-height:1.6}
 .conf-meter{height:9px;border-radius:6px;background:var(--bg2);overflow:hidden;margin:8px 0;
   border:1px solid var(--line);box-shadow:inset 0 1px 2px rgba(0,0,0,.4)}
 .conf-meter i{display:block;height:100%;border-radius:6px;transform-origin:left;
-  animation:growx .55s cubic-bezier(.2,.7,.2,1) both;box-shadow:0 0 12px -2px currentColor}
+  animation:growx .55s cubic-bezier(.2,.7,.2,1) both;box-shadow:0 0 12px -2px currentcolor}
 
 /* ---------- Text helpers ---------- */
 .muted{color:var(--dim);font-size:12px;line-height:1.55}
