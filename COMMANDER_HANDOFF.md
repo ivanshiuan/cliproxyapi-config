@@ -9,7 +9,16 @@
 
 ## ✅ 我已完成（不需要你動手）
 
-### 🆕 獲客成長飛輪 + Phase 3（本 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
+### 🆕 開幕輪盤行銷程式收尾（本 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
+
+> 398 pytest 全綠 + ruff + pyright clean，且三項皆以真實伺服器端到端驗證過（login → 建活動 → 抽獎 → 看成效 / 改賠率）。
+
+- **店長後台登入閘門**（`restaurant_api/api/auth.py`）：單一共享通行碼 → HMAC 簽章、httpOnly、12h 短效 session cookie。`POST /admin/login`、`/admin/logout`、`/admin/session`。後台與櫃台端點（建/查/改活動、增/查/改獎項、券查碼、櫃台核銷）全部上鎖；顧客面（輪盤、抽獎、自己的錢包、QR、海報）維持公開。顧客頁不再自助核銷，改為「至櫃台出示券碼」。
+- **店長成效儀表板**（`GET /campaigns/{id}/stats` + admin.html 即時面板）：抽獎數 / 參與人數 / 中獎率 / 核銷率、已核銷獎品價值 vs 未核銷負債、券漏斗（已核銷／可用／已過期）、各獎項已發/配額分佈。
+- **賠率即時微調**：後台獎項表格的權重／價值／配額改為可直接編輯 → `PATCH /prizes/{id}`（活動進行中可調大獎中獎率）。
+- **🔴 部署前必做**：設 `RESTO_ADMIN_PASSCODE` 與 `RESTO_SESSION_SECRET`（dev 預設值很明顯，務必覆蓋；`openssl rand -hex 32` 產 secret）。見 `.env.example` 新增區塊與下方「你要做的」清單。
+
+### 獲客成長飛輪 + Phase 3（前一 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
 
 > 五道 gate 全綠（ruff / pyright / 381 pytest / alembic check / db-smoke），migration down→base→up round-trip OK，app 開機 + OpenAPI 正常。經 9 輪副盤檢查 + 對抗式 code-review 並修完所有缺陷。
 
@@ -90,6 +99,19 @@ cp .env.example .env
 
 從 https://console.anthropic.com/settings/keys 拿。
 （這個只影響 DevSwarm；FastAPI 後端不需要它。）
+
+### 2b. 🔴 設店長後台通行碼與 session secret（公開上線前必做）
+
+開幕輪盤後台（`/demo/admin.html`）目前用「店長共享通行碼」上鎖。dev 預設值（`changeme-admin` / 明顯的 secret）只能在本機用，**對外開放前一定要覆蓋**：
+
+```bash
+# 寫進部署環境（或 .env）：
+RESTO_ADMIN_PASSCODE=<發給店長的通行碼>
+RESTO_SESSION_SECRET=$(openssl rand -hex 32)
+# 可選：RESTO_ADMIN_SESSION_TTL_SECONDS=43200  # 預設 12h
+```
+
+沒設＝任何人輸入預設密碼就能進後台改活動／核銷。`.env.example` 已有對應區塊。
 
 ---
 
