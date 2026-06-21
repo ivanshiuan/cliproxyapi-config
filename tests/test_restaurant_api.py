@@ -7,23 +7,25 @@ a live Postgres in CI.
 
 from __future__ import annotations
 
-from fastapi.testclient import TestClient
+import httpx
 
 from restaurant_api.main import app
 
 
-def test_version_endpoint():
-    client = TestClient(app)
-    resp = client.get("/version")
+async def test_version_endpoint():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/version")
     assert resp.status_code == 200
     body = resp.json()
     assert body["version"]
     assert body["name"]
 
 
-def test_root_endpoint():
-    client = TestClient(app)
-    resp = client.get("/")
+async def test_root_endpoint():
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.get("/")
     assert resp.status_code == 200
     assert resp.json()["service"] == "restaurant_api"
 
