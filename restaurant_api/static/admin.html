@@ -61,9 +61,24 @@
 <header>
   <h1>🎯 店長後台</h1>
   <span class="tag">開幕輪盤抽獎 · 活動 / 獎項 / 核銷</span>
+  <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
 </header>
 
-<div class="grid">
+<!-- 登入遮罩 -->
+<div id="loginOverlay" style="position:fixed;inset:0;background:#0c0814ee;display:none;
+     place-items:center;z-index:100">
+  <div class="card" style="width:340px;margin:0">
+    <h2><span class="dot"></span>店長後台登入</h2>
+    <label>通行碼</label>
+    <input id="passcode" type="password" placeholder="請輸入店長通行碼"
+      onkeydown="if(event.key==='Enter')doLogin()" />
+    <div id="loginErr" class="hint" style="color:var(--bad);min-height:16px"></div>
+    <div style="margin-top:12px"><button style="width:100%" onclick="doLogin()">登入</button></div>
+    <div class="hint" style="margin-top:10px">開發預設密碼 <code>changeme-admin</code>；上線請設 <code>RESTO_ADMIN_PASSCODE</code>。</div>
+  </div>
+</div>
+
+<div id="app" class="grid" style="display:none">
   <!-- ── 左欄：活動列表 + 建立 ── -->
   <div>
     <div class="card">
@@ -119,10 +134,32 @@ async function api(path, opts={}){
   const body = await res.text();
   let data; try{ data = body ? JSON.parse(body) : null; }catch{ data = body; }
   if(!res.ok){
+    if(res.status===401 && !path.startsWith("/admin/")){ showLogin(); }  // session expired mid-use
     const msg = (data && (data.detail?.message || data.detail || data.message)) || ("HTTP "+res.status);
-    throw new Error(typeof msg==="string"?msg:JSON.stringify(msg));
+    const err = new Error(typeof msg==="string"?msg:JSON.stringify(msg)); err.status = res.status; throw err;
   }
   return data;
+}
+
+// ── 登入閘門 ──
+function showLogin(){ $("loginOverlay").style.display="grid"; $("app").style.display="none"; $("logoutBtn").style.display="none"; $("passcode").focus(); }
+function showApp(){ $("loginOverlay").style.display="none"; $("app").style.display="grid"; $("logoutBtn").style.display="inline-block"; }
+async function boot(){
+  try{ await api("/admin/session"); showApp(); loadCampaigns(); }
+  catch{ showLogin(); }
+}
+async function doLogin(){
+  const pc=$("passcode").value;
+  $("loginErr").textContent="";
+  try{
+    const res=await fetch(API+"/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({passcode:pc})});
+    if(!res.ok){ $("loginErr").textContent="通行碼錯誤"; return; }
+    $("passcode").value=""; showApp(); loadCampaigns();
+  }catch(e){ $("loginErr").textContent="登入失敗："+e.message; }
+}
+async function logout(){
+  try{ await fetch(API+"/admin/logout",{method:"POST"}); }catch{}
+  CUR=null; CAMPAIGNS=[]; showLogin();
 }
 
 // ── 活動列表 ──
@@ -279,7 +316,7 @@ function lookupVoucherResult(v){
     <div class="muted" style="margin-top:6px">核銷時間 ${esc(v.redeemed_at)}</div></div>`;
 }
 
-loadCampaigns();
+boot();
 </script>
 </body>
 </html>

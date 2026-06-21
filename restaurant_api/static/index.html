@@ -131,7 +131,7 @@
   <div class="card wallet" id="walletCard" style="display:none">
     <h2>🎁 我的獎品錢包</h2>
     <div id="walletList"></div>
-    <div class="demo-note">每次來店只能核銷一張（通常挑最大獎）。逾期券會自動失效。</div>
+    <div class="demo-note">來店時向店員出示券碼，由櫃台核銷（每次來店限一張，通常挑最大獎）。逾期券自動失效。</div>
   </div>
 
   <div class="err" id="err"></div>
@@ -310,22 +310,11 @@ async function loadWallet() {
           <div class="v-name">${escapeHtml(v.prize_name)} <span class="pill ${v.status}">${statusLabel(v.status)}</span></div>
           <div class="v-meta">${v.code} · ${v.valid_from}～${v.valid_until}</div>
         </div>
-        <button class="redeem-btn" ${v.status === "active" ? "" : "disabled"} onclick="redeem('${v.id}')">核銷</button>
+        ${v.status === "active" ? `<span class="redeem-btn" style="cursor:default">至櫃台出示</span>` : ""}
       </div>`).join("");
   } catch (e) { /* wallet is best-effort */ }
 }
 function statusLabel(s){ return {active:"可用", redeemed:"已核銷", expired:"已過期", void:"作廢"}[s] || s; }
-
-async function redeem(vid) {
-  try {
-    await api(`/campaigns/${campaignId}/vouchers/${vid}/redeem`, { method: "POST", body: "{}" });
-    toast("✅ 核銷成功，請享用！");
-    loadWallet();
-  } catch (e) {
-    if (e.status === 409) toast(e.message.includes("today") || e.message.includes("visit") ? "每次來店只能核銷一張哦" : e.message);
-    else toast("核銷失敗：" + e.message);
-  }
-}
 
 $("spinBtn").addEventListener("click", doSpin);
 loadWheel();

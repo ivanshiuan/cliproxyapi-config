@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     multi_tenant_enabled: bool = False
     default_tenant_id: str = "00000000-0000-0000-0000-000000000000"
 
+    # ─── Admin console auth ─────────────────────────────────────────────
+    # 店長後台 (/demo/admin.html) is gated by a single shared passcode that
+    # mints a short-lived HMAC-signed session cookie. Both MUST be overridden
+    # in production (RESTO_ADMIN_PASSCODE / RESTO_SESSION_SECRET); the defaults
+    # below are dev-only and intentionally obvious.
+    admin_passcode: str = "changeme-admin"
+    session_secret: str = "dev-insecure-session-secret-change-me"
+    admin_session_ttl_seconds: int = Field(default=43_200, ge=60)  # 12h
+
     # ─── Locale ─────────────────────────────────────────────────────────
     default_timezone: str = "Asia/Taipei"
     default_currency: str = "TWD"

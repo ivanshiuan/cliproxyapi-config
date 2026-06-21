@@ -27,9 +27,10 @@ import html
 import uuid
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from fastapi.responses import HTMLResponse
 
+from ..api.auth import require_admin
 from ..api.deps import DbSession, Messenger, TenantId
 from ..models import CampaignStatus, VoucherStatus
 from ..qr import make_qr_svg
@@ -56,6 +57,9 @@ _Q_INCLUDE_INACTIVE = Query(default=True)
 _Q_LIMIT = Query(default=200, ge=1, le=500)
 _Q_CUSTOMER_ID = Query(...)
 
+# 店長後台 / 櫃台端點要登入。顧客面 (wheel / spin / 自己的 voucher 錢包) 維持公開。
+_ADMIN = [Depends(require_admin)]
+
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 
@@ -67,6 +71,7 @@ router = APIRouter(prefix="/campaigns", tags=["campaigns"])
     response_model=CampaignResponse,
     status_code=status.HTTP_201_CREATED,
     summary="建立輪盤抽獎活動",
+    dependencies=_ADMIN,
 )
 async def create_campaign(
     payload: CampaignCreate,
@@ -77,7 +82,7 @@ async def create_campaign(
     return await campaigns_service.create_campaign(session, payload, tenant_id=tenant_id)
 
 
-@router.get("", response_model=list[CampaignResponse], summary="列出活動")
+@router.get("", response_model=list[CampaignResponse], summary="列出活動", dependencies=_ADMIN)
 async def list_campaigns(
     session: DbSession,
     tenant_id: TenantId,
@@ -95,7 +100,12 @@ async def list_campaigns(
     )
 
 
-@router.get("/{campaign_id}", response_model=CampaignResponse, summary="查單一活動")
+@router.get(
+    "/{campaign_id}",
+    response_model=CampaignResponse,
+    summary="查單一活動",
+    dependencies=_ADMIN,
+)
 async def get_campaign(
     campaign_id: uuid.UUID,
     session: DbSession,
@@ -109,6 +119,7 @@ async def get_campaign(
     "/{campaign_id}",
     response_model=CampaignResponse,
     summary="更新活動設定 / 狀態 (draft→active→ended)",
+    dependencies=_ADMIN,
 )
 async def patch_campaign(
     campaign_id: uuid.UUID,
@@ -130,6 +141,7 @@ async def patch_campaign(
     response_model=PrizeResponse,
     status_code=status.HTTP_201_CREATED,
     summary="新增輪盤獎項 (大獎用低 weight + 低 total_quota 控管稀有度)",
+    dependencies=_ADMIN,
 )
 async def add_prize(
     campaign_id: uuid.UUID,
@@ -147,6 +159,7 @@ async def add_prize(
     "/{campaign_id}/prizes",
     response_model=list[PrizeResponse],
     summary="列出獎項",
+    dependencies=_ADMIN,
 )
 async def list_prizes(
     campaign_id: uuid.UUID,
@@ -164,6 +177,7 @@ async def list_prizes(
     "/{campaign_id}/prizes/{prize_id}",
     response_model=PrizeResponse,
     summary="更新獎項 (weight / quota / value)",
+    dependencies=_ADMIN,
 )
 async def patch_prize(
     campaign_id: uuid.UUID,
@@ -245,6 +259,7 @@ async def list_vouchers(
     "/{campaign_id}/vouchers/by-code/{code}",
     response_model=VoucherResponse,
     summary="以兌換碼查券 (櫃台掃碼)",
+    dependencies=_ADMIN,
 )
 async def get_voucher_by_code(
     campaign_id: uuid.UUID,
@@ -262,6 +277,7 @@ async def get_voucher_by_code(
     "/{campaign_id}/vouchers/{voucher_id}/redeem",
     response_model=VoucherResponse,
     summary="核銷一張券 (每位會員每日/每次來店限核銷一張)",
+    dependencies=_ADMIN,
 )
 async def redeem_voucher(
     campaign_id: uuid.UUID,

@@ -25,6 +25,7 @@ import pytest_asyncio  # type: ignore[import-not-found]
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from restaurant_api.api.auth import AdminPrincipal, require_admin
 from restaurant_api.api.deps import get_current_tenant_id, get_db, get_line_messenger
 from restaurant_api.api.errors import ConflictError, NotFoundError
 from restaurant_api.integrations.line import StubLineMessenger
@@ -82,6 +83,7 @@ async def client(
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_current_tenant_id] = _override_tenant
     app.dependency_overrides[get_line_messenger] = _override_messenger
+    app.dependency_overrides[require_admin] = lambda: AdminPrincipal()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
