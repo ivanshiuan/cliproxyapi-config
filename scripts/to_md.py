@@ -77,6 +77,10 @@ def main(argv: list[str] | None = None) -> int:
         print("error: --out 只能搭配單一輸入檔", file=sys.stderr)
         return 1
 
+    if args.out and args.stdout:
+        print("error: --out 與 --stdout 互斥（--stdout 模式不寫檔）", file=sys.stderr)
+        return 1
+
     try:
         from markitdown import MarkItDown
     except ImportError:  # pragma: no cover - 只在沒裝時觸發
@@ -123,17 +127,23 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         out = Path(args.out) if args.out else src.with_suffix(src.suffix + ".md")
-        out.write_text(text, encoding="utf-8")
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text, encoding="utf-8")
 
-        # 粗估省了多少：原始 bytes vs markdown chars（~4 char/token）
-        src_bytes = src.stat().st_size
-        md_chars = len(text)
-        est_tokens = md_chars // 4
-        print(
-            f"ok: {src.name} -> {out}  "
-            f"({src_bytes:,} bytes 原檔 → {md_chars:,} chars markdown, ~{est_tokens:,} tokens)",
-            file=sys.stderr,
-        )
+            # 粗估省了多少：原始 bytes vs markdown chars（~4 char/token）
+            src_bytes = src.stat().st_size
+            md_chars = len(text)
+            est_tokens = md_chars // 4
+            print(
+                f"ok: {src.name} -> {out}  "
+                f"({src_bytes:,} bytes 原檔 → {md_chars:,} chars markdown, ~{est_tokens:,} tokens)",
+                file=sys.stderr,
+            )
+        except Exception as exc:  # 寫檔/取狀態失敗只算這一檔，不中斷整批
+            print(f"fail: {src} -> {type(exc).__name__}: {exc}", file=sys.stderr)
+            had_error = True
+            continue
 
     return 1 if had_error else 0
 
