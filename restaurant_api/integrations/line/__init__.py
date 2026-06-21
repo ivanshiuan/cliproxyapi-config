@@ -26,6 +26,7 @@ from __future__ import annotations
 from .messenger import (
     BroadcastAudience,
     HttpLineMessenger,
+    LineApiError,
     LineMessage,
     LineMessenger,
     StubLineMessenger,
@@ -35,6 +36,7 @@ from .messenger import (
 __all__ = [
     "BroadcastAudience",
     "HttpLineMessenger",
+    "LineApiError",
     "LineMessage",
     "LineMessenger",
     "StubLineMessenger",
