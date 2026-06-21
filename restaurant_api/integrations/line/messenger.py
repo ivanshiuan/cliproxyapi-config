@@ -17,10 +17,11 @@ Test strategy:
 from __future__ import annotations
 
 import logging
-import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Literal
+
+import httpx
 
 logger = logging.getLogger("restaurant_api.integrations.line")
 
@@ -122,45 +123,139 @@ class StubLineMessenger(LineMessenger):
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Phase-2 HTTP implementation skeleton — DO NOT USE IN PROD WITHOUT WIRING
+# Message serialization + transport error
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def line_message_payload(message: LineMessage) -> dict[str, object]:
+    """Serialize a ``LineMessage`` into a LINE Messaging API message object.
+
+    ``text`` → ``{"type": "text", ...}``; ``flex``/``template`` wrap the
+    caller-supplied ``payload`` and use ``text`` as the required alt-text.
+    """
+    if message.kind == "text":
+        return {"type": "text", "text": message.text}
+    if message.kind == "flex":
+        return {
+            "type": "flex",
+            "altText": message.text,
+            "contents": message.payload or {},
+        }
+    if message.kind == "template":
+        return {
+            "type": "template",
+            "altText": message.text,
+            "template": message.payload or {},
+        }
+    raise ValueError(f"unsupported LINE message kind: {message.kind!r}")
+
+
+class LineApiError(RuntimeError):
+    """Raised when the LINE Messaging API returns a non-2xx response.
+
+    Carries the status code and (truncated) body so the best-effort push
+    wrappers at call sites log something actionable.
+    """
+
+    def __init__(self, status: int, body: str, path: str) -> None:
+        self.status = status
+        self.body = body
+        self.path = path
+        super().__init__(f"LINE API {path} failed: HTTP {status}: {body[:300]}")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Phase-2 HTTP implementation — real LINE Messaging API
 # ──────────────────────────────────────────────────────────────────────────
 
 
 @dataclass
 class HttpLineMessenger(LineMessenger):
-    """Real LINE Messaging API back-end.
+    """Real LINE Messaging API back-end (api.line.me/v2/bot).
 
-    Phase-2 deliverable. Skeleton here so the production wiring lives in
-    one obvious place when we switch.
+    Outbound push/reply/multicast authenticate with the channel access
+    token alone; ``channel_secret`` is only needed by the (separate)
+    inbound webhook signature check, so it is optional here.
 
-    Required env: ``LINE_CHANNEL_ACCESS_TOKEN``, ``LINE_CHANNEL_SECRET``.
+    A single ``httpx.AsyncClient`` is created lazily and reused for the
+    process lifetime; ``transport`` lets tests inject ``httpx.MockTransport``.
     """
 
     channel_access_token: str
-    channel_secret: str
+    channel_secret: str = ""
     base_url: str = "https://api.line.me/v2/bot"
+    timeout_seconds: float = 10.0
+    transport: httpx.BaseTransport | None = None
+    _client: httpx.AsyncClient | None = field(default=None, repr=False, compare=False)
 
     @classmethod
     def from_env(cls) -> HttpLineMessenger:
-        token = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")
-        secret = os.environ.get("LINE_CHANNEL_SECRET", "")
-        if not token or not secret:
-            raise RuntimeError(
-                "LINE_CHANNEL_ACCESS_TOKEN and LINE_CHANNEL_SECRET must be set"
+        """Build from Settings (which reads both the OS env and ``.env``)."""
+        from ...config import get_settings
+
+        settings = get_settings()
+        token = settings.line_channel_access_token
+        if not token:
+            raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN must be set")
+        return cls(
+            channel_access_token=token,
+            channel_secret=settings.line_channel_secret,
+        )
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self.timeout_seconds,
+                headers={"Authorization": f"Bearer {self.channel_access_token}"},
+                transport=self.transport,  # type: ignore[arg-type]
             )
-        return cls(channel_access_token=token, channel_secret=secret)
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the underlying client (call on app shutdown / in tests)."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
+    async def _post(self, path: str, body: dict[str, object]) -> None:
+        resp = await self._get_client().post(path, json=body)
+        if resp.status_code >= 400:
+            raise LineApiError(resp.status_code, resp.text, path)
 
     async def push(self, line_user_id: str, message: LineMessage) -> None:
-        # Phase 2 implementation: httpx.AsyncClient.post(f"{base_url}/message/push", ...)
-        raise NotImplementedError("HttpLineMessenger.push wired up in Phase 2")
-
-    async def broadcast(self, audience: BroadcastAudience, message: LineMessage) -> int:
-        # Phase 2: query customers by tier/tag, then push in batches of 500.
-        raise NotImplementedError("HttpLineMessenger.broadcast wired up in Phase 2")
+        await self._post(
+            "/message/push",
+            {"to": line_user_id, "messages": [line_message_payload(message)]},
+        )
 
     async def reply(self, reply_token: str, message: LineMessage) -> None:
-        # Phase 2: httpx.AsyncClient.post(f"{base_url}/message/reply", ...)
-        raise NotImplementedError("HttpLineMessenger.reply wired up in Phase 2")
+        await self._post(
+            "/message/reply",
+            {"replyToken": reply_token, "messages": [line_message_payload(message)]},
+        )
+
+    async def broadcast(self, audience: BroadcastAudience, message: LineMessage) -> int:
+        """Multicast to ``audience.explicit_user_ids`` in batches of 500.
+
+        Tier/tag → user_id resolution is a DB concern owned by the caller
+        (e.g. the membership-lifecycle job already resolves recipients and
+        calls ``push`` per member), so a tier/tag-only audience is rejected
+        here rather than silently dropped.
+        """
+        recipients = list(audience.explicit_user_ids)
+        if not recipients:
+            raise NotImplementedError(
+                "HttpLineMessenger.broadcast requires explicit_user_ids; "
+                "resolve tiers/tags to user ids in the caller before broadcasting"
+            )
+        payload = line_message_payload(message)
+        delivered = 0
+        for start in range(0, len(recipients), 500):
+            batch = recipients[start : start + 500]
+            await self._post("/message/multicast", {"to": batch, "messages": [payload]})
+            delivered += len(batch)
+        return delivered
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -174,13 +269,15 @@ _singleton: LineMessenger | None = None
 def get_messenger() -> LineMessenger:
     """Return the process-wide messenger.
 
-    Phase 1: ``StubLineMessenger`` (records, no network).
-    Phase 2: switch to ``HttpLineMessenger.from_env()`` once
-    LINE_CHANNEL_ACCESS_TOKEN is populated in the deploy env.
+    Returns the real ``HttpLineMessenger`` when ``LINE_CHANNEL_ACCESS_TOKEN``
+    is configured (via OS env or ``.env``), otherwise the in-memory
+    ``StubLineMessenger`` used in dev and tests.
     """
     global _singleton
     if _singleton is None:
-        if os.environ.get("LINE_CHANNEL_ACCESS_TOKEN"):
+        from ...config import get_settings
+
+        if get_settings().line_channel_access_token:
             _singleton = HttpLineMessenger.from_env()
         else:
             _singleton = StubLineMessenger()
