@@ -1,0 +1,32 @@
+{
+  "size": { "width": 2500, "height": 1686 },
+  "selected": true,
+  "name": "周霸虎-主選單-v1",
+  "chatBarText": "點我看優惠 ▾",
+  "areas": [
+    {
+      "bounds": { "x": 0, "y": 0, "width": 833, "height": 843 },
+      "action": { "type": "uri", "label": "開幕輪盤抽獎", "uri": "https://your-domain.tw/demo/?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8" }
+    },
+    {
+      "bounds": { "x": 833, "y": 0, "width": 834, "height": 843 },
+      "action": { "type": "uri", "label": "招牌菜單", "uri": "https://your-domain.tw/menu" }
+    },
+    {
+      "bounds": { "x": 1667, "y": 0, "width": 833, "height": 843 },
+      "action": { "type": "uri", "label": "線上訂位", "uri": "https://your-domain.tw/booking" }
+    },
+    {
+      "bounds": { "x": 0, "y": 843, "width": 833, "height": 843 },
+      "action": { "type": "uri", "label": "我的會員集點", "uri": "https://your-domain.tw/member" }
+    },
+    {
+      "bounds": { "x": 833, "y": 843, "width": 834, "height": 843 },
+      "action": { "type": "uri", "label": "線上點餐外帶", "uri": "https://your-domain.tw/order" }
+    },
+    {
+      "bounds": { "x": 1667, "y": 843, "width": 833, "height": 843 },
+      "action": { "type": "uri", "label": "品牌官網", "uri": "https://your-domain.tw" }
+    }
+  ]
+}

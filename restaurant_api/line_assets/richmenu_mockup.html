@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>周霸虎 — 圖文選單視覺稿 (2500×1686)</title>
+<style>
+  :root{ --bg:#1b1033; --line:#3a1d6e; --accent:#ffd34e; --accent2:#ff5d8f; --text:#f4f0ff; --muted:#b6a8da; }
+  *{ box-sizing:border-box; margin:0; }
+  body{ background:#0d0820; display:grid; place-items:center; min-height:100vh; padding:24px;
+        font-family:"PingFang TC","Noto Sans TC",system-ui,sans-serif; }
+  .hint{ color:#8a7bbf; font-size:14px; margin-bottom:14px; text-align:center; }
+  /* 2500x1686 等比縮放預覽 */
+  .menu{ width:1000px; height:674.4px; background:
+      radial-gradient(120% 100% at 50% 0%, #3a1d6e 0%, var(--bg) 60%);
+      display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(2,1fr);
+      border-radius:18px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.6);
+      border:2px solid var(--line); }
+  .cell{ position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center;
+         gap:8px; padding:18px; border-right:2px solid var(--line); border-bottom:2px solid var(--line);
+         text-align:center; }
+  .cell:nth-child(3n){ border-right:0; }
+  .cell:nth-child(n+4){ border-bottom:0; }
+  .ico{ font-size:58px; line-height:1; filter:drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+  .title{ color:var(--accent); font-weight:900; font-size:26px; }
+  .sub{ color:var(--muted); font-size:15px; }
+  .badge{ position:absolute; top:14px; right:14px; background:var(--accent2); color:#2a0e1f;
+          font-weight:900; font-size:12px; padding:3px 10px; border-radius:999px; }
+  .c1{ background:linear-gradient(160deg, rgba(255,93,143,.18), transparent 60%); }
+</style>
+</head>
+<body>
+  <div>
+    <div class="hint">圖文選單視覺稿 · 實際輸出 2500×1686 PNG（此預覽為 1000px 等比縮小）</div>
+    <div class="menu">
+      <div class="cell c1"><span class="badge">天天抽</span><div class="ico">🎡</div><div class="title">開幕輪盤抽獎</div><div class="sub">每日一抽大獎</div></div>
+      <div class="cell"><div class="ico">🍲</div><div class="title">招牌菜單</div><div class="sub">看菜色 / 價格</div></div>
+      <div class="cell"><div class="ico">📅</div><div class="title">線上訂位</div><div class="sub">快速訂位免等</div></div>
+      <div class="cell"><div class="ico">🎁</div><div class="title">會員 / 集點</div><div class="sub">我的獎品錢包</div></div>
+      <div class="cell"><div class="ico">🛵</div><div class="title">線上點餐</div><div class="sub">外帶免排隊</div></div>
+      <div class="cell"><div class="ico">🏠</div><div class="title">品牌官網</div><div class="sub">最新消息</div></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+{
+  "messages": [
+    {
+      "type": "flex",
+      "altText": "🎡 開幕輪盤・天天抽！和牛、免單套餐等你拿",
+      "contents": {
+        "type": "bubble",
+        "size": "mega",
+        "hero": {
+          "type": "image",
+          "url": "https://your-domain.tw/static/img/campaign_hero.jpg",
+          "size": "full",
+          "aspectRatio": "20:13",
+          "aspectMode": "cover",
+          "action": { "type": "uri", "uri": "https://your-domain.tw/demo/?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8" }
+        },
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#1b1033",
+          "paddingAll": "20px",
+          "contents": [
+            { "type": "text", "text": "🎡 開幕輪盤・天天抽", "weight": "bold", "size": "xl", "color": "#ffd34e", "wrap": true },
+            { "type": "text", "text": "盛大開幕回饋！每天都能轉一次：", "size": "sm", "color": "#f4f0ff", "wrap": true, "margin": "md" },
+            {
+              "type": "box", "layout": "vertical", "margin": "md", "spacing": "sm",
+              "contents": [
+                { "type": "text", "text": "🥇 免單四人套餐", "size": "sm", "color": "#f4f0ff" },
+                { "type": "text", "text": "🥩 和牛一盤", "size": "sm", "color": "#f4f0ff" },
+                { "type": "text", "text": "🍽️ 雙人套餐", "size": "sm", "color": "#f4f0ff" },
+                { "type": "text", "text": "🥤 招待飲料一杯", "size": "sm", "color": "#f4f0ff" }
+              ]
+            },
+            { "type": "text", "text": "中獎自動進會員錢包，來店出示即可兌換。", "size": "xs", "color": "#b6a8da", "wrap": true, "margin": "md" }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#1b1033",
+          "spacing": "sm",
+          "paddingAll": "16px",
+          "contents": [
+            {
+              "type": "button", "style": "primary", "color": "#ff5d8f", "height": "md",
+              "action": { "type": "uri", "label": "🎡 立即抽獎", "uri": "https://your-domain.tw/demo/?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8" }
+            },
+            {
+              "type": "button", "style": "link", "height": "sm",
+              "action": { "type": "uri", "label": "看官網更多優惠 ▶", "uri": "https://your-domain.tw" }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

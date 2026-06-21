@@ -1,0 +1,40 @@
+{
+  "messages": [
+    {
+      "type": "flex",
+      "altText": "🎁 周霸虎會員集點・好禮天天換",
+      "contents": {
+        "type": "bubble",
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#1b1033",
+          "paddingAll": "20px",
+          "contents": [
+            { "type": "text", "text": "🎁 周霸虎會員集點", "weight": "bold", "size": "xl", "color": "#ffd34e", "wrap": true },
+            { "type": "text", "text": "每次消費累積點數，點數可折抵或換招牌好禮：", "size": "sm", "color": "#f4f0ff", "wrap": true, "margin": "md" },
+            {
+              "type": "box", "layout": "vertical", "margin": "md", "spacing": "sm",
+              "contents": [
+                { "type": "text", "text": "・消費 NT$1 ＝ 1 點", "size": "sm", "color": "#f4f0ff" },
+                { "type": "text", "text": "・生日當月送專屬好禮", "size": "sm", "color": "#f4f0ff" },
+                { "type": "text", "text": "・抽獎中獎自動進錢包", "size": "sm", "color": "#f4f0ff" }
+              ]
+            }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#1b1033",
+          "spacing": "sm",
+          "paddingAll": "16px",
+          "contents": [
+            { "type": "button", "style": "primary", "color": "#ff5d8f", "height": "md", "action": { "type": "uri", "label": "🎁 我的會員錢包", "uri": "https://your-domain.tw/member" } },
+            { "type": "button", "style": "link", "height": "sm", "action": { "type": "uri", "label": "官網看更多 ▶", "uri": "https://your-domain.tw" } }
+          ]
+        }
+      }
+    }
+  ]
+}

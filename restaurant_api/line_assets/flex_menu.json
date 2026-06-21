@@ -1,0 +1,76 @@
+{
+  "messages": [
+    {
+      "type": "flex",
+      "altText": "🍲 周霸虎招牌菜單 — 鍋底 / 肉品 / 海鮮",
+      "contents": {
+        "type": "carousel",
+        "contents": [
+          {
+            "type": "bubble",
+            "size": "kilo",
+            "hero": { "type": "image", "url": "https://your-domain.tw/static/img/menu_pot.jpg", "size": "full", "aspectRatio": "1:1", "aspectMode": "cover" },
+            "body": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#2a1b4a", "paddingAll": "14px",
+              "contents": [
+                { "type": "text", "text": "🍲 招牌鍋底", "weight": "bold", "color": "#ffd34e", "size": "md" },
+                { "type": "text", "text": "霸虎麻辣鍋・老火鍋・養生菌菇", "size": "xs", "color": "#f4f0ff", "wrap": true, "margin": "sm" },
+                { "type": "text", "text": "NT$xxx 起", "size": "sm", "color": "#46d39a", "margin": "sm" }
+              ]
+            },
+            "footer": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#2a1b4a", "paddingAll": "12px",
+              "contents": [ { "type": "button", "style": "primary", "color": "#ff5d8f", "height": "sm", "action": { "type": "uri", "label": "線上訂位", "uri": "https://your-domain.tw/booking" } }, { "type": "button", "style": "link", "height": "sm", "action": { "type": "uri", "label": "完整菜單", "uri": "https://your-domain.tw/menu" } } ]
+            }
+          },
+          {
+            "type": "bubble",
+            "size": "kilo",
+            "hero": { "type": "image", "url": "https://your-domain.tw/static/img/menu_beef.jpg", "size": "full", "aspectRatio": "1:1", "aspectMode": "cover" },
+            "body": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#2a1b4a", "paddingAll": "14px",
+              "contents": [
+                { "type": "text", "text": "🥩 嚴選肉品", "weight": "bold", "color": "#ffd34e", "size": "md" },
+                { "type": "text", "text": "澳洲和牛・霜降牛・梅花豬", "size": "xs", "color": "#f4f0ff", "wrap": true, "margin": "sm" },
+                { "type": "text", "text": "NT$xxx 起", "size": "sm", "color": "#46d39a", "margin": "sm" }
+              ]
+            },
+            "footer": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#2a1b4a", "paddingAll": "12px",
+              "contents": [ { "type": "button", "style": "primary", "color": "#ff5d8f", "height": "sm", "action": { "type": "uri", "label": "線上訂位", "uri": "https://your-domain.tw/booking" } }, { "type": "button", "style": "link", "height": "sm", "action": { "type": "uri", "label": "完整菜單", "uri": "https://your-domain.tw/menu" } } ]
+            }
+          },
+          {
+            "type": "bubble",
+            "size": "kilo",
+            "hero": { "type": "image", "url": "https://your-domain.tw/static/img/menu_seafood.jpg", "size": "full", "aspectRatio": "1:1", "aspectMode": "cover" },
+            "body": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#2a1b4a", "paddingAll": "14px",
+              "contents": [
+                { "type": "text", "text": "🦐 海鮮 / 手工", "weight": "bold", "color": "#ffd34e", "size": "md" },
+                { "type": "text", "text": "活蝦・蛤蜊・手工花枝漿・鴨血", "size": "xs", "color": "#f4f0ff", "wrap": true, "margin": "sm" },
+                { "type": "text", "text": "NT$xxx 起", "size": "sm", "color": "#46d39a", "margin": "sm" }
+              ]
+            },
+            "footer": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#2a1b4a", "paddingAll": "12px",
+              "contents": [ { "type": "button", "style": "primary", "color": "#ff5d8f", "height": "sm", "action": { "type": "uri", "label": "線上訂位", "uri": "https://your-domain.tw/booking" } }, { "type": "button", "style": "link", "height": "sm", "action": { "type": "uri", "label": "完整菜單", "uri": "https://your-domain.tw/menu" } } ]
+            }
+          },
+          {
+            "type": "bubble",
+            "size": "kilo",
+            "body": {
+              "type": "box", "layout": "vertical", "backgroundColor": "#1b1033", "paddingAll": "18px", "justifyContent": "center",
+              "contents": [
+                { "type": "text", "text": "🏠", "size": "xxl", "align": "center", "color": "#ffd34e" },
+                { "type": "text", "text": "看完整菜單與最新優惠", "weight": "bold", "color": "#f4f0ff", "size": "md", "align": "center", "wrap": true, "margin": "md" },
+                { "type": "button", "style": "primary", "color": "#ff5d8f", "height": "md", "margin": "lg", "action": { "type": "uri", "label": "前往官網", "uri": "https://your-domain.tw" } }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
