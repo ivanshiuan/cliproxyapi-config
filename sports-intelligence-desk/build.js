@@ -19,8 +19,8 @@ const js = JS_ORDER.map(f => `/* === ${f} === */\n` + read(f)).join("\n");
 let html = read("index.html")
   // 外部 css → 內嵌 <style>
   .replace(/<link rel="stylesheet"[^>]*>/, "<style>\n" + css + "\n</style>")
-  // 移除 manifest（單檔離線用不到）
-  .replace(/<link rel="manifest"[^>]*>\s*/g, "")
+  // 移除其餘所有 <link>（manifest / icon / apple-touch-icon — 單檔離線用不到）
+  .replace(/<link\b[^>]*>\s*/g, "")
   // 移除 6 支外部 <script src>
   .replace(/<script src="js\/[^"]*"><\/script>\s*/g, "")
   // service worker 註冊區塊 → 換成內嵌全部 JS
@@ -40,7 +40,7 @@ console.log(`✓ ${path.relative(ROOT, out)} (${(fs.statSync(out).size / 1024).t
 
 /* ---------- dist/site/ ：Cloudflare Pages 上傳根目錄（只含執行檔） ----------
  * 乾淨、不含 qa.js / backtest_sim.js / build.js / docs / deploy —— 避免測試碼外洩。 */
-const SITE_FILES = ["index.html", "manifest.webmanifest", "sw.js"];
+const SITE_FILES = ["index.html", "manifest.webmanifest", "sw.js", "icon.svg"];
 const SITE_DIRS = ["css", "js"];
 const siteDir = path.join(outDir, "site");
 fs.rmSync(siteDir, { recursive: true, force: true });

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sports Intelligence Desk">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10151f"/>
+      <stop offset="1" stop-color="#0a0e14"/>
+    </linearGradient>
+    <linearGradient id="ln" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1dd882"/>
+      <stop offset="1" stop-color="#4da3ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#243042" stroke-width="4"/>
+  <!-- ascending alpha/edge line -->
+  <polyline points="96,360 188,300 256,332 360,176 416,140"
+    fill="none" stroke="url(#ln)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="416" cy="140" r="22" fill="#1dd882"/>
+  <!-- baseline ticks -->
+  <g fill="#5b6675">
+    <rect x="92" y="392" width="56" height="10" rx="5"/>
+    <rect x="170" y="392" width="56" height="10" rx="5"/>
+    <rect x="248" y="392" width="56" height="10" rx="5"/>
+    <rect x="326" y="392" width="56" height="10" rx="5"/>
+  </g>
+  <text x="256" y="468" text-anchor="middle" font-family="SF Mono,monospace" font-size="58" font-weight="800" fill="#e6edf3" letter-spacing="6">SID</text>
+</svg>

@@ -1,7 +1,7 @@
 /* SID Terminal — offline cache (PWA) */
-const CACHE = "sid-v3";
+const CACHE = "sid-v4";
 const ASSETS = [
-  "./", "./index.html", "./manifest.webmanifest",
+  "./", "./index.html", "./manifest.webmanifest", "./icon.svg",
   "./css/terminal.css", "./js/data.js", "./js/history.js",
   "./js/engine.js", "./js/backtest.js", "./js/live.js", "./js/app.js",
 ];
