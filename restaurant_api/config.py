@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     # ─── Logging ────────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
+    # ─── LINE Messaging ─────────────────────────────────────────────────
+    # Read the UNPREFIXED env vars (no RESTO_ prefix) so there is a single
+    # source of truth shared with HttpLineMessenger.from_env(), which also
+    # reads LINE_CHANNEL_ACCESS_TOKEN / LINE_CHANNEL_SECRET. Empty in dev:
+    # the outbound messenger falls back to the stub, and the inbound webhook
+    # refuses requests until the secret is configured.
+    line_channel_access_token: str = Field(
+        default="", validation_alias="LINE_CHANNEL_ACCESS_TOKEN"
+    )
+    line_channel_secret: str = Field(default="", validation_alias="LINE_CHANNEL_SECRET")
+
     @property
     def database_url(self) -> str:
         """asyncpg DSN."""
