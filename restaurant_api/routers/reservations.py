@@ -18,7 +18,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query, status
 
-from ..api.deps import DbSession, TenantId
+from ..api.deps import DbSession, Messenger, TenantId
 from ..models import QueueStatus, ReservationStatus
 from ..schemas.reservations import (
     QueueEntryResponse,
@@ -112,9 +112,10 @@ async def patch_reservation_status(
     payload: ReservationStatusPatch,
     session: DbSession,
     tenant_id: TenantId,
+    messenger: Messenger,
 ) -> ReservationResponse:
     return await reservation_service.patch_reservation_status(
-        session, reservation_id, payload, tenant_id=tenant_id
+        session, reservation_id, payload, tenant_id=tenant_id, messenger=messenger
     )
 
 
@@ -172,9 +173,10 @@ async def patch_queue_status(
     payload: QueueStatusPatch,
     session: DbSession,
     tenant_id: TenantId,
+    messenger: Messenger,
 ) -> QueueEntryResponse:
     return await reservation_service.patch_queue_status(
-        session, queue_id, payload, tenant_id=tenant_id
+        session, queue_id, payload, tenant_id=tenant_id, messenger=messenger
     )
 
 
