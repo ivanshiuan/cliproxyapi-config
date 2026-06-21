@@ -1,0 +1,7 @@
+name = "sid-live-proxy"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# 部署前用 secret 設定 key（不要寫在這裡）：
+#   wrangler secret put APIFOOTBALL_KEY
+#   wrangler secret put FOOTBALLDATA_KEY
