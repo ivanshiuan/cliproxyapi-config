@@ -47,6 +47,7 @@ def _convert_one(md, src: Path) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """解析旗標、逐檔轉成 Markdown，回傳退出碼（全成功 0、任一失敗 1）。"""
     parser = argparse.ArgumentParser(
         description="Convert files to Markdown for token-efficient reading.",
     )
