@@ -8,7 +8,21 @@ webhook. See https://developers.line.biz/en/reference/messaging-api/#webhooks
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Annotated, Any
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+
+def _reject_float(v: Any) -> Any:
+    """Reject float inputs so an epoch-ms timestamp can't be silently coerced.
+
+    Mirrors the project-wide "never trust a float at the boundary" rule
+    (see CLAUDE.md). ``bool`` is an ``int`` subclass we don't expect here,
+    but LINE only ever sends an integer, so a plain float guard is enough.
+    """
+    if isinstance(v, float):
+        raise ValueError("timestamp must be an integer, not a float")
+    return v
 
 
 class LineSource(BaseModel):
@@ -47,7 +61,7 @@ class LineWebhookEvent(BaseModel):
 
     type: str  # "message" | "follow" | "unfollow" | "postback" | ...
     reply_token: str | None = Field(default=None, alias="replyToken")
-    timestamp: int | None = None
+    timestamp: Annotated[int | None, BeforeValidator(_reject_float)] = None
     source: LineSource | None = None
     message: LineEventMessage | None = None
     postback: LinePostback | None = None

@@ -33,11 +33,11 @@ from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, Request, status
+from pydantic import ValidationError
 
+from ..api.deps import get_line_channel_secret, get_line_messenger
 from ..api.errors import DomainError
-from ..config import get_settings
 from ..integrations.line import LineMessenger
-from ..integrations.line import get_messenger as _get_messenger
 from ..schemas.line import LineWebhookBody, LineWebhookEvent
 
 logger = logging.getLogger("restaurant_api.integrations.line")
@@ -64,19 +64,21 @@ class WebhookNotConfiguredError(DomainError):
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
 
+class InvalidWebhookPayloadError(DomainError):
+    """Signature was valid but the JSON body didn't match the LINE schema."""
+
+    code = "INVALID_LINE_WEBHOOK_PAYLOAD"
+    status_code = status.HTTP_400_BAD_REQUEST
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # DI seams
 # ──────────────────────────────────────────────────────────────────────────
-
-
-def get_line_channel_secret() -> str:
-    """The HMAC key for signature verification (empty until configured)."""
-    return get_settings().line_channel_secret
-
-
-def get_webhook_messenger() -> LineMessenger:
-    """Outbound messenger a handler may reply/push with."""
-    return _get_messenger()
+#
+# The channel-secret and outbound-messenger providers live in ``api/deps.py``
+# (the project's central DI module) and are imported above. The event-handler
+# seam stays here because its default (`log_event`) is this router's concern;
+# moving it to deps would create a router⇄deps import cycle.
 
 
 async def log_event(event: LineWebhookEvent, messenger: LineMessenger) -> None:
@@ -91,7 +93,8 @@ async def log_event(event: LineWebhookEvent, messenger: LineMessenger) -> None:
             "line_event_type": event.type,
             "line_message_type": event.message.type if event.message else None,
             "has_reply_token": event.reply_token is not None,
-            "line_user_id": event.source.user_id if event.source else None,
+            # Presence only — the raw LINE user id is PII and must not hit logs.
+            "has_line_user_id": bool(event.source and event.source.user_id),
         },
     )
 
@@ -103,7 +106,7 @@ def get_event_handler() -> LineEventHandler:
 
 SecretDep = Annotated[str, Depends(get_line_channel_secret)]
 HandlerDep = Annotated[LineEventHandler, Depends(get_event_handler)]
-MessengerDep = Annotated[LineMessenger, Depends(get_webhook_messenger)]
+MessengerDep = Annotated[LineMessenger, Depends(get_line_messenger)]
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -147,7 +150,12 @@ async def line_webhook(
     body = await request.body()
     verify_signature(secret, body, x_line_signature)
 
-    payload = LineWebhookBody.model_validate_json(body)
+    try:
+        payload = LineWebhookBody.model_validate_json(body)
+    except ValidationError as exc:
+        # Signature proved the sender, but the body is malformed — answer with
+        # the standard error envelope (400) instead of leaking a 500.
+        raise InvalidWebhookPayloadError("Malformed LINE webhook payload") from exc
     for event in payload.events:
         await handler(event, messenger)
 
@@ -156,10 +164,9 @@ async def line_webhook(
 
 __all__ = [
     "InvalidSignatureError",
+    "InvalidWebhookPayloadError",
     "WebhookNotConfiguredError",
     "get_event_handler",
-    "get_line_channel_secret",
-    "get_webhook_messenger",
     "log_event",
     "router",
     "verify_signature",

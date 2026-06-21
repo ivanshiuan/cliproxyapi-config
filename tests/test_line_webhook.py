@@ -17,14 +17,13 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from restaurant_api.api.deps import get_line_channel_secret, get_line_messenger
 from restaurant_api.api.errors import DomainError, domain_error_handler
 from restaurant_api.integrations.line import StubLineMessenger
 from restaurant_api.routers.line_webhook import (
     InvalidSignatureError,
     WebhookNotConfiguredError,
     get_event_handler,
-    get_line_channel_secret,
-    get_webhook_messenger,
     router,
     verify_signature,
 )
@@ -50,7 +49,7 @@ def _build_app(*, secret: str = SECRET, handler=None):
         captured.append(event)
 
     app.dependency_overrides[get_line_channel_secret] = lambda: secret
-    app.dependency_overrides[get_webhook_messenger] = lambda: StubLineMessenger()
+    app.dependency_overrides[get_line_messenger] = lambda: StubLineMessenger()
     app.dependency_overrides[get_event_handler] = lambda: (handler or _capture)
     return app, captured
 
@@ -188,4 +187,34 @@ async def test_webhook_empty_events_handled_zero():
         )
     assert resp.status_code == 200
     assert resp.json()["handled"] == 0
+    assert captured == []
+
+
+async def test_webhook_malformed_payload_returns_400():
+    # Correctly signed, but `events` is the wrong shape — the body is proven to
+    # come from LINE, so we answer with the standard 400 envelope, not a 500.
+    app, captured = _build_app()
+    body = b'{"events":"not-a-list"}'
+    async with _client(app) as c:
+        resp = await c.post(
+            "/line/webhook", content=body, headers={"X-Line-Signature": _sign(SECRET, body)}
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_LINE_WEBHOOK_PAYLOAD"
+    assert captured == []
+
+
+async def test_webhook_float_timestamp_rejected_400():
+    # A float epoch timestamp must not be silently coerced — schema rejects it,
+    # which surfaces as the same 400 payload-error envelope.
+    app, captured = _build_app()
+    body = json.dumps(
+        {"events": [{"type": "message", "timestamp": 1.5}]}
+    ).encode("utf-8")
+    async with _client(app) as c:
+        resp = await c.post(
+            "/line/webhook", content=body, headers={"X-Line-Signature": _sign(SECRET, body)}
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "INVALID_LINE_WEBHOOK_PAYLOAD"
     assert captured == []
