@@ -43,6 +43,15 @@ def get_line_messenger() -> LineMessenger:
     return _get_messenger()
 
 
+def get_line_channel_secret() -> str:
+    """HMAC key for inbound LINE webhook signature verification.
+
+    Empty until ``LINE_CHANNEL_SECRET`` is configured, in which case the
+    webhook refuses requests (503) rather than accept unverifiable events.
+    """
+    return get_settings().line_channel_secret
+
+
 def get_current_tenant_id(
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-Id")] = None,
 ) -> uuid.UUID:
@@ -74,5 +83,6 @@ __all__ = [
     "TenantId",
     "get_current_tenant_id",
     "get_db",
+    "get_line_channel_secret",
     "get_line_messenger",
 ]
