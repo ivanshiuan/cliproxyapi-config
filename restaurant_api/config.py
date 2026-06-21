@@ -6,9 +6,27 @@ All settings read from environment (and `.env` if present, loaded by FastAPI lif
 from __future__ import annotations
 
 from functools import lru_cache
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _with_driver(dsn: str, driver: str) -> str:
+    """Normalize a PaaS-style ``DATABASE_URL`` to a SQLAlchemy DSN.
+
+    Cloud hosts emit ``postgres://`` or ``postgresql://`` (no SQLAlchemy driver).
+    We force the right driver (``asyncpg`` for the app, ``psycopg`` for Alembic).
+    asyncpg does not understand libpq query params like ``sslmode`` — it would
+    raise ``invalid dsn`` — so we drop the query for asyncpg (SSL, when needed,
+    is negotiated by the engine). psycopg understands ``sslmode`` so we keep it.
+    """
+    parts = urlsplit(dsn)
+    scheme = parts.scheme.split("+", 1)[0]  # postgres / postgresql
+    if scheme in {"postgres", "postgresql"}:
+        scheme = "postgresql"
+    query = "" if driver == "asyncpg" else parts.query
+    return urlunsplit((f"{scheme}+{driver}", parts.netloc, parts.path, query, parts.fragment))
 
 
 class Settings(BaseSettings):
@@ -26,6 +44,13 @@ class Settings(BaseSettings):
     app_name: str = "Restaurant API"
 
     # ─── Database ───────────────────────────────────────────────────────
+    # Cloud hosts (Render / Railway / Neon / Fly) inject a single connection
+    # string as DATABASE_URL. When set it wins over the discrete db_* fields
+    # below, so the same image runs locally (db_* / .env) and in the cloud
+    # (DATABASE_URL) with no code change. Community env name, so no RESTO_
+    # prefix — matches what every PaaS sets out of the box.
+    database_dsn: str = Field(default="", validation_alias="DATABASE_URL")
+
     db_host: str = "localhost"
     db_port: int = 5432
     db_user: str = "resto"
@@ -85,7 +110,9 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """asyncpg DSN."""
+        """asyncpg DSN (app runtime). Honors DATABASE_URL when present."""
+        if self.database_dsn:
+            return _with_driver(self.database_dsn, "asyncpg")
         return (
             f"postgresql+asyncpg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
@@ -98,6 +125,8 @@ class Settings(BaseSettings):
         We standardize on psycopg2-style URL because Alembic's `run_migrations_online`
         helper expects a sync engine. The `+psycopg` driver is in alembic env.py.
         """
+        if self.database_dsn:
+            return _with_driver(self.database_dsn, "psycopg")
         return (
             f"postgresql+psycopg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"

@@ -1,0 +1,55 @@
+# Render Blueprint — 一鍵部署「周霸虎」餐飲後端 + 開幕輪盤
+#
+# 正式 / 最快 / 免費：
+#   • 一個免費 web 服務（Docker）＋ 一個免費 Postgres，同一平台、免信用卡
+#   • 推上 GitHub 這個分支 → Render 自動建置部署 → 固定 HTTPS 網址
+#   • 啟動時自動跑 migration + 建立開幕輪盤活動（idempotent，重啟不重複）
+#
+# 用法：
+#   1. 到 https://dashboard.render.com → New → Blueprint
+#   2. 連結 GitHub repo: ivanshiuan/cliproxyapi-config（分支 launch-wheel-game-campaign）
+#   3. Render 讀到本檔，自動建立 web + db
+#   4. 在 web 服務的 Environment 填入 LINE_CHANNEL_ACCESS_TOKEN（其餘自動產生）
+#   5. Deploy → 拿到 https://chouhutiger-xxxx.onrender.com
+#
+# 注意：免費方案閒置會休眠，首次喚醒約 30 秒；免費 Postgres 有效期較短，
+#       正式長跑可隨時升級付費方案（不需改任何程式）。
+
+databases:
+  - name: resto-db
+    plan: free
+    region: singapore
+    databaseName: resto
+    user: resto
+
+services:
+  - type: web
+    name: chouhutiger
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: restaurant_api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health/live
+    # 綁定 Render 給的 $PORT；先跑 migration + seed 再起服務。
+    dockerCommand: >-
+      sh -c "cd /app/restaurant_api && alembic upgrade head &&
+      cd /app && python scripts/seed_wheel_campaign.py || true &&
+      exec uvicorn restaurant_api.main:app --host 0.0.0.0 --port $PORT
+      --proxy-headers --forwarded-allow-ips '*'"
+    envVars:
+      # 雲端 Postgres 連線字串：自動從上面的 resto-db 注入（內網、免 SSL 設定）
+      - key: DATABASE_URL
+        fromDatabase:
+          name: resto-db
+          property: connectionString
+      # 店長後台密碼 / session 簽章祕鑰：Render 自動產生強隨機值
+      - key: RESTO_ADMIN_PASSCODE
+        generateValue: true
+      - key: RESTO_SESSION_SECRET
+        generateValue: true
+      # LINE 推播金鑰：手動填（你已經有的那把 channel access token）
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: RESTO_ENV
+        value: prod
