@@ -1,6 +1,26 @@
 # SPORTS INTELLIGENCE DESK — 交接文件（HANDOFF）
 
-> 最後更新：2026-06-20 ｜ 分支：`claude/sports-intelligence-desk-dayved`
+> 最後更新：2026-06-21 ｜ 分支：`claude/sports-intelligence-desk-dayved`
+
+---
+
+## 📌 2026-06-21 深度復盤 + UIUX 升級（PR #2）
+
+**做了什麼**
+- UIUX 全版位升級（`terminal.css` v2：玻璃質感/漸層/發光等級/進場動畫，類別名相容、邏輯零改）
+- PWA 圖示 `icon.svg`（manifest any+maskable、index、sw v4、build 納入）
+- 回應 CodeRabbit 三輪審查共 **18 條全修並 resolve**（安全/XSS/健全性/lint/文件一致性）
+- **深度復盤**再抓到 `esc()` 套用不一致（戰術/歷史/設定頁），已補齊
+
+**驗證**：`node qa.js 100` → **14900/14900**；backtest 可複現；clean-clone build 通過；CSS 括號平衡。
+
+**誠實揭露的殘留風險（非 bug）**
+1. **UI 像素級/RWD 實機**：此環境無瀏覽器，QA 只證明 HTML 渲染乾淨，無法保證版面 → 需開單檔或部署後實機驗收。
+2. **模型真實 Alpha**：Edge 資訊量<50%、純模型未贏市場（僅 A5 集成贏）、評級衡量價差非準度 → 須賽後回填 `SID.results` 累積。
+3. **Live 面**：只更新賽程/比分/傷病狀態，其餘 curated。
+4. **CI `Test (Python 3.12)` 紅燈**：既有、與本 JS PR 無關（`restaurant_api` 缺 `apscheduler`，pyright 失敗）。
+
+**待辦（使用者動作）**：① Cloudflare 部署 `498-win.pages.dev` ② merge PR #2。
 > 一句話：把每場球賽當「即將開盤的資產」，輸出「真實機率 vs 市場價格的落差(Alpha)」的純前端投研系統。
 
 ---
