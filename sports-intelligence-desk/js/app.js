@@ -212,21 +212,21 @@
     const ts = a.tacScore;
     h += `<div class="card"><div class="section-title" style="margin-top:0">戰術對位（A4 量化）</div>
       <div class="memo">
-      <div class="kv"><b>戰術分</b><span>${ts.score>0?'+':''}${ts.score.toFixed(2)}（利 ${ts.favors}）</span></div>
-      <p class="muted">${a.home.name}：${a.home.style}</p>
-      <p class="muted">${a.away.name}：${a.away.style}</p>
-      <ul>` + a.tac.map(t => `<li>${t}</li>`).join("") +
-      (ts.drivers.length ? `</ul><div class="tiny">量化因子：${ts.drivers.join("；")}</div>` : `</ul>`) +
+      <div class="kv"><b>戰術分</b><span>${ts.score>0?'+':''}${ts.score.toFixed(2)}（利 ${esc(ts.favors)}）</span></div>
+      <p class="muted">${esc(a.home.name)}：${esc(a.home.style)}</p>
+      <p class="muted">${esc(a.away.name)}：${esc(a.away.style)}</p>
+      <ul>` + a.tac.map(t => `<li>${esc(t)}</li>`).join("") +
+      (ts.drivers.length ? `</ul><div class="tiny">量化因子：${ts.drivers.map(esc).join("；")}</div>` : `</ul>`) +
       `</div></div>`;
 
     // 歷史交手 + 大賽戰績
     if (a.hist) {
       h += `<div class="card"><div class="section-title" style="margin-top:0">歷史交手 + 大賽戰績</div>
         <div class="memo">
-        <div class="kv"><b>歷史交手</b><span style="text-align:right;max-width:60%">${a.hist.h2h.summary}</span></div>`;
-      if (a.hist.homePedigree) h += `<div class="kv"><b>${a.home.name} 世界盃</b><span>${a.hist.homePedigree.best}・底蘊 ${a.hist.homePedigree.pedigree}</span></div>`;
-      if (a.hist.awayPedigree) h += `<div class="kv"><b>${a.away.name} 世界盃</b><span>${a.hist.awayPedigree.best}・底蘊 ${a.hist.awayPedigree.pedigree}</span></div>`;
-      h += `<ul>` + a.hist.notes.map(n => `<li>${n}</li>`).join("") + `</ul></div></div>`;
+        <div class="kv"><b>歷史交手</b><span style="text-align:right;max-width:60%">${esc(a.hist.h2h.summary)}</span></div>`;
+      if (a.hist.homePedigree) h += `<div class="kv"><b>${esc(a.home.name)} 世界盃</b><span>${esc(a.hist.homePedigree.best)}・底蘊 ${a.hist.homePedigree.pedigree}</span></div>`;
+      if (a.hist.awayPedigree) h += `<div class="kv"><b>${esc(a.away.name)} 世界盃</b><span>${esc(a.hist.awayPedigree.best)}・底蘊 ${a.hist.awayPedigree.pedigree}</span></div>`;
+      h += `<ul>` + a.hist.notes.map(n => `<li>${esc(n)}</li>`).join("") + `</ul></div></div>`;
     }
 
     // 市場盤口
@@ -457,7 +457,7 @@
     return `<div class="wrap">
       <div class="section-title" style="margin-top:0">資料來源</div>
       <div class="card">${liveBadge}
-        <div class="tiny" style="margin-top:8px">${SID.meta.source}</div></div>
+        <div class="tiny" style="margin-top:8px">${esc(SID.meta.source)}</div></div>
 
       <div class="section-title">Live 對接（Path C）</div>
       <div class="card"><div class="memo">
@@ -467,9 +467,9 @@
             <option value="footballdata"${c.provider==="footballdata"?" selected":""}>football-data.org</option>
             <option value="thesportsdb"${c.provider==="thesportsdb"?" selected":""}>TheSportsDB</option>
           </select></span></div>
-        <div class="kv"><b>API Key</b><span><input id="cfg-key" value="${c.key||""}" placeholder="直連時填；用 Worker 則留空"
+        <div class="kv"><b>API Key</b><span><input id="cfg-key" value="${esc(c.key||"")}" placeholder="直連時填；用 Worker 則留空"
           style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px;width:160px"></span></div>
-        <div class="kv"><b>Proxy（解 CORS）</b><span><input id="cfg-proxy" value="${c.proxy||""}" placeholder="https://worker.dev/?u="
+        <div class="kv"><b>Proxy（解 CORS）</b><span><input id="cfg-proxy" value="${esc(c.proxy||"")}" placeholder="https://worker.dev/?u="
           style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px;width:160px"></span></div>
         <div class="kv"><b>Season</b><span><input id="cfg-season" value="${c.season||2026}"
           style="background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:4px;width:80px"></span></div>
