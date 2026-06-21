@@ -26,8 +26,9 @@ import pytest_asyncio  # type: ignore[import-not-found]
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from restaurant_api.api.deps import get_current_tenant_id, get_db
+from restaurant_api.integrations.line import StubLineMessenger
 from restaurant_api.main import app
-from restaurant_api.models import Store, Tenant
+from restaurant_api.models import Customer, Store, Tenant
 
 pytestmark = pytest.mark.asyncio
 
@@ -312,3 +313,131 @@ async def test_idempotent_repost_same_status_returns_409(
     )
     assert twice.status_code == 409
     assert "already" in twice.json()["error"]["message"].lower()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# LINE notifications on status change (fire-and-forget)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def _line_customer(
+    db_session: AsyncSession, tenant_id: uuid.UUID, line_user_id: str
+) -> Customer:
+    cust = Customer(tenant_id=tenant_id, display_name="客", line_user_id=line_user_id)
+    db_session.add(cust)
+    await db_session.flush()
+    return cust
+
+
+def _pushes_to(stub_messenger: StubLineMessenger, line_id: str) -> list[str]:
+    return [
+        m["message"].text  # type: ignore[union-attr]
+        for m in stub_messenger.sent_messages
+        if m.get("op") == "push" and m.get("to") == line_id
+    ]
+
+
+async def test_confirm_reservation_pushes_line_to_line_customer(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_tenant: Tenant,
+    seed_store: Store,
+    stub_messenger: StubLineMessenger,
+) -> None:
+    line_id = f"U{uuid.uuid4().hex[:16]}"
+    cust = await _line_customer(db_session, seed_tenant.id, line_id)
+    create = await client.post(
+        "/reservations", json=_booking_payload(seed_store.id, customer_id=str(cust.id))
+    )
+    rid = create.json()["id"]
+
+    resp = await client.patch(
+        f"/reservations/{rid}/status", json={"status": "confirmed"}
+    )
+    assert resp.status_code == 200
+
+    pushes = _pushes_to(stub_messenger, line_id)
+    assert len(pushes) == 1
+    assert "訂位確認" in pushes[0]
+
+
+async def test_confirm_reservation_no_push_without_line_user(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_tenant: Tenant,
+    seed_store: Store,
+    stub_messenger: StubLineMessenger,
+) -> None:
+    # Customer exists but isn't a LINE user (matched by phone) → no push.
+    cust = Customer(tenant_id=seed_tenant.id, display_name="客")
+    db_session.add(cust)
+    await db_session.flush()
+    create = await client.post(
+        "/reservations", json=_booking_payload(seed_store.id, customer_id=str(cust.id))
+    )
+    rid = create.json()["id"]
+
+    resp = await client.patch(
+        f"/reservations/{rid}/status", json={"status": "confirmed"}
+    )
+    assert resp.status_code == 200
+    assert stub_messenger.sent_messages == []
+
+
+async def test_confirm_reservation_no_push_for_anonymous_booking(
+    client: httpx.AsyncClient,
+    seed_store: Store,
+    stub_messenger: StubLineMessenger,
+) -> None:
+    # Phone booking with no customer_id at all → nothing to push to.
+    create = await client.post("/reservations", json=_booking_payload(seed_store.id))
+    rid = create.json()["id"]
+    resp = await client.patch(
+        f"/reservations/{rid}/status", json={"status": "confirmed"}
+    )
+    assert resp.status_code == 200
+    assert stub_messenger.sent_messages == []
+
+
+async def test_queue_called_pushes_line_to_line_customer(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_tenant: Tenant,
+    seed_store: Store,
+    stub_messenger: StubLineMessenger,
+) -> None:
+    line_id = f"U{uuid.uuid4().hex[:16]}"
+    cust = await _line_customer(db_session, seed_tenant.id, line_id)
+    create = await client.post(
+        "/queue", json=_queue_payload(seed_store.id, customer_id=str(cust.id))
+    )
+    qid = create.json()["id"]
+
+    resp = await client.patch(f"/queue/{qid}/status", json={"status": "called"})
+    assert resp.status_code == 200
+
+    pushes = _pushes_to(stub_messenger, line_id)
+    assert len(pushes) == 1
+    assert "候位通知" in pushes[0]
+    assert "A-12" in pushes[0]  # queue_no echoed into the message
+
+
+async def test_queue_seated_does_not_push(
+    client: httpx.AsyncClient,
+    db_session: AsyncSession,
+    seed_tenant: Tenant,
+    seed_store: Store,
+    stub_messenger: StubLineMessenger,
+) -> None:
+    # Only the CALLED transition notifies; SEATED is silent.
+    line_id = f"U{uuid.uuid4().hex[:16]}"
+    cust = await _line_customer(db_session, seed_tenant.id, line_id)
+    create = await client.post(
+        "/queue", json=_queue_payload(seed_store.id, customer_id=str(cust.id))
+    )
+    qid = create.json()["id"]
+    await client.patch(f"/queue/{qid}/status", json={"status": "called"})
+    stub_messenger.sent_messages.clear()  # drop the call notification
+
+    await client.patch(f"/queue/{qid}/status", json={"status": "seated"})
+    assert _pushes_to(stub_messenger, line_id) == []

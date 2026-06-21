@@ -15,14 +15,18 @@ Boundary rules (same pattern as the other services in this repo):
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError
+from ..integrations.line import LineMessage, LineMessenger
 from ..models import (
+    Customer,
     QueueStatus,
     Reservation,
     ReservationStatus,
@@ -39,6 +43,44 @@ from ..schemas.reservations import (
     ReservationStatusPatch,
 )
 from .audit_service import audit
+
+logger = logging.getLogger("restaurant_api.integrations.line")
+_TPE = ZoneInfo("Asia/Taipei")
+
+
+async def _notify_customer(
+    session: AsyncSession,
+    *,
+    customer_id: uuid.UUID | None,
+    tenant_id: uuid.UUID,
+    text: str,
+    messenger: LineMessenger | None,
+) -> None:
+    """Fire-and-forget LINE push tied to a reservation / queue status change.
+
+    No-op when there's no messenger, no linked customer, or that customer
+    isn't a LINE user (front-of-house matched them by phone). A LINE failure
+    is logged but never blocks the status transition — same contract as the
+    order-close receipt push.
+    """
+    if messenger is None or customer_id is None:
+        return
+    customer = (
+        await session.execute(
+            select(Customer).where(
+                Customer.id == customer_id,
+                Customer.tenant_id == tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if customer is None or not customer.line_user_id:
+        return
+    try:
+        await messenger.push(customer.line_user_id, LineMessage(kind="text", text=text))
+    except Exception as exc:
+        logger.warning(
+            "reservation.line_push_failed customer_id=%s err=%s", customer_id, exc
+        )
 
 # ──────────────────────────────────────────────────────────────────────────
 # Reservations
@@ -124,6 +166,7 @@ async def patch_reservation_status(
     payload: ReservationStatusPatch,
     *,
     tenant_id: uuid.UUID,
+    messenger: LineMessenger | None = None,
 ) -> ReservationResponse:
     row = await _load_reservation(session, reservation_id, tenant_id)
     _check_reservation_transition(row.status, payload.status)
@@ -157,6 +200,24 @@ async def patch_reservation_status(
         after={"status": payload.status.value},
         reason=payload.reason,
     )
+
+    # Notify the guest when the booking is confirmed. ASCII punctuation only
+    # (RUF002 flags full-width marks in source strings).
+    if payload.status == ReservationStatus.CONFIRMED:
+        local = row.reserved_for.astimezone(_TPE)
+        await _notify_customer(
+            session,
+            customer_id=row.customer_id,
+            tenant_id=tenant_id,
+            text=(
+                f"[訂位確認] {row.contact_name} 您好,\n"
+                f"您 {row.party_size} 位的訂位已確認.\n"
+                f"時間: {local:%Y-%m-%d %H:%M}\n"
+                f"期待您的光臨!"
+            ),
+            messenger=messenger,
+        )
+
     return ReservationResponse.model_validate(row)
 
 
@@ -222,6 +283,7 @@ async def patch_queue_status(
     payload: QueueStatusPatch,
     *,
     tenant_id: uuid.UUID,
+    messenger: LineMessenger | None = None,
 ) -> QueueEntryResponse:
     row = await _load_queue_entry(session, queue_id, tenant_id)
     _check_queue_transition(row.status, payload.status)
@@ -251,6 +313,22 @@ async def patch_queue_status(
         after={"status": payload.status.value},
         reason=payload.reason,
     )
+
+    # Notify the guest when their table is called. ASCII punctuation only.
+    if payload.status == QueueStatus.CALLED:
+        label = f" (號碼 {row.queue_no})" if row.queue_no else ""
+        await _notify_customer(
+            session,
+            customer_id=row.customer_id,
+            tenant_id=tenant_id,
+            text=(
+                f"[候位通知] {row.contact_name} 您好,\n"
+                f"您的桌位已準備好{label},\n"
+                f"請於 5 分鐘內至櫃台報到, 謝謝!"
+            ),
+            messenger=messenger,
+        )
+
     return QueueEntryResponse.model_validate(row)
 
 
