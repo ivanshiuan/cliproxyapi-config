@@ -34,6 +34,21 @@ from anthropic import APIError, APIStatusError, APITimeoutError, RateLimitError
 
 from .config import Config, estimate_cost_usd
 
+# Newer Anthropic models (Opus 4.7+, Fable) deprecate the `temperature`
+# parameter and the API returns a 400 if it is sent. Older models
+# (Sonnet 4.6, Haiku 4.5) still accept it. We only forward `temperature`
+# for models known to support it.
+_TEMPERATURE_UNSUPPORTED_PREFIXES = (
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-fable-",
+)
+
+
+def _model_accepts_temperature(model: str) -> bool:
+    """Return True if the model still accepts the `temperature` parameter."""
+    return not model.startswith(_TEMPERATURE_UNSUPPORTED_PREFIXES)
+
 
 @dataclass
 class Usage:
@@ -171,10 +186,11 @@ def call(
             kwargs: dict[str, Any] = {
                 "model": model,
                 "max_tokens": max_tokens,
-                "temperature": temperature,
                 "system": _build_system_blocks(system, cache_system),
                 "messages": messages,
             }
+            if _model_accepts_temperature(model):
+                kwargs["temperature"] = temperature
             if tools:
                 kwargs["tools"] = tools
             response = client.messages.create(**kwargs)
