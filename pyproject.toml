@@ -120,6 +120,7 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/seed_growth_demo.py" = ["RUF001"]
 "scripts/line_check.py" = ["RUF001"]
 "scripts/wheel_uxtest.py" = ["RUF001"]
+"scripts/wheel_reset_for_launch.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"

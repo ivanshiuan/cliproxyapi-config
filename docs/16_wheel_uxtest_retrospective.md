@@ -113,3 +113,23 @@
 
 **流程與引擎本身：可上線、體驗順、邏輯穩**（0 跳轉、1 點擊、配額/限抽/核銷/權限/錢包全部正確）。
 **上線前三件事**：① 接 LIFF 免打字 ② 幫和牛加配額上限 ③ 重置被壓測污染的獎項計數。
+
+---
+
+## 七、本次已套用的修正（2026-06-21）
+
+| 修正 | 做法 | 狀態 |
+|---|---|---|
+| ① LIFF 免打字 | `static/index.html` 加 `initLiff()`：有 `?liff=<id>` 時自動抓 LINE `userId`+`displayName` 並隱藏輸入框；無則維持 demo 手動輸入（向下相容） | ✅ 已實作 |
+| ② 和牛配額上限 | `seed_wheel_campaign.py` 的和牛 `total_quota` 改 40；既有活動用 `wheel_reset_for_launch.py` 套用 | ✅ 已套用（上限=40） |
+| ③ 重置壓測污染 | `scripts/wheel_reset_for_launch.py`：清測試券/抽獎、`awarded_count` 歸零、套用上線配額 | ✅ 已執行 |
+
+### 如何正式啟用 LIFF（你需要做的唯一一步）
+1. LINE Developers → 你的 channel → **LIFF** → Add，Endpoint URL 填 `https://<你的網址>/demo/`，size 選 `Full`。
+2. 拿到 **LIFF ID**（形如 `1657……-AbCdEfGh`）。
+3. 把圖文選單 / Flex 的抽獎連結改成：
+   `https://liff.line.me/<LIFF_ID>?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8`
+   （或 `https://<你的網址>/demo/?campaign=…&liff=<LIFF_ID>`）
+4. 會員從 LINE 點進來 → 自動登入、自動帶身分 → **一個字都不用打**，按一下就抽。
+
+> 沒填 LIFF ID 一切照舊（手動/demo），所以本機與外部瀏覽器測試不受影響。

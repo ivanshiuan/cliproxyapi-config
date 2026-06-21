@@ -143,10 +143,16 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 const API = ""; // same-origin
 const qs = new URLSearchParams(location.search);
 const campaignId = qs.get("campaign");
+// LIFF id makes the page auto-read the member's real LINE identity (zero typing).
+// Provide it via ?liff=<id> (rich-menu links to https://liff.line.me/<id>?campaign=…).
+// Absent → falls back to the manual/demo input below, so local demos still work.
+const LIFF_ID = qs.get("liff") || "";
+let liffActive = false;
 let segments = [];           // [{id, name, sort_order}]
 let customerId = null;
 let spinning = false;
@@ -178,13 +184,33 @@ function toast(msg) {
 function showErr(msg) { $("err").textContent = msg || ""; }
 
 // Restore a stable demo member across reloads so "每日一抽" behaves.
-(function initMember() {
+function initDemoMember() {
   let saved = sessionStorage.getItem("wheel_demo_member");
   if (!saved) { saved = "U" + Math.random().toString(16).slice(2, 18); sessionStorage.setItem("wheel_demo_member", saved); }
   $("memberId").value = saved;
   $("memberName").value = sessionStorage.getItem("wheel_demo_name") || "輪盤玩家";
   customerId = sessionStorage.getItem("wheel_demo_customer_" + campaignId) || null;
-})();
+}
+
+// Production path: pull the member's real LINE userId + displayName from LIFF so
+// they type NOTHING. On success we hide the manual id/name card entirely.
+async function initLiff() {
+  if (!LIFF_ID || !window.liff) return false;
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return true; } // redirects back, re-runs
+    const p = await liff.getProfile();
+    $("memberId").value = p.userId;
+    $("memberName").value = p.displayName || "輪盤會員";
+    $("memberCard").style.display = "none"; // no typing — identity is automatic
+    liffActive = true;
+    customerId = sessionStorage.getItem("wheel_demo_customer_" + campaignId) || null;
+    return true;
+  } catch (e) {
+    showErr("LINE 登入失敗，改用手動輸入：" + (e && e.message ? e.message : e));
+    return false;
+  }
+}
 
 async function api(path, opts) {
   const res = await fetch(API + path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts));
@@ -317,7 +343,12 @@ async function loadWallet() {
 function statusLabel(s){ return {active:"可用", redeemed:"已核銷", expired:"已過期", void:"作廢"}[s] || s; }
 
 $("spinBtn").addEventListener("click", doSpin);
-loadWheel();
+
+(async function boot() {
+  await initLiff();                       // production: auto identity via LINE
+  if (!liffActive) initDemoMember();      // fallback: manual/demo input
+  loadWheel();
+})();
 </script>
 </body>
 </html>
