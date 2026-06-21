@@ -45,9 +45,11 @@ from ..models import (
 from ..schemas.campaigns import (
     CampaignCreate,
     CampaignResponse,
+    CampaignStats,
     CampaignUpdate,
     PrizeCreate,
     PrizeResponse,
+    PrizeStat,
     PrizeUpdate,
     PrizeWon,
     SpinRequest,
@@ -941,8 +943,106 @@ async def _reject_duplicate_slug(
         )
 
 
+async def campaign_stats(
+    session: AsyncSession, campaign_id: uuid.UUID, *, tenant_id: uuid.UUID
+) -> CampaignStats:
+    """Aggregate a campaign's engagement + voucher funnel for the 店長 dashboard.
+
+    Three scoped reads: spins (count / unique players / wins in one pass),
+    vouchers grouped by status (count + value), and the prize table for the
+    per-segment distribution. All filtered by ``tenant_id``; 404 if the
+    campaign is missing or soft-deleted.
+    """
+    campaign = await _load_campaign(session, campaign_id, tenant_id)
+
+    total_spins, unique_players, winning_spins = (
+        await session.execute(
+            select(
+                func.count(CampaignSpin.id),
+                func.count(func.distinct(CampaignSpin.customer_id)),
+                func.count(CampaignSpin.id).filter(CampaignSpin.won.is_(True)),
+            ).where(
+                CampaignSpin.campaign_id == campaign_id,
+                CampaignSpin.tenant_id == tenant_id,
+            )
+        )
+    ).one()
+
+    counts: dict[VoucherStatus, int] = {}
+    values: dict[VoucherStatus, Decimal] = {}
+    rows = (
+        await session.execute(
+            select(
+                CampaignVoucher.status,
+                func.count(CampaignVoucher.id),
+                func.coalesce(func.sum(CampaignVoucher.value_estimate), 0),
+            )
+            .where(
+                CampaignVoucher.campaign_id == campaign_id,
+                CampaignVoucher.tenant_id == tenant_id,
+            )
+            .group_by(CampaignVoucher.status)
+        )
+    ).all()
+    for status_, n, value_sum in rows:
+        counts[status_] = n
+        values[status_] = Decimal(value_sum)
+    minted = sum(counts.values())
+    redeemed = counts.get(VoucherStatus.REDEEMED, 0)
+
+    prize_rows = (
+        (
+            await session.execute(
+                select(CampaignPrize)
+                .where(
+                    CampaignPrize.campaign_id == campaign_id,
+                    CampaignPrize.tenant_id == tenant_id,
+                    CampaignPrize.deleted_at.is_(None),
+                )
+                .order_by(CampaignPrize.sort_order, CampaignPrize.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    prizes = [
+        PrizeStat(
+            prize_id=p.id,
+            name=p.name,
+            value_estimate=p.value_estimate,
+            awarded_count=p.awarded_count,
+            total_quota=p.total_quota,
+            remaining=(
+                None if p.total_quota is None else max(p.total_quota - p.awarded_count, 0)
+            ),
+            is_active=p.is_active,
+        )
+        for p in prize_rows
+    ]
+
+    return CampaignStats(
+        campaign_id=campaign.id,
+        name=campaign.name,
+        status=campaign.status,
+        total_spins=total_spins,
+        unique_players=unique_players,
+        winning_spins=winning_spins,
+        win_rate=round(winning_spins / total_spins, 4) if total_spins else 0.0,
+        vouchers_minted=minted,
+        vouchers_active=counts.get(VoucherStatus.ACTIVE, 0),
+        vouchers_redeemed=redeemed,
+        vouchers_expired=counts.get(VoucherStatus.EXPIRED, 0),
+        vouchers_void=counts.get(VoucherStatus.VOID, 0),
+        redemption_rate=round(redeemed / minted, 4) if minted else 0.0,
+        value_redeemed=values.get(VoucherStatus.REDEEMED, Decimal("0")),
+        value_outstanding=values.get(VoucherStatus.ACTIVE, Decimal("0")),
+        prizes=prizes,
+    )
+
+
 __all__ = [
     "add_prize",
+    "campaign_stats",
     "create_campaign",
     "get_campaign",
     "get_voucher_by_code",

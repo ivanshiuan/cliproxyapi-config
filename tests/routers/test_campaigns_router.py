@@ -599,6 +599,65 @@ async def test_spin_and_redeem_full_loop_http(
     assert redeem.json()["status"] == "redeemed"
 
 
+async def test_campaign_stats_dashboard_http(
+    client: httpx.AsyncClient, seed_menu_item: MenuItem
+) -> None:
+    """Two players spin a single-prize (always-win) wheel; one redeems. The
+    stats endpoint reports engagement, the voucher funnel, and prize spend.
+    """
+    cid = (
+        await client.post(
+            "/campaigns", json={"name": "成效測試", "slug": _slug(), "status": "active"}
+        )
+    ).json()["id"]
+    await client.post(
+        f"/campaigns/{cid}/prizes",
+        json={
+            "name": "和牛一盤",
+            "weight": 1,
+            "value_estimate": "500",
+            "menu_item_id": str(seed_menu_item.id),
+        },
+    )
+
+    voucher_ids = []
+    for _ in range(2):  # two distinct members
+        body = (
+            await client.post(
+                f"/campaigns/{cid}/spin",
+                json={"line_user_id": f"U{uuid.uuid4().hex[:16]}", "display_name": "客"},
+            )
+        ).json()
+        voucher_ids.append(body["voucher"]["id"])
+
+    # One of the two redeems → funnel: 2 minted, 1 redeemed, 1 active.
+    redeem = await client.post(f"/campaigns/{cid}/vouchers/{voucher_ids[0]}/redeem", json={})
+    assert redeem.status_code == 200, redeem.text
+
+    stats = await client.get(f"/campaigns/{cid}/stats")
+    assert stats.status_code == 200, stats.text
+    s = stats.json()
+
+    assert s["total_spins"] == 2
+    assert s["unique_players"] == 2
+    assert s["winning_spins"] == 2
+    assert s["win_rate"] == 1.0
+    assert s["vouchers_minted"] == 2
+    assert s["vouchers_redeemed"] == 1
+    assert s["vouchers_active"] == 1
+    assert s["redemption_rate"] == 0.5
+    assert Decimal(str(s["value_redeemed"])) == Decimal("500")
+    assert Decimal(str(s["value_outstanding"])) == Decimal("500")
+    assert len(s["prizes"]) == 1
+    assert s["prizes"][0]["awarded_count"] == 2
+    assert s["prizes"][0]["remaining"] is None  # uncapped
+
+
+async def test_campaign_stats_unknown_campaign_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get(f"/campaigns/{uuid.uuid4()}/stats")
+    assert resp.status_code == 404
+
+
 async def test_spin_requires_member_identity_http(client: httpx.AsyncClient) -> None:
     create = await client.post(
         "/campaigns", json={"name": "X", "slug": _slug(), "status": "active"}

@@ -294,6 +294,61 @@ class VoucherRedeemRequest(BaseModel):
 SpinResponse.model_rebuild()
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Results dashboard (店長 成效儀表板)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class PrizeStat(BaseModel):
+    """Per-prize draw outcome — how many of each segment have been awarded,
+    and (when capped) how many remain. Surfaces which prizes are running dry.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    prize_id: UUID
+    name: str
+    value_estimate: Decimal
+    awarded_count: int
+    total_quota: int | None  # None = unlimited
+    remaining: int | None  # None = unlimited; else max(quota - awarded, 0)
+    is_active: bool
+
+
+class CampaignStats(BaseModel):
+    """A campaign's results at a glance: engagement (spins / players / win
+    rate) and the voucher funnel (minted → redeemed/expired), plus the
+    realised vs. outstanding prize value so the 店長 sees both spend and
+    open liability.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    campaign_id: UUID
+    name: str
+    status: CampaignStatus
+
+    # Engagement
+    total_spins: int
+    unique_players: int
+    winning_spins: int
+    win_rate: float  # winning_spins / total_spins (0 when no spins)
+
+    # Voucher funnel
+    vouchers_minted: int
+    vouchers_active: int
+    vouchers_redeemed: int
+    vouchers_expired: int
+    vouchers_void: int
+    redemption_rate: float  # redeemed / minted (0 when none minted)
+
+    # Money — realised prize spend vs. still-open wallet liability
+    value_redeemed: Decimal
+    value_outstanding: Decimal
+
+    prizes: list[PrizeStat]
+
+
 __all__ = [
     "CampaignCreate",
     "CampaignResponse",

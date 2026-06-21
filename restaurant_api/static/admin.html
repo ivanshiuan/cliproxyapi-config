@@ -53,6 +53,17 @@
     font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:50; }
   .toast.show { opacity:1; }
   .links a { color:var(--accent); font-size:13px; margin-right:14px; }
+  .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .stat { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .stat b { display:block; font-size:22px; line-height:1.1; }
+  .stat span { color:var(--muted); font-size:11px; }
+  .funnel { display:flex; height:10px; border-radius:6px; overflow:hidden; margin:12px 0 6px; background:var(--panel2); }
+  .funnel i { display:block; height:100%; }
+  .fr { background:var(--good); }       /* redeemed */
+  .fa { background:var(--accent); }     /* active */
+  .fe { background:#ffa8a8; }           /* expired */
+  .legend span { font-size:11px; color:var(--muted); margin-right:12px; }
+  .legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; vertical-align:middle; }
   .big { font-size:22px; font-weight:800; }
   .hint { font-size:11px; color:var(--muted); margin-top:4px; }
 </style>
@@ -230,6 +241,12 @@ async function renderDetail(){
   </div>
 
   <div class="card" style="margin:0 0 16px">
+    <h2><span class="dot"></span>活動成效 <span class="muted">（即時）</span>
+      <button class="ghost sm" style="float:right" onclick="loadStats()">↻ 重新整理</button></h2>
+    <div id="statsBox"><div class="empty">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin:0 0 16px">
     <h2><span class="dot"></span>輪盤獎項 <span class="muted">（weight 越高越常中；大獎用低 weight + total_quota 控管）</span></h2>
     ${prizes.length? `<table>
       <tr><th>獎項</th><th>權重</th><th>中獎機率</th><th>價值</th><th>配額</th><th>已發</th><th></th></tr>
@@ -263,6 +280,36 @@ async function renderDetail(){
     </div>
     <div id="voucherBox" style="margin-top:12px"></div>
   </div>`;
+  loadStats();
+}
+
+async function loadStats(){
+  const box=$("statsBox"); if(!box||!CUR) return;
+  let s; try{ s=await api(`/campaigns/${CUR.id}/stats`); }
+  catch(e){ box.innerHTML=`<div class="empty">讀取失敗：${esc(e.message)}</div>`; return; }
+  const pct=v=>(v*100).toFixed(v?1:0)+"%";
+  const minted=s.vouchers_minted||1;  // avoid /0 for bar widths
+  const w=n=>(n/minted*100).toFixed(2)+"%";
+  box.innerHTML=`
+    <div class="stats-grid">
+      <div class="stat"><b>${s.total_spins}</b><span>總抽獎次數</span></div>
+      <div class="stat"><b>${s.unique_players}</b><span>參與人數</span></div>
+      <div class="stat"><b>${pct(s.win_rate)}</b><span>中獎率</span></div>
+      <div class="stat"><b>${pct(s.redemption_rate)}</b><span>核銷率</span></div>
+      <div class="stat"><b>${money(s.value_redeemed)}</b><span>已核銷獎品價值</span></div>
+      <div class="stat"><b>${money(s.value_outstanding)}</b><span>未核銷負債（流通中）</span></div>
+    </div>
+    <div class="funnel" title="券漏斗：已發 ${s.vouchers_minted} 張">
+      <i class="fr" style="width:${w(s.vouchers_redeemed)}"></i>
+      <i class="fa" style="width:${w(s.vouchers_active)}"></i>
+      <i class="fe" style="width:${w(s.vouchers_expired)}"></i>
+    </div>
+    <div class="legend">
+      <span><i class="fr"></i>已核銷 ${s.vouchers_redeemed}</span>
+      <span><i class="fa"></i>可用 ${s.vouchers_active}</span>
+      <span><i class="fe"></i>已過期 ${s.vouchers_expired}</span>
+      <span>共發出 ${s.vouchers_minted} 張</span>
+    </div>`;
 }
 
 async function setStatus(s){

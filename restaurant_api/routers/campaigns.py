@@ -37,6 +37,7 @@ from ..qr import make_qr_svg
 from ..schemas.campaigns import (
     CampaignCreate,
     CampaignResponse,
+    CampaignStats,
     CampaignUpdate,
     PrizeCreate,
     PrizeResponse,
@@ -131,6 +132,24 @@ async def patch_campaign(
     return await campaigns_service.patch_campaign(
         session, campaign_id, payload, tenant_id=tenant_id
     )
+
+
+# ── Results dashboard (店長 成效儀表板) ──────────────────────────────────────
+
+
+@router.get(
+    "/{campaign_id}/stats",
+    response_model=CampaignStats,
+    summary="活動成效 (抽獎數 / 參與人數 / 中獎率 / 兌換漏斗 / 獎項分佈)",
+    dependencies=_ADMIN,
+)
+async def get_campaign_stats(
+    campaign_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CampaignStats:
+    """Aggregate engagement + voucher funnel + per-prize distribution."""
+    return await campaigns_service.campaign_stats(session, campaign_id, tenant_id=tenant_id)
 
 
 # ── Prizes ─────────────────────────────────────────────────────────────────
