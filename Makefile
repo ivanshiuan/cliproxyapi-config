@@ -144,6 +144,14 @@ seed: install ## Seed demo restaurant data (1 tenant, 1 store, 5 employees, 12 m
 seed-reset: install ## Wipe seed tenant first, then seed fresh
 	$(PY) scripts/seed_demo_data.py --reset
 
+.PHONY: wheel-demo
+wheel-demo: install ## Seed an active 開幕輪盤 campaign and print the demo URL (then `make api`)
+	$(PY) scripts/seed_wheel_campaign.py
+
+.PHONY: growth-demo
+growth-demo: install ## Seed the full 成長飛輪 demo (儲值/裂變/UGC/RFM) and print the dashboards
+	$(PY) scripts/seed_growth_demo.py
+
 .PHONY: demo-flow
 demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳→報廢→員工餐→下班→彙總)
 	$(PY) scripts/demo_flow.py
@@ -184,9 +192,9 @@ jobs: install ## Run the background-job scheduler (expiry warning, points expire
 	$(PY) -m restaurant_api.jobs
 
 .PHONY: jobs-once
-jobs-once: install ## Run all 3 nightly jobs once and exit (for cron-style external schedulers)
-	$(PY) -c "import asyncio; from restaurant_api.jobs import run_expiry_warning, run_points_expire, run_cogs_variance_check; \
-		asyncio.run(run_expiry_warning()); asyncio.run(run_points_expire()); asyncio.run(run_cogs_variance_check())"
+jobs-once: install ## Run all nightly jobs once and exit (for cron-style external schedulers)
+	$(PY) -c "import asyncio; from restaurant_api.jobs import run_expiry_warning, run_points_expire, run_campaign_voucher_expiry, run_cogs_variance_check; \
+		asyncio.run(run_expiry_warning()); asyncio.run(run_points_expire()); asyncio.run(run_campaign_voucher_expiry()); asyncio.run(run_cogs_variance_check())"
 
 .PHONY: openapi
 openapi: install ## Export OpenAPI 3 schema to openapi.json (regenerate any time)

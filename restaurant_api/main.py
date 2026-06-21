@@ -12,22 +12,28 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .api import auth as auth_router
 from .api import health as health_router
 from .api.errors import DomainError, domain_error_handler
 from .config import get_settings
 from .database import dispose_engine
 from .middleware import RequestContextMiddleware, configure_logging
+from .routers import campaigns as campaigns_router
 from .routers import clock as clock_router
 from .routers import customers as customers_router
 from .routers import events as events_router
 from .routers import kitchen as kitchen_router
+from .routers import membership as membership_router
 from .routers import orders as orders_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
+from .routers import ugc as ugc_router
 from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
 
 logger = logging.getLogger("restaurant_api")
@@ -87,6 +93,9 @@ _mount_router(clock_router, "/clock")
 _mount_router(events_router, "/events")
 _mount_router(kitchen_router, "/kitchen")
 _mount_router(customers_router, "/customers")
+_mount_router(campaigns_router, "/campaigns")
+_mount_router(ugc_router, "/ugc")
+_mount_router(membership_router, "/membership")
 # Reservations module exports two routers (one per prefix); mount each with
 # the path-based idempotency guard.
 if not any(getattr(r, "path", "").startswith("/reservations") for r in app.routes):
@@ -94,6 +103,14 @@ if not any(getattr(r, "path", "").startswith("/reservations") for r in app.route
 if not any(getattr(r, "path", "").startswith("/queue") for r in app.routes):
     app.include_router(reservations_router.queue_router)
 app.include_router(health_router.router)
+if not any(getattr(r, "path", "").startswith("/admin") for r in app.routes):
+    app.include_router(auth_router.router)
+
+# Static wheel-spin demo page (門口 QR Code 指向 /demo/?campaign=<id>). Same-origin
+# with the API so no CORS is needed. Mounted last so it can't shadow API routes.
+_STATIC_DIR = Path(__file__).parent / "static"
+if _STATIC_DIR.is_dir():
+    app.mount("/demo", StaticFiles(directory=str(_STATIC_DIR), html=True), name="demo")
 
 
 @app.get("/version", tags=["meta"])

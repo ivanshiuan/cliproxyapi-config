@@ -16,9 +16,24 @@ from .base import (
     TimestampedMixin,
     uuid7,
 )
+from .campaigns import (
+    CampaignPrize,
+    CampaignSpin,
+    CampaignStatus,
+    CampaignVoucher,
+    MarketingCampaign,
+    VoucherStatus,
+)
 from .cash import CashDrawerSession
 from .cost_events import StaffMealEvent, TastingEvent, WasteEvent
-from .customers import Customer, CustomerPointsLedger, CustomerTier
+from .customers import (
+    Customer,
+    CustomerPointsLedger,
+    CustomerStoredValueLedger,
+    CustomerTier,
+    Referral,
+    ReferralStatus,
+)
 from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
@@ -46,6 +61,7 @@ from .reservations import (
 )
 from .stores import Store
 from .tenants import Tenant
+from .ugc import UgcKind, UgcStatus, UgcSubmission
 
 __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readability
     # base / shared
@@ -107,6 +123,19 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "Customer",
     "CustomerTier",
     "CustomerPointsLedger",
+    "CustomerStoredValueLedger",
+    "Referral",
+    "ReferralStatus",
+    "UgcKind",
+    "UgcStatus",
+    "UgcSubmission",
+    # marketing campaigns (wheel-spin lottery)
+    "MarketingCampaign",
+    "CampaignStatus",
+    "CampaignPrize",
+    "CampaignSpin",
+    "CampaignVoucher",
+    "VoucherStatus",
     # embeddings (AI data asset seed)
     "Embedding",
     "VECTOR_DIM",

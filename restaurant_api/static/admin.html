@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>店長後台 · 開幕輪盤抽獎</title>
+<style>
+  :root {
+    --bg:#16101f; --panel:#1f1730; --panel2:#272036; --line:#382c52;
+    --accent:#ffd34e; --accent2:#ff5d8f; --good:#46d39a; --bad:#ff6b6b;
+    --text:#f4f0ff; --muted:#9d8fc4;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"PingFang TC","Noto Sans TC",system-ui,sans-serif;
+    background:var(--bg); color:var(--text); }
+  header { padding:14px 20px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:12px; position:sticky; top:0; background:var(--bg); z-index:10; }
+  header h1 { font-size:18px; margin:0; }
+  header .tag { font-size:12px; color:var(--muted); }
+  .grid { display:grid; grid-template-columns:320px 1fr; gap:16px; padding:16px; max-width:1200px; margin:0 auto; }
+  @media (max-width:820px){ .grid{ grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+  .card h2 .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input, select { width:100%; padding:9px 11px; border-radius:9px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--text); font:inherit; }
+  input:focus,select:focus{ outline:2px solid var(--accent); }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  button { font:inherit; font-weight:700; border:0; border-radius:9px; cursor:pointer; padding:9px 14px; color:#1b1033; background:var(--accent); }
+  button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+  button.pink { background:var(--accent2); color:#fff; }
+  button.sm { padding:5px 9px; font-size:12px; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  .clist { display:flex; flex-direction:column; gap:8px; }
+  .citem { padding:10px 12px; border:1px solid var(--line); border-radius:10px; cursor:pointer; background:var(--panel2); }
+  .citem.active { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .citem .nm { font-weight:700; }
+  .citem .meta { font-size:12px; color:var(--muted); margin-top:2px; }
+  .pill { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:700; }
+  .pill.draft{ background:#3a3357; color:#c9bdf0; }
+  .pill.active{ background:#16432f; color:var(--good); }
+  .pill.ended{ background:#3a2330; color:#ffa8a8; }
+  .pill.redeemed{ background:#16432f; color:var(--good); }
+  .pill.expired{ background:#3a2330; color:#ffa8a8; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12px; }
+  .muted { color:var(--muted); font-size:12px; }
+  .empty { color:var(--muted); font-size:13px; padding:14px 0; text-align:center; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%);
+    background:#000a; border:1px solid var(--line); padding:10px 18px; border-radius:999px;
+    font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:50; }
+  .toast.show { opacity:1; }
+  .links a { color:var(--accent); font-size:13px; margin-right:14px; }
+  .stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .stat { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .stat b { display:block; font-size:22px; line-height:1.1; }
+  .stat span { color:var(--muted); font-size:11px; }
+  .funnel { display:flex; height:10px; border-radius:6px; overflow:hidden; margin:12px 0 6px; background:var(--panel2); }
+  .funnel i { display:block; height:100%; }
+  .fr { background:var(--good); }       /* redeemed */
+  .fa { background:var(--accent); }     /* active */
+  .fe { background:#ffa8a8; }           /* expired */
+  .legend span { font-size:11px; color:var(--muted); margin-right:12px; }
+  .legend i { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:4px; vertical-align:middle; }
+  input.cell { width:74px; padding:5px 7px; margin:0; }
+  .big { font-size:22px; font-weight:800; }
+  .hint { font-size:11px; color:var(--muted); margin-top:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 店長後台</h1>
+  <span class="tag">開幕輪盤抽獎 · 活動 / 獎項 / 核銷</span>
+  <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
+</header>
+
+<!-- 登入遮罩 -->
+<div id="loginOverlay" style="position:fixed;inset:0;background:#0c0814ee;display:none;
+     place-items:center;z-index:100">
+  <div class="card" style="width:340px;margin:0">
+    <h2><span class="dot"></span>店長後台登入</h2>
+    <label>通行碼</label>
+    <input id="passcode" type="password" placeholder="請輸入店長通行碼"
+      onkeydown="if(event.key==='Enter')doLogin()" />
+    <div id="loginErr" class="hint" style="color:var(--bad);min-height:16px"></div>
+    <div style="margin-top:12px"><button style="width:100%" onclick="doLogin()">登入</button></div>
+    <div class="hint" style="margin-top:10px">開發預設密碼 <code>changeme-admin</code>；上線請設 <code>RESTO_ADMIN_PASSCODE</code>。</div>
+  </div>
+</div>
+
+<div id="app" class="grid" style="display:none">
+  <!-- ── 左欄：活動列表 + 建立 ── -->
+  <div>
+    <div class="card">
+      <h2><span class="dot"></span>活動列表</h2>
+      <div class="row" style="margin-bottom:10px">
+        <select id="statusFilter">
+          <option value="">全部狀態</option>
+          <option value="draft">草稿</option>
+          <option value="active">進行中</option>
+          <option value="ended">已結束</option>
+        </select>
+        <button class="ghost" onclick="loadCampaigns()">重新整理</button>
+      </div>
+      <div id="campaignList" class="clist"><div class="empty">載入中…</div></div>
+    </div>
+
+    <div class="card">
+      <h2><span class="dot"></span>建立新活動</h2>
+      <label>活動名稱</label>
+      <input id="cName" placeholder="開幕輪盤抽獎" />
+      <label>網址代稱 slug（小寫英數與 -）</label>
+      <input id="cSlug" placeholder="grand-open-2026" />
+      <div class="row">
+        <div><label>每日抽獎次數</label><input id="cLimit" type="number" value="1" min="1" max="100" /></div>
+        <div><label>券有效天數</label><input id="cValid" type="number" value="14" min="1" max="365" /></div>
+      </div>
+      <div class="row">
+        <div><label>開始時間（選填）</label><input id="cStarts" type="datetime-local" /></div>
+        <div><label>結束時間（選填）</label><input id="cEnds" type="datetime-local" /></div>
+      </div>
+      <label>每日推播訊息（選填）</label>
+      <input id="cMsg" placeholder="今天也來抽一波！" />
+      <div class="hint">時間以台北時間計；活動需「進行中」且在時間區間內才可抽獎。</div>
+      <div style="margin-top:12px"><button onclick="createCampaign()">＋ 建立活動</button></div>
+    </div>
+  </div>
+
+  <!-- ── 右欄：選定活動的詳情 ── -->
+  <div>
+    <div id="detail" class="card"><div class="empty">← 從左側選一個活動，或先建立一個</div></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const API = location.origin;            // same-origin
+let CAMPAIGNS = [];
+let CUR = null;                          // selected campaign object
+
+const $ = id => document.getElementById(id);
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
+function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function money(v){ return "NT$"+Number(v).toLocaleString("zh-TW",{maximumFractionDigits:0}); }
+// Taipei is a fixed +08:00 offset (no DST) — keep tz handling trivial.
+function tpeToIso(localVal){ if(!localVal) return null; const v=localVal.length===16?localVal+":00":localVal; return v+"+08:00"; }
+function isoToTpeInput(iso){ if(!iso) return ""; return new Date(new Date(iso).getTime()+8*3600*1000).toISOString().slice(0,16); }
+function fmtTpe(iso){ return iso?isoToTpeInput(iso).replace("T"," ")+"（台北）":"未設定"; }
+
+async function api(path, opts={}){
+  const res = await fetch(API+path, Object.assign({headers:{"Content-Type":"application/json"}}, opts));
+  const body = await res.text();
+  let data; try{ data = body ? JSON.parse(body) : null; }catch{ data = body; }
+  if(!res.ok){
+    if(res.status===401 && !path.startsWith("/admin/")){ showLogin(); }  // session expired mid-use
+    const msg = (data && (data.detail?.message || data.detail || data.message)) || ("HTTP "+res.status);
+    const err = new Error(typeof msg==="string"?msg:JSON.stringify(msg)); err.status = res.status; throw err;
+  }
+  return data;
+}
+
+// ── 登入閘門 ──
+function showLogin(){ $("loginOverlay").style.display="grid"; $("app").style.display="none"; $("logoutBtn").style.display="none"; $("passcode").focus(); }
+function showApp(){ $("loginOverlay").style.display="none"; $("app").style.display="grid"; $("logoutBtn").style.display="inline-block"; }
+async function boot(){
+  try{ await api("/admin/session"); showApp(); loadCampaigns(); }
+  catch{ showLogin(); }
+}
+async function doLogin(){
+  const pc=$("passcode").value;
+  $("loginErr").textContent="";
+  try{
+    const res=await fetch(API+"/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({passcode:pc})});
+    if(!res.ok){ $("loginErr").textContent="通行碼錯誤"; return; }
+    $("passcode").value=""; showApp(); loadCampaigns();
+  }catch(e){ $("loginErr").textContent="登入失敗："+e.message; }
+}
+async function logout(){
+  try{ await fetch(API+"/admin/logout",{method:"POST"}); }catch{}
+  CUR=null; CAMPAIGNS=[]; showLogin();
+}
+
+// ── 活動列表 ──
+async function loadCampaigns(){
+  const f = $("statusFilter").value;
+  try{
+    CAMPAIGNS = await api("/campaigns"+(f?`?campaign_status=${f}`:""));
+    renderCampaignList();
+  }catch(e){ $("campaignList").innerHTML=`<div class="empty">讀取失敗：${esc(e.message)}</div>`; }
+}
+function renderCampaignList(){
+  const el = $("campaignList");
+  if(!CAMPAIGNS.length){ el.innerHTML=`<div class="empty">尚無活動，請於下方建立</div>`; return; }
+  el.innerHTML = CAMPAIGNS.map(c=>`
+    <div class="citem ${CUR&&CUR.id===c.id?'active':''}" onclick="selectCampaign('${c.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span class="nm">${esc(c.name)}</span>
+        <span class="pill ${c.status}">${statusLabel(c.status)}</span>
+      </div>
+      <div class="meta">每日 ${c.daily_spin_limit} 抽 · 券效 ${c.voucher_validity_days} 天 · /${esc(c.slug)}</div>
+    </div>`).join("");
+}
+function statusLabel(s){ return {draft:"草稿",active:"進行中",ended:"已結束"}[s]||s; }
+
+async function createCampaign(){
+  const name=$("cName").value.trim(), slug=$("cSlug").value.trim();
+  if(!name||!slug){ toast("請填活動名稱與 slug"); return; }
+  if(!/^[a-z0-9][a-z0-9-]*$/.test(slug)){ toast("slug 只能小寫英數與 -"); return; }
+  try{
+    const c = await api("/campaigns",{method:"POST",body:JSON.stringify({
+      name, slug,
+      daily_spin_limit:Number($("cLimit").value)||1,
+      voucher_validity_days:Number($("cValid").value)||14,
+      starts_at:tpeToIso($("cStarts").value),
+      ends_at:tpeToIso($("cEnds").value),
+      daily_message:$("cMsg").value.trim()||null,
+    })});
+    toast("活動已建立（草稿）");
+    $("cName").value=$("cSlug").value=$("cMsg").value=$("cStarts").value=$("cEnds").value="";
+    await loadCampaigns(); selectCampaign(c.id);
+  }catch(e){ toast("建立失敗："+e.message); }
+}
+
+// ── 選定活動詳情 ──
+async function selectCampaign(id){
+  CUR = CAMPAIGNS.find(c=>c.id===id) || await api(`/campaigns/${id}`);
+  renderCampaignList();
+  await renderDetail();
+}
+async function renderDetail(){
+  const c=CUR, d=$("detail");
+  let prizes=[]; try{ prizes=await api(`/campaigns/${c.id}/prizes`); }catch{}
+  const totalW = prizes.filter(p=>p.is_active).reduce((s,p)=>s+p.weight,0)||1;
+  const qrUrl=`${API}/campaigns/${c.id}/qr.svg`, posterUrl=`${API}/campaigns/${c.id}/poster`, demoUrl=`${API}/demo/?campaign=${c.id}`;
+
+  d.innerHTML = `
+  <div class="card" style="margin:0 0 16px">
+    <h2><span class="dot"></span>${esc(c.name)} <span class="pill ${c.status}">${statusLabel(c.status)}</span></h2>
+    <div class="muted">slug /${esc(c.slug)} · 每日 ${c.daily_spin_limit} 抽 · 券有效 ${c.voucher_validity_days} 天</div>
+    <div style="margin-top:12px" class="row">
+      <button class="ghost sm" ${c.status==='active'?'disabled':''} onclick="setStatus('active')">▶ 上線 (active)</button>
+      <button class="ghost sm" ${c.status==='ended'?'disabled':''} onclick="setStatus('ended')">⏹ 結束 (ended)</button>
+      <button class="ghost sm" ${c.status==='draft'?'disabled':''} onclick="setStatus('draft')">↩ 轉草稿</button>
+    </div>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <div class="muted">⏰ 活動排程（台北時間）：${fmtTpe(c.starts_at)} → ${fmtTpe(c.ends_at)}</div>
+      <div class="row" style="margin-top:8px">
+        <div><label>開始時間</label><input id="eStarts" type="datetime-local" value="${isoToTpeInput(c.starts_at)}" /></div>
+        <div><label>結束時間</label><input id="eEnds" type="datetime-local" value="${isoToTpeInput(c.ends_at)}" /></div>
+        <div style="align-self:flex-end"><button class="ghost sm" onclick="saveSchedule()">💾 儲存排程</button></div>
+      </div>
+      <div class="hint">需「進行中」且在區間內才可抽獎；超出區間抽獎會被擋下。</div>
+    </div>
+    <div class="links" style="margin-top:14px">
+      <a href="${demoUrl}" target="_blank">🎰 顧客抽獎頁</a>
+      <a href="${qrUrl}" target="_blank">🔳 門口 QR</a>
+      <a href="${posterUrl}" target="_blank">🖼 列印海報</a>
+    </div>
+  </div>
+
+  <div class="card" style="margin:0 0 16px">
+    <h2><span class="dot"></span>活動成效 <span class="muted">（即時）</span>
+      <span style="float:right">
+        <button class="ghost sm" onclick="location.href='${API}/campaigns/${c.id}/vouchers.csv'">⬇ 匯出券 CSV</button>
+        <button class="ghost sm" onclick="loadStats()">↻ 重新整理</button>
+      </span></h2>
+    <div id="statsBox"><div class="empty">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin:0 0 16px">
+    <h2><span class="dot"></span>輪盤獎項 <span class="muted">（可直接改權重/價值/配額後按 💾；配額留空＝不更改）</span></h2>
+    ${prizes.length? `<table>
+      <tr><th>獎項</th><th>權重</th><th>中獎機率</th><th>價值(元)</th><th>總配額</th><th>已發</th><th></th></tr>
+      ${prizes.map(p=>`<tr>
+        <td>${esc(p.name)}</td>
+        <td><input class="cell" id="w_${p.id}" type="number" min="0" value="${p.weight}"></td>
+        <td>${p.is_active?((p.weight/totalW*100).toFixed(1)+"%"):'<span class="muted">停用</span>'}</td>
+        <td><input class="cell" id="v_${p.id}" type="number" min="0" value="${Number(p.value_estimate)}"></td>
+        <td><input class="cell" id="q_${p.id}" type="number" min="0" placeholder="∞" value="${p.total_quota??''}"></td>
+        <td>${p.awarded_count}</td>
+        <td style="white-space:nowrap">
+          <button class="ghost sm" title="儲存變更" onclick="savePrize('${p.id}')">💾</button>
+          <button class="ghost sm" onclick="togglePrize('${p.id}',${!p.is_active})">${p.is_active?"停用":"啟用"}</button>
+        </td>
+      </tr>`).join("")}
+    </table>` : `<div class="empty">尚無獎項，請於下方新增（至少一項才能上線）</div>`}
+
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <div class="row">
+        <div style="flex:2"><label>獎項名稱</label><input id="pName" placeholder="和牛一盤" /></div>
+        <div><label>權重</label><input id="pWeight" type="number" value="10" min="0" /></div>
+        <div><label>價值(元)</label><input id="pValue" type="number" value="0" min="0" /></div>
+        <div><label>總配額(空=無限)</label><input id="pQuota" type="number" min="0" placeholder="∞" /></div>
+      </div>
+      <div style="margin-top:10px"><button class="pink" onclick="addPrize()">＋ 新增獎項</button></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin:0">
+    <h2><span class="dot"></span>櫃台核銷（顧客來店出示券碼）</h2>
+    <div class="row">
+      <div style="flex:2"><label>輸入/掃描券碼</label><input id="rCode" placeholder="例：4BNHU6HH" onkeydown="if(event.key==='Enter')lookupVoucher()" /></div>
+      <div style="align-self:flex-end"><button onclick="lookupVoucher()">查詢</button></div>
+    </div>
+    <div id="voucherBox" style="margin-top:12px"></div>
+  </div>`;
+  loadStats();
+}
+
+async function loadStats(){
+  const box=$("statsBox"); if(!box||!CUR) return;
+  let s; try{ s=await api(`/campaigns/${CUR.id}/stats`); }
+  catch(e){ box.innerHTML=`<div class="empty">讀取失敗：${esc(e.message)}</div>`; return; }
+  const pct=v=>(v*100).toFixed(v?1:0)+"%";
+  const minted=s.vouchers_minted||1;  // avoid /0 for bar widths
+  const w=n=>(n/minted*100).toFixed(2)+"%";
+  box.innerHTML=`
+    <div class="stats-grid">
+      <div class="stat"><b>${s.total_spins}</b><span>總抽獎次數</span></div>
+      <div class="stat"><b>${s.unique_players}</b><span>參與人數</span></div>
+      <div class="stat"><b>${pct(s.win_rate)}</b><span>中獎率</span></div>
+      <div class="stat"><b>${pct(s.redemption_rate)}</b><span>核銷率</span></div>
+      <div class="stat"><b>${money(s.value_redeemed)}</b><span>已核銷獎品價值</span></div>
+      <div class="stat"><b>${money(s.value_outstanding)}</b><span>未核銷負債（流通中）</span></div>
+    </div>
+    <div class="funnel" title="券漏斗：已發 ${s.vouchers_minted} 張">
+      <i class="fr" style="width:${w(s.vouchers_redeemed)}"></i>
+      <i class="fa" style="width:${w(s.vouchers_active)}"></i>
+      <i class="fe" style="width:${w(s.vouchers_expired)}"></i>
+    </div>
+    <div class="legend">
+      <span><i class="fr"></i>已核銷 ${s.vouchers_redeemed}</span>
+      <span><i class="fa"></i>可用 ${s.vouchers_active}</span>
+      <span><i class="fe"></i>已過期 ${s.vouchers_expired}</span>
+      <span>共發出 ${s.vouchers_minted} 張</span>
+    </div>`;
+}
+
+async function setStatus(s){
+  try{ await api(`/campaigns/${CUR.id}`,{method:"PATCH",body:JSON.stringify({status:s})});
+    toast("狀態已更新："+statusLabel(s));
+    await loadCampaigns(); CUR=CAMPAIGNS.find(c=>c.id===CUR.id); renderCampaignList(); renderDetail();
+  }catch(e){ toast("更新失敗："+e.message); }
+}
+async function saveSchedule(){
+  // Blank field → null → patch_campaign ignores it (leaves the window unchanged).
+  const body={ starts_at:tpeToIso($("eStarts").value), ends_at:tpeToIso($("eEnds").value) };
+  try{ CUR=await api(`/campaigns/${CUR.id}`,{method:"PATCH",body:JSON.stringify(body)});
+    toast("排程已更新"); renderDetail();
+  }catch(e){ toast("更新失敗："+e.message); }
+}
+async function addPrize(){
+  const name=$("pName").value.trim();
+  if(!name){ toast("請填獎項名稱"); return; }
+  const body={ name, weight:Number($("pWeight").value)||0, value_estimate:String($("pValue").value||"0") };
+  const q=$("pQuota").value.trim(); if(q!=="") body.total_quota=Number(q);
+  try{ await api(`/campaigns/${CUR.id}/prizes`,{method:"POST",body:JSON.stringify(body)});
+    toast("獎項已新增"); renderDetail();
+  }catch(e){ toast("新增失敗："+e.message); }
+}
+async function togglePrize(pid,active){
+  try{ await api(`/campaigns/${CUR.id}/prizes/${pid}`,{method:"PATCH",body:JSON.stringify({is_active:active})});
+    toast(active?"已啟用":"已停用"); renderDetail();
+  }catch(e){ toast("更新失敗："+e.message); }
+}
+async function savePrize(pid){
+  // Live-tune odds: weight + value always sent; quota only when a value is
+  // entered (patch_prize ignores nulls, so blank means "leave unchanged").
+  const body={ weight:Number($("w_"+pid).value)||0, value_estimate:String($("v_"+pid).value||"0") };
+  const q=$("q_"+pid).value.trim(); if(q!=="") body.total_quota=Number(q);
+  try{ await api(`/campaigns/${CUR.id}/prizes/${pid}`,{method:"PATCH",body:JSON.stringify(body)});
+    toast("獎項已更新"); renderDetail();
+  }catch(e){ toast("更新失敗："+e.message); }
+}
+
+async function lookupVoucher(){
+  const code=$("rCode").value.trim().toUpperCase();
+  const box=$("voucherBox");
+  if(!code){ toast("請輸入券碼"); return; }
+  try{
+    const v=await api(`/campaigns/${CUR.id}/vouchers/by-code/${encodeURIComponent(code)}`);
+    box.innerHTML=`
+      <div style="border:1px solid var(--line);border-radius:12px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span class="big">${esc(v.prize_name)}</span>
+          <span class="pill ${v.status}">${voucherStatus(v.status)}</span>
+        </div>
+        <div class="muted" style="margin:6px 0">價值 ${money(v.value_estimate)} · 有效 ${v.valid_from} ～ ${v.valid_until}</div>
+        ${v.redeemed_at?`<div class="muted">已於 ${esc(v.redeemed_on||v.redeemed_at)} 核銷</div>`
+          :`<button class="pink" onclick="redeem('${v.id}')" ${v.status!=='active'?'disabled':''}>✓ 確認核銷</button>`}
+      </div>`;
+  }catch(e){ box.innerHTML=`<div class="empty">查無此券或不可用：${esc(e.message)}</div>`; }
+}
+function voucherStatus(s){ return {active:"可核銷",redeemed:"已核銷",expired:"已過期"}[s]||s; }
+async function redeem(vid){
+  try{ const v=await api(`/campaigns/${CUR.id}/vouchers/${vid}/redeem`,{method:"POST",body:"{}"});
+    toast("核銷成功 🎉"); $("rCode").value=""; lookupVoucherResult(v);
+  }catch(e){ toast("核銷失敗："+e.message); }
+}
+function lookupVoucherResult(v){
+  $("voucherBox").innerHTML=`<div style="border:1px solid var(--good);border-radius:12px;padding:14px">
+    <span class="big">${esc(v.prize_name)}</span> <span class="pill redeemed">已核銷</span>
+    <div class="muted" style="margin-top:6px">核銷時間 ${esc(v.redeemed_at)}</div></div>`;
+}
+
+boot();
+</script>
+</body>
+</html>

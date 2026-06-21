@@ -345,10 +345,13 @@ async def test_leave_request_happy_path(
 async def test_today_returns_open_clocks_only(
     client, db_session, seed_tenant, seed_store, seed_employee
 ):
-    # Currently-open clock for seed_employee. Use minutes-ago not hours-ago
-    # so the row's TPE date is guaranteed equal to today even when the CI
-    # clock is within an hour of midnight TPE.
-    in_at = datetime.now(UTC) - timedelta(minutes=10)
+    # Anchor to the frozen test clock (_FIXED_NOW_UTC) so BOTH "today" (TPE
+    # date) and elapsed_hours are deterministic. With the real wall-clock, a
+    # clock-in "minutes ago" within ~10 min after TPE midnight (UTC 16:00-16:10)
+    # lands on the *previous* TPE day and gets dropped from "today" — a genuine
+    # ~daily CI flake. Freezing _utcnow (as the sibling clock-out tests do)
+    # removes the dependency entirely.
+    in_at = _FIXED_NOW_UTC - timedelta(minutes=10)
     await _seed_open_clock(
         db_session, employee=seed_employee, store=seed_store, clock_in_at=in_at
     )
@@ -374,13 +377,14 @@ async def test_today_returns_open_clocks_only(
         store_id=seed_store.id,
         employee_id=closed_emp.id,
         clock_in=in_at - timedelta(hours=1),
-        clock_out=datetime.now(UTC) - timedelta(minutes=10),
+        clock_out=_FIXED_NOW_UTC - timedelta(minutes=10),
         regular_hours=Decimal("3.00"),
     )
     db_session.add(closed_row)
     await db_session.flush()
 
-    resp = await client.get(f"/clock/today?store_id={seed_store.id}")
+    with _freeze_clock_now():
+        resp = await client.get(f"/clock/today?store_id={seed_store.id}")
     assert resp.status_code == 200, resp.text
     items = resp.json()
     assert len(items) == 1

@@ -108,6 +108,30 @@ async def client(db_session: AsyncSession) -> AsyncIterator[Any]:
     """
     import httpx
 
+    from restaurant_api.api.auth import AdminPrincipal, require_admin
+    from restaurant_api.api.deps import get_db
+
+    async def _override() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override
+    # Existing router tests predate admin auth; run them authenticated by
+    # default so the new gate doesn't 401 hundreds of green tests. The
+    # auth-specific tests use ``anon_client`` (no override) to exercise the gate.
+    app.dependency_overrides[require_admin] = lambda: AdminPrincipal()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def anon_client(db_session: AsyncSession) -> AsyncIterator[Any]:
+    """Like ``client`` but WITHOUT the admin-auth override — for testing the
+    login flow and the 401 gate on protected endpoints.
+    """
+    import httpx
+
     from restaurant_api.api.deps import get_db
 
     async def _override() -> AsyncIterator[AsyncSession]:
