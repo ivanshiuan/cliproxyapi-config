@@ -117,8 +117,13 @@
         <div><label>每日抽獎次數</label><input id="cLimit" type="number" value="1" min="1" max="100" /></div>
         <div><label>券有效天數</label><input id="cValid" type="number" value="14" min="1" max="365" /></div>
       </div>
+      <div class="row">
+        <div><label>開始時間（選填）</label><input id="cStarts" type="datetime-local" /></div>
+        <div><label>結束時間（選填）</label><input id="cEnds" type="datetime-local" /></div>
+      </div>
       <label>每日推播訊息（選填）</label>
       <input id="cMsg" placeholder="今天也來抽一波！" />
+      <div class="hint">時間以台北時間計；活動需「進行中」且在時間區間內才可抽獎。</div>
       <div style="margin-top:12px"><button onclick="createCampaign()">＋ 建立活動</button></div>
     </div>
   </div>
@@ -140,6 +145,10 @@ const $ = id => document.getElementById(id);
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
 function esc(s){ return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function money(v){ return "NT$"+Number(v).toLocaleString("zh-TW",{maximumFractionDigits:0}); }
+// Taipei is a fixed +08:00 offset (no DST) — keep tz handling trivial.
+function tpeToIso(localVal){ if(!localVal) return null; const v=localVal.length===16?localVal+":00":localVal; return v+"+08:00"; }
+function isoToTpeInput(iso){ if(!iso) return ""; return new Date(new Date(iso).getTime()+8*3600*1000).toISOString().slice(0,16); }
+function fmtTpe(iso){ return iso?isoToTpeInput(iso).replace("T"," ")+"（台北）":"未設定"; }
 
 async function api(path, opts={}){
   const res = await fetch(API+path, Object.assign({headers:{"Content-Type":"application/json"}}, opts));
@@ -205,10 +214,12 @@ async function createCampaign(){
       name, slug,
       daily_spin_limit:Number($("cLimit").value)||1,
       voucher_validity_days:Number($("cValid").value)||14,
+      starts_at:tpeToIso($("cStarts").value),
+      ends_at:tpeToIso($("cEnds").value),
       daily_message:$("cMsg").value.trim()||null,
     })});
     toast("活動已建立（草稿）");
-    $("cName").value=$("cSlug").value=$("cMsg").value="";
+    $("cName").value=$("cSlug").value=$("cMsg").value=$("cStarts").value=$("cEnds").value="";
     await loadCampaigns(); selectCampaign(c.id);
   }catch(e){ toast("建立失敗："+e.message); }
 }
@@ -234,6 +245,15 @@ async function renderDetail(){
       <button class="ghost sm" ${c.status==='ended'?'disabled':''} onclick="setStatus('ended')">⏹ 結束 (ended)</button>
       <button class="ghost sm" ${c.status==='draft'?'disabled':''} onclick="setStatus('draft')">↩ 轉草稿</button>
     </div>
+    <div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+      <div class="muted">⏰ 活動排程（台北時間）：${fmtTpe(c.starts_at)} → ${fmtTpe(c.ends_at)}</div>
+      <div class="row" style="margin-top:8px">
+        <div><label>開始時間</label><input id="eStarts" type="datetime-local" value="${isoToTpeInput(c.starts_at)}" /></div>
+        <div><label>結束時間</label><input id="eEnds" type="datetime-local" value="${isoToTpeInput(c.ends_at)}" /></div>
+        <div style="align-self:flex-end"><button class="ghost sm" onclick="saveSchedule()">💾 儲存排程</button></div>
+      </div>
+      <div class="hint">需「進行中」且在區間內才可抽獎；超出區間抽獎會被擋下。</div>
+    </div>
     <div class="links" style="margin-top:14px">
       <a href="${demoUrl}" target="_blank">🎰 顧客抽獎頁</a>
       <a href="${qrUrl}" target="_blank">🔳 門口 QR</a>
@@ -243,7 +263,10 @@ async function renderDetail(){
 
   <div class="card" style="margin:0 0 16px">
     <h2><span class="dot"></span>活動成效 <span class="muted">（即時）</span>
-      <button class="ghost sm" style="float:right" onclick="loadStats()">↻ 重新整理</button></h2>
+      <span style="float:right">
+        <button class="ghost sm" onclick="location.href='${API}/campaigns/${c.id}/vouchers.csv'">⬇ 匯出券 CSV</button>
+        <button class="ghost sm" onclick="loadStats()">↻ 重新整理</button>
+      </span></h2>
     <div id="statsBox"><div class="empty">載入中…</div></div>
   </div>
 
@@ -320,6 +343,13 @@ async function setStatus(s){
   try{ await api(`/campaigns/${CUR.id}`,{method:"PATCH",body:JSON.stringify({status:s})});
     toast("狀態已更新："+statusLabel(s));
     await loadCampaigns(); CUR=CAMPAIGNS.find(c=>c.id===CUR.id); renderCampaignList(); renderDetail();
+  }catch(e){ toast("更新失敗："+e.message); }
+}
+async function saveSchedule(){
+  // Blank field → null → patch_campaign ignores it (leaves the window unchanged).
+  const body={ starts_at:tpeToIso($("eStarts").value), ends_at:tpeToIso($("eEnds").value) };
+  try{ CUR=await api(`/campaigns/${CUR.id}`,{method:"PATCH",body:JSON.stringify(body)});
+    toast("排程已更新"); renderDetail();
   }catch(e){ toast("更新失敗："+e.message); }
 }
 async function addPrize(){

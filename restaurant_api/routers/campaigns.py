@@ -23,7 +23,9 @@ Wallet / counter:
 
 from __future__ import annotations
 
+import csv
 import html
+import io
 import uuid
 from urllib.parse import urlencode
 
@@ -271,6 +273,56 @@ async def list_vouchers(
         customer_id=customer_id,
         status=voucher_status,
         limit=limit,
+    )
+
+
+_CSV_COLUMNS = [
+    "code",
+    "status",
+    "prize_name",
+    "value_estimate",
+    "customer_id",
+    "valid_from",
+    "valid_until",
+    "redeemed_on",
+    "created_at",
+]
+
+
+@router.get(
+    "/{campaign_id}/vouchers.csv",
+    summary="匯出全部券清單 CSV (店長對帳用)",
+    response_class=Response,
+    dependencies=_ADMIN,
+)
+async def export_vouchers_csv(
+    campaign_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> Response:
+    """Download every voucher in the campaign as CSV (UTF-8 BOM for Excel CJK)."""
+    rows = await campaigns_service.export_vouchers(session, campaign_id, tenant_id=tenant_id)
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(_CSV_COLUMNS)
+    for v in rows:
+        writer.writerow(
+            [
+                v.code,
+                v.status.value,
+                v.prize_name,
+                f"{v.value_estimate}",
+                str(v.customer_id),
+                v.valid_from.isoformat(),
+                v.valid_until.isoformat(),
+                v.redeemed_on.isoformat() if v.redeemed_on else "",
+                v.created_at.isoformat(),
+            ]
+        )
+    return Response(
+        content="\ufeff" + buf.getvalue(),  # BOM so Excel reads CJK as UTF-8
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="vouchers-{campaign_id}.csv"'},
     )
 
 

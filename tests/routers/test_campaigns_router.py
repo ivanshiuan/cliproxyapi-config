@@ -658,6 +658,41 @@ async def test_campaign_stats_unknown_campaign_404(client: httpx.AsyncClient) ->
     assert resp.status_code == 404
 
 
+async def test_vouchers_csv_export_http(
+    client: httpx.AsyncClient, seed_menu_item: MenuItem
+) -> None:
+    """One spin mints one voucher; the CSV export carries the header + that row."""
+    cid = (
+        await client.post(
+            "/campaigns", json={"name": "匯出", "slug": _slug(), "status": "active"}
+        )
+    ).json()["id"]
+    await client.post(
+        f"/campaigns/{cid}/prizes",
+        json={"name": "和牛", "weight": 1, "value_estimate": "500",
+              "menu_item_id": str(seed_menu_item.id)},
+    )
+    spin = await client.post(
+        f"/campaigns/{cid}/spin",
+        json={"line_user_id": f"U{uuid.uuid4().hex[:16]}", "display_name": "客"},
+    )
+    code = spin.json()["voucher"]["code"]
+
+    resp = await client.get(f"/campaigns/{cid}/vouchers.csv")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers.get("content-disposition", "")
+    body = resp.text
+    assert "code,status,prize_name" in body  # header row
+    assert code in body  # the minted voucher
+    assert "和牛" in body
+
+
+async def test_vouchers_csv_unknown_campaign_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get(f"/campaigns/{uuid.uuid4()}/vouchers.csv")
+    assert resp.status_code == 404
+
+
 async def test_spin_requires_member_identity_http(client: httpx.AsyncClient) -> None:
     create = await client.post(
         "/campaigns", json={"name": "X", "slug": _slug(), "status": "active"}

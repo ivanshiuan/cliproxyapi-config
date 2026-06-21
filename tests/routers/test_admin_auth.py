@@ -97,6 +97,7 @@ async def test_management_endpoints_require_auth(anon_client) -> None:
     rid = uuid.uuid4()
     assert (await anon_client.get(f"/campaigns/{rid}/vouchers/by-code/ABC")).status_code == 401
     assert (await anon_client.get(f"/campaigns/{rid}/stats")).status_code == 401
+    assert (await anon_client.get(f"/campaigns/{rid}/vouchers.csv")).status_code == 401
 
 
 @needs_db

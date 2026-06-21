@@ -1040,10 +1040,35 @@ async def campaign_stats(
     )
 
 
+async def export_vouchers(
+    session: AsyncSession, campaign_id: uuid.UUID, *, tenant_id: uuid.UUID
+) -> list[VoucherResponse]:
+    """Every voucher minted by a campaign (newest first) — for the CSV export
+    the 店長 uses to reconcile redemptions. Scoped by tenant; 404 if missing.
+    """
+    await _load_campaign(session, campaign_id, tenant_id)  # 404 guard
+    rows = (
+        (
+            await session.execute(
+                select(CampaignVoucher)
+                .where(
+                    CampaignVoucher.campaign_id == campaign_id,
+                    CampaignVoucher.tenant_id == tenant_id,
+                )
+                .order_by(CampaignVoucher.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [VoucherResponse.model_validate(r) for r in rows]
+
+
 __all__ = [
     "add_prize",
     "campaign_stats",
     "create_campaign",
+    "export_vouchers",
     "get_campaign",
     "get_voucher_by_code",
     "get_wheel",
