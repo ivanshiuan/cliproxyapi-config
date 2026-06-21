@@ -9,7 +9,7 @@
 **做了什麼**
 - UIUX 全版位升級（`terminal.css` v2：玻璃質感/漸層/發光等級/進場動畫，類別名相容、邏輯零改）
 - PWA 圖示 `icon.svg`（manifest any+maskable、index、sw v4、build 納入）
-- 回應 CodeRabbit 三輪審查共 **18 條全修並 resolve**（安全/XSS/健全性/lint/文件一致性）
+- 回應 CodeRabbit **三輪審查項目全數修復並 resolve**（安全/XSS/健全性/lint/文件一致性；逐條對應見各 fix commit）
 - **深度復盤**再抓到 `esc()` 套用不一致（戰術/歷史/設定頁），已補齊
 
 **驗證**：`node qa.js 100` → **14900/14900**；backtest 可複現；clean-clone build 通過；CSS 括號平衡。
