@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="hz:slide-selector" content=".page">
+<title>周霸虎老火鍋 BUFF HOTPOT — 品牌識別系統手冊 VIS Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&family=Noto+Serif+TC:wght@400;600;700;900&family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --crimson:#9A1B2F;        /* 重慶深緋紅 */
+    --crimson-deep:#6E1322;
+    --silver:#C7CCD1;         /* 金屬銀 */
+    --steel:#8A9197;
+    --silver-lite:#E7E9EC;
+    --gold:#C2A14E;           /* 質感金 */
+    --gold-lite:#E3CB8B;
+    --ink:#141210;            /* 近黑墨 */
+    --ink-2:#2A2724;
+    --paper:#F4F1EC;          /* 米白高級紙感 */
+    --paper-2:#ECE7DF;
+    --line:rgba(20,18,16,.14);
+    --w:1123px; --h:794px;    /* A4 橫 @96dpi */
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:#2b2b2b}
+  body{
+    font-family:"Noto Sans TC","Montserrat",sans-serif;
+    color:var(--ink);-webkit-font-smoothing:antialiased;
+    display:flex;flex-direction:column;align-items:center;gap:22px;padding:34px 0;
+  }
+  .page{
+    position:relative;width:var(--w);height:var(--h);background:var(--paper);
+    overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.45);
+    padding:64px 72px;display:flex;flex-direction:column;
+  }
+  .eng{font-family:"Montserrat",sans-serif;letter-spacing:.16em}
+  .serif{font-family:"Noto Serif TC",serif}
+  /* 頁首：品牌標記放右上(繁中視覺權重 100% 角) */
+  .pg-head{position:absolute;top:34px;left:72px;right:72px;display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.22em;color:var(--steel);text-transform:uppercase}
+  .pg-head .bk{font-family:"Noto Serif TC",serif;font-weight:900;color:var(--crimson);font-size:15px;letter-spacing:.3em}
+  .pg-foot{position:absolute;bottom:30px;left:72px;right:72px;display:flex;justify-content:space-between;align-items:center;font-size:10px;letter-spacing:.18em;color:var(--steel)}
+  .pg-foot .no{font-family:"Montserrat";font-weight:600;color:var(--ink)}
+  .kicker{font-family:"Montserrat";font-weight:700;font-size:12px;letter-spacing:.34em;color:var(--gold);text-transform:uppercase;margin-bottom:14px}
+  .secno{font-family:"Montserrat";font-weight:800;font-size:13px;color:var(--crimson);letter-spacing:.2em}
+  h1.title{font-family:"Noto Serif TC",serif;font-weight:900;font-size:46px;line-height:1.12;letter-spacing:.02em;margin-bottom:18px}
+  h2.sub{font-weight:500;font-size:18px;line-height:1.9;color:var(--ink-2);letter-spacing:.04em;max-width:62ch}
+  p.body{font-weight:300;font-size:14.5px;line-height:2.05;color:var(--ink-2);letter-spacing:.02em;max-width:46ch}
+  .content{margin-top:auto;margin-bottom:auto}
+  /* 霸字標記 */
+  .bk-mark{font-family:"Noto Serif TC",serif;font-weight:900;line-height:.9;color:var(--ink)}
+  .rule{height:2px;width:54px;background:var(--crimson);margin:18px 0}
+  .rule.gold{background:var(--gold)} .rule.silver{background:var(--steel)}
+  /* 色票 */
+  .sw{border-radius:3px;display:flex;flex-direction:column;justify-content:flex-end;padding:16px;color:#fff;height:170px}
+  .sw .nm{font-weight:700;font-size:15px} .sw .hex{font-family:"Montserrat";font-size:11px;letter-spacing:.14em;opacity:.9;margin-top:6px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  table.spec{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.spec td,table.spec th{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left}
+  table.spec th{font-family:"Montserrat";font-weight:600;letter-spacing:.12em;color:var(--steel);text-transform:uppercase;font-size:10.5px}
+  table.spec td:first-child{font-weight:500}
+  .chip{display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:middle;margin-right:8px}
+  /* mockup 框 */
+  .mock{background:#fff;border:1px solid var(--line);border-radius:4px;position:relative;overflow:hidden;box-shadow:0 8px 22px rgba(0,0,0,.10)}
+  .tag{display:inline-block;font-family:"Montserrat";font-size:10px;font-weight:600;letter-spacing:.16em;color:var(--steel);text-transform:uppercase;border:1px solid var(--line);border-radius:40px;padding:5px 12px;margin:0 6px 6px 0}
+  .num-dot{width:30px;height:30px;border-radius:50%;background:var(--crimson);color:#fff;font-family:"Montserrat";font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .li{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+  .li .t{font-weight:700;font-size:14px;margin-bottom:3px}
+  .li .d{font-weight:300;font-size:12.5px;line-height:1.8;color:var(--ink-2)}
+  .dark{background:var(--ink);color:var(--paper)}
+  .dark .pg-head,.dark .pg-foot{color:rgba(255,255,255,.4)}
+  .dark .pg-head .bk{color:var(--gold)}
+  .crim{background:var(--crimson);color:#fff}
+  .crim .pg-head,.crim .pg-foot{color:rgba(255,255,255,.55)}
+  .crim .pg-head .bk{color:#fff}
+  /* 封面 */
+  .cover{justify-content:center;align-items:center;text-align:center;background:radial-gradient(120% 90% at 50% 18%,#23201d 0%,var(--ink) 60%,#0c0b0a 100%)}
+  .cover .big{font-family:"Noto Serif TC",serif;font-weight:900;font-size:300px;line-height:.8;background:linear-gradient(160deg,#fff 5%,var(--silver) 28%,var(--steel) 52%,#fff 70%,var(--gold-lite) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 6px 22px rgba(0,0,0,.55))}
+  @media print{body{background:#fff;gap:0;padding:0}.page{box-shadow:none;page-break-after:always;break-after:page}}
+</style>
+</head>
+<body>
+
+<!-- 01 COVER -->
+<section class="page cover">
+  <div class="eng" style="color:var(--gold);font-size:13px;letter-spacing:.5em;margin-bottom:26px">BRAND IDENTITY MANUAL · 2026</div>
+  <div class="big">霸</div>
+  <div style="margin-top:30px;font-family:'Noto Serif TC';font-weight:700;font-size:30px;letter-spacing:.5em;color:#fff;padding-left:.5em">周霸虎老火鍋</div>
+  <div class="eng" style="color:var(--silver);font-size:16px;letter-spacing:.42em;margin-top:14px">B U F F&nbsp;&nbsp;H O T P O T</div>
+  <div style="margin-top:40px;width:46px;height:2px;background:var(--gold)"></div>
+  <div style="margin-top:24px;font-family:'Noto Serif TC';font-weight:600;font-size:17px;letter-spacing:.4em;color:var(--gold-lite)">川味本真</div>
+  <div class="pg-foot" style="color:rgba(255,255,255,.4)"><span class="eng">VISUAL IDENTITY SYSTEM</span><span class="eng">VOL. 01</span></div>
+</section>
+
+<!-- 02 扉頁 -->
+<section class="page dark" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">BUFF HOTPOT</span></div>
+  <div class="content">
+    <div class="kicker">The Spirit｜品牌精神</div>
+    <h1 class="title serif" style="color:var(--paper);font-size:54px">一個字，<br>定義一座江湖。</h1>
+    <div class="rule gold" style="width:72px"></div>
+    <p class="body" style="color:rgba(244,241,236,.72);max-width:50ch">這本手冊收錄「周霸虎老火鍋」全部的視覺語言。它不是規範的牢籠，而是一套讓品牌在任何尺度、任何材質、任何城市都能被「一眼認出」的系統。請善用它，並守住它。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">EST. TAICHUNG · CHONGQING STYLE</span><span class="no eng">02</span></div>
+</section>
+
+<!-- 03 目錄 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Contents · 目錄</span></div>
+  <div class="content" style="margin-top:96px">
+    <div class="kicker">Contents</div>
+    <h1 class="title">目錄</h1>
+    <div class="grid3" style="margin-top:30px;font-size:13px;line-height:2.4">
+      <div>
+        <div class="secno">A — 品牌核心</div>
+        <div style="color:var(--ink-2);font-weight:300">品牌故事 · 哲學<br>核心價值 · 定位<br>品牌個性 · 標語</div>
+      </div>
+      <div>
+        <div class="secno">B — 標誌系統</div>
+        <div style="color:var(--ink-2);font-weight:300">主標誌 · 構成網格<br>安全距離 · 最小尺寸<br>標準字 · 組合 · 誤用</div>
+      </div>
+      <div>
+        <div class="secno">C — 視覺基礎</div>
+        <div style="color:var(--ink-2);font-weight:300">色彩系統 · 字體系統<br>網格 · 輔助圖形<br>圖標 · 攝影 · 語氣</div>
+      </div>
+      <div style="margin-top:22px">
+        <div class="secno">D — 商務物料</div>
+        <div style="color:var(--ink-2);font-weight:300">名片 · 信紙 · 資料夾<br>菜單 · 桌牌 · 點餐</div>
+      </div>
+      <div style="margin-top:22px">
+        <div class="secno">E — 空間 · 制服</div>
+        <div style="color:var(--ink-2);font-weight:300">招牌 · 門面 · 導視<br>制服 · 圍裙 · 老帽</div>
+      </div>
+      <div style="margin-top:22px">
+        <div class="secno">F — 包裝 · 數位</div>
+        <div style="color:var(--ink-2);font-weight:300">外帶 · 餐具 · 會員卡<br>社群 · 數位 · 加盟</div>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">BUFF HOTPOT · VIS MANUAL</span><span class="no eng">03</span></div>
+</section>
+
+<!-- ============ A 品牌核心 ============ -->
+<!-- 04 章名 A -->
+<section class="page crim" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Section A</span></div>
+  <div class="content">
+    <div class="eng" style="font-size:120px;font-weight:800;opacity:.18;line-height:.8">A</div>
+    <h1 class="title serif" style="color:#fff;margin-top:-40px">品牌核心</h1>
+    <h2 class="sub" style="color:rgba(255,255,255,.8)">Brand Core｜先有世界觀，才有設計。</h2>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE</span><span class="no eng">04</span></div>
+</section>
+
+<!-- 05 品牌故事 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">A.01 Brand Story</span></div>
+  <div class="content" style="margin-top:90px">
+    <div class="grid2">
+      <div>
+        <div class="kicker">Brand Story</div>
+        <h1 class="title">現代江湖，<br>一鍋本真。</h1>
+        <div class="rule"></div>
+        <p class="body">「周霸虎」起於重慶老灶的牛油紅湯。我們把江湖的義氣與直爽，收進一只鍋裡；再用現代設計的理性與俐落，重新替它定義門面。<br><br>不靠繁複的圖騰說話，只用一個「霸」字立規矩 —— 這是我們對「川味本真」最短、也最有力的詮釋。</p>
+      </div>
+      <div style="background:var(--ink);height:560px;border-radius:4px;display:flex;align-items:center;justify-content:center">
+        <div class="bk-mark" style="font-size:280px;background:linear-gradient(160deg,var(--silver),var(--steel),var(--gold-lite));-webkit-background-clip:text;background-clip:text;color:transparent">霸</div>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE · STORY</span><span class="no eng">05</span></div>
+</section>
+
+<!-- 06 品牌哲學 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">A.02 Philosophy</span></div>
+  <div class="content" style="margin-top:90px">
+    <div class="kicker">Design Philosophy</div>
+    <h1 class="title">科技中帶人情，<br>理性中帶幽默。</h1>
+    <div class="rule gold"></div>
+    <div class="grid3" style="margin-top:34px">
+      <div><div class="serif" style="font-size:40px;color:var(--crimson);font-weight:900">減</div><div class="li" style="margin-top:10px"><div class="d"><b>減法即奢侈。</b>留白不是空，是「我不急著證明自己」的底氣。每張畫面砍到不能再砍。</div></div></div>
+      <div><div class="serif" style="font-size:40px;color:var(--gold);font-weight:900">記</div><div class="li" style="margin-top:10px"><div class="d"><b>設計為記憶。</b>美而不被記住等於失敗。閉眼五秒還記得一件事，才算數。</div></div></div>
+      <div><div class="serif" style="font-size:40px;color:var(--steel);font-weight:900">守</div><div class="li" style="margin-top:10px"><div class="d"><b>五年保質期。</b>只守三個視覺元素 —— 緋紅、金屬銀、霸字線條 —— 不追退潮的熱潮風。</div></div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE · PHILOSOPHY</span><span class="no eng">06</span></div>
+</section>
+
+<!-- 07 核心價值 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">A.03 Core Values</span></div>
+  <div class="content" style="margin-top:88px">
+    <div class="kicker">Core Values</div>
+    <h1 class="title">四個字，撐起一個品牌。</h1>
+    <div class="grid4" style="margin-top:40px">
+      <div style="border-top:3px solid var(--crimson);padding-top:18px"><div class="serif" style="font-size:54px;font-weight:900">本</div><div class="li"><div class="d"><b>本真</b><br>用真材實料，不走捷徑。</div></div></div>
+      <div style="border-top:3px solid var(--gold);padding-top:18px"><div class="serif" style="font-size:54px;font-weight:900">霸</div><div class="li"><div class="d"><b>霸氣</b><br>味道與態度都不妥協。</div></div></div>
+      <div style="border-top:3px solid var(--steel);padding-top:18px"><div class="serif" style="font-size:54px;font-weight:900">義</div><div class="li"><div class="d"><b>義氣</b><br>待客如友，江湖人情。</div></div></div>
+      <div style="border-top:3px solid var(--ink);padding-top:18px"><div class="serif" style="font-size:54px;font-weight:900">新</div><div class="li"><div class="d"><b>創新</b><br>老味道，現代的臉。</div></div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE · VALUES</span><span class="no eng">07</span></div>
+</section>
+
+<!-- 08 品牌定位 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">A.04 Positioning</span></div>
+  <div class="content" style="margin-top:90px">
+    <div class="grid2">
+      <div>
+        <div class="kicker">Positioning</div>
+        <h1 class="title">老火鍋的味，<br>精品店的臉。</h1>
+        <div class="rule silver"></div>
+        <p class="body">在「平價熱炒火鍋」與「冷感無印性冷淡」之間，存在一塊空白 —— 既要重慶牛油的濃烈本真，又要國際精品的俐落質感。<br><br>周霸虎，就站在這個交叉點上。</p>
+      </div>
+      <div>
+        <table class="spec">
+          <tr><th>維度</th><th>周霸虎定位</th></tr>
+          <tr><td>味型</td><td>重慶牛油老火鍋・本真</td></tr>
+          <tr><td>客單帶</td><td>中高端・聚會 / 商務宴客</td></tr>
+          <tr><td>氣質</td><td>現代江湖・內斂的霸氣</td></tr>
+          <tr><td>視覺</td><td>極簡線條・高對比三色</td></tr>
+          <tr><td>延展</td><td>可國際連鎖的超級符號</td></tr>
+          <tr><td>對手差異</td><td>不靠網美風，靠識別度</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE · POSITIONING</span><span class="no eng">08</span></div>
+</section>
+
+<!-- 09 品牌個性 + 語氣 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">A.05 Personality &amp; Voice</span></div>
+  <div class="content" style="margin-top:88px">
+    <div class="kicker">Personality &amp; Tone of Voice</div>
+    <h1 class="title">像個江湖大哥，<br>但讀過書。</h1>
+    <div class="grid2" style="margin-top:30px;align-items:flex-start">
+      <div>
+        <div class="secno">品牌個性光譜</div>
+        <div style="margin-top:18px;font-size:12.5px;line-height:2.2">
+          <div>內斂 ●——————○ 張揚 <span style="color:var(--steel)">（偏內斂）</span></div>
+          <div>傳統 ○——————● 現代 <span style="color:var(--steel)">（偏現代）</span></div>
+          <div>嚴肅 ●————○—— 幽默 <span style="color:var(--steel)">（理性帶幽默）</span></div>
+          <div>大眾 ——○————● 高端 <span style="color:var(--steel)">（中高端）</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="secno">語氣語調 Do / Don't</div>
+        <table class="spec" style="margin-top:12px">
+          <tr><th>會這樣說</th><th>不會這樣說</th></tr>
+          <tr><td>「鍋，我們熬足八小時。」</td><td>「超划算！買一送一！」</td></tr>
+          <tr><td>「霸氣，是把細節做到底。」</td><td>「全網最低價快來搶。」</td></tr>
+          <tr><td>「川味本真，敬老灶。」</td><td>「網美打卡必點 🔥🔥」</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE · PERSONALITY</span><span class="no eng">09</span></div>
+</section>
+
+<!-- 10 標語 -->
+<section class="page dark" style="justify-content:center;align-items:center;text-align:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">A.06 Slogan</span></div>
+  <div class="content">
+    <div class="kicker" style="color:var(--gold)">The Slogan</div>
+    <div class="serif" style="font-size:96px;font-weight:900;color:var(--paper);letter-spacing:.3em;padding-left:.3em">川味本真</div>
+    <div class="eng" style="color:var(--silver);font-size:15px;letter-spacing:.4em;margin-top:18px">AUTHENTIC SICHUAN · NOTHING FAKE</div>
+    <div style="width:46px;height:2px;background:var(--gold);margin:28px auto"></div>
+    <p class="body" style="color:rgba(244,241,236,.7);max-width:40ch;margin:0 auto;text-align:center">四個字說完品牌的承諾：味道是真的，態度是真的。永遠與主標誌鎖定（lockup）使用，不單獨改寫。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">BRAND CORE · SLOGAN</span><span class="no eng">10</span></div>
+</section>
+
+<!-- ============ B 標誌系統 ============ -->
+<!-- 11 章名 B -->
+<section class="page dark" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Section B</span></div>
+  <div class="content">
+    <div class="eng" style="font-size:120px;font-weight:800;color:var(--gold);opacity:.22;line-height:.8">B</div>
+    <h1 class="title serif" style="color:#fff;margin-top:-40px">標誌系統</h1>
+    <h2 class="sub" style="color:rgba(255,255,255,.78)">Logo System｜一個「霸」字，就是超級符號。</h2>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO SYSTEM</span><span class="no eng">11</span></div>
+</section>
+
+<!-- 12 主標誌 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.01 Primary Logo</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="grid2">
+      <div>
+        <div class="kicker">Primary Logo</div>
+        <h1 class="title">主標誌</h1>
+        <div class="rule"></div>
+        <p class="body">主標誌由「霸」字超級符號 + 標準字「周霸虎老火鍋」+ 英文「BUFF HOTPOT」三段構成。霸字以粗細一致的金屬銀單線條重構，去除多餘筆畫裝飾，保留辨識骨架。<br><br>這是所有應用的第一順位版本。</p>
+      </div>
+      <div style="background:var(--paper-2);border-radius:4px;height:560px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px">
+        <div class="bk-mark" style="font-size:210px;color:var(--ink)">霸</div>
+        <div class="serif" style="font-size:24px;font-weight:700;letter-spacing:.4em;padding-left:.4em">周霸虎老火鍋</div>
+        <div class="eng" style="font-size:12px;letter-spacing:.42em;color:var(--steel)">B U F F &nbsp; H O T P O T</div>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · PRIMARY</span><span class="no eng">12</span></div>
+</section>
+
+<!-- 13 構成網格 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.02 Construction</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="grid2">
+      <div>
+        <div class="kicker">Construction Grid</div>
+        <h1 class="title">幾何構成</h1>
+        <div class="rule gold"></div>
+        <p class="body">霸字立於 1×1 的方格基準。中宮（中心留白）固定為總高的 1/5，筆畫線寬統一為基準單位 <b>1u</b>。任何重製都必須回到此網格，禁止徒手描繪。</p>
+      </div>
+      <div style="height:520px;border:1px solid var(--line);border-radius:4px;background:
+        linear-gradient(var(--line) 1px,transparent 1px) 0 0/100% 8.33%,
+        linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/8.33% 100%,var(--paper);display:flex;align-items:center;justify-content:center;position:relative">
+        <div class="bk-mark" style="font-size:300px;color:rgba(154,27,47,.92)">霸</div>
+        <div style="position:absolute;inset:8.33%;border:1.5px dashed var(--gold)"></div>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · CONSTRUCTION</span><span class="no eng">13</span></div>
+</section>
+
+<!-- 14 安全距離 + 最小尺寸 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.03 Clear Space &amp; Min Size</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="grid2">
+      <div>
+        <div class="kicker">Clear Space</div>
+        <h1 class="title" style="font-size:38px">安全距離</h1>
+        <p class="body">標誌四周須保留 ≥ <b>1/2 霸字寬（½X）</b>的淨空，任何文字、圖形不得侵入。</p>
+        <div style="margin-top:20px;height:240px;border:1px solid var(--line);border-radius:4px;display:flex;align-items:center;justify-content:center;position:relative;background:var(--paper-2)">
+          <div style="position:absolute;inset:46px;border:1.5px dashed var(--steel)"></div>
+          <div class="bk-mark" style="font-size:130px">霸</div>
+        </div>
+      </div>
+      <div>
+        <div class="kicker">Minimum Size</div>
+        <h1 class="title" style="font-size:38px">最小尺寸</h1>
+        <p class="body">確保 16px / 8mm 仍可辨識。低於此尺寸請改用「單霸字」反脆弱版本。</p>
+        <div style="margin-top:20px;display:flex;align-items:flex-end;gap:30px;height:240px;padding:24px;border:1px solid var(--line);border-radius:4px;background:var(--paper-2)">
+          <div style="text-align:center"><div class="bk-mark" style="font-size:90px">霸</div><div class="eng" style="font-size:10px;color:var(--steel);margin-top:8px">PRINT ≥ 12mm</div></div>
+          <div style="text-align:center"><div class="bk-mark" style="font-size:44px">霸</div><div class="eng" style="font-size:10px;color:var(--steel);margin-top:8px">DIGITAL ≥ 24px</div></div>
+          <div style="text-align:center"><div class="bk-mark" style="font-size:18px">霸</div><div class="eng" style="font-size:10px;color:var(--steel);margin-top:8px">FAVICON 16px</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · SPACING</span><span class="no eng">14</span></div>
+</section>
+
+<!-- 15 標準字 + 組合 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.04 Lockups</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Wordmark &amp; Lockups</div>
+    <h1 class="title">標準字與組合</h1>
+    <p class="body" style="max-width:60ch">中英文比例固定 3:1。提供橫式、直式、純標記三種鎖定組合，依版面選用，不得自行重排間距。</p>
+    <div class="grid3" style="margin-top:30px">
+      <div class="mock" style="height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px"><div class="bk-mark" style="font-size:80px">霸</div><div class="serif" style="font-weight:700;letter-spacing:.34em;padding-left:.34em">周霸虎老火鍋</div><div class="eng" style="font-size:9px;letter-spacing:.4em;color:var(--steel)">BUFF HOTPOT</div><span class="tag" style="margin-top:8px">橫式 主版</span></div>
+      <div class="mock" style="height:300px;display:flex;align-items:center;justify-content:center;gap:18px"><div class="bk-mark" style="font-size:120px">霸</div><div style="writing-mode:vertical-rl;font-family:'Noto Serif TC';font-weight:700;font-size:22px;letter-spacing:.3em">周霸虎老火鍋</div><span class="tag" style="position:absolute;bottom:14px">直式</span></div>
+      <div class="mock" style="height:300px;display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:150px">霸</div><span class="tag" style="position:absolute;bottom:14px">純標記 / App</span></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · LOCKUPS</span><span class="no eng">15</span></div>
+</section>
+
+<!-- 16 單色 / 反白 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.05 Mono &amp; Reversed</span></div>
+  <div class="content" style="margin-top:84px">
+    <div class="kicker">Monochrome &amp; Reversed</div>
+    <h1 class="title">單色與反白</h1>
+    <p class="body" style="max-width:60ch">為確保反脆弱性，標誌必須在單色、反白、燙金、雷雕等情境皆能成立。下列為核准版本。</p>
+    <div class="grid4" style="margin-top:28px">
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:#fff"><div class="bk-mark" style="font-size:120px;color:var(--ink)">霸</div></div>
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:var(--ink)"><div class="bk-mark" style="font-size:120px;color:#fff">霸</div></div>
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:var(--crimson)"><div class="bk-mark" style="font-size:120px;color:#fff">霸</div></div>
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:var(--ink)"><div class="bk-mark" style="font-size:120px;background:linear-gradient(150deg,var(--gold-lite),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent">霸</div></div>
+    </div>
+    <div class="grid4" style="margin-top:12px;font-size:10px;letter-spacing:.14em;color:var(--steel);text-align:center" class="eng">
+      <div class="eng">正色 / 墨黑</div><div class="eng">反白 / 黑底</div><div class="eng">緋紅底 反白</div><div class="eng">燙金 / VIP</div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · MONO</span><span class="no eng">16</span></div>
+</section>
+
+<!-- 17 誤用 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.06 Misuse</span></div>
+  <div class="content" style="margin-top:84px">
+    <div class="kicker" style="color:var(--crimson)">Misuse — 禁止事項</div>
+    <h1 class="title">八種絕不允許</h1>
+    <div class="grid4" style="margin-top:26px">
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center;position:relative"><div class="bk-mark" style="font-size:78px;transform:scaleX(1.5)">霸</div><span class="x"></span></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:78px;transform:rotate(-14deg)">霸</div></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center;background:#3a7"><div class="bk-mark" style="font-size:78px;color:#fff">霸</div></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:78px;text-shadow:3px 3px 0 var(--gold),6px 6px 8px rgba(0,0,0,.4)">霸</div></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:78px;font-family:'Noto Sans TC';font-weight:300">霸</div></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center;background:url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%2210%22><circle cx=%222%22 cy=%222%22 r=%221.5%22 fill=%22%23ccc%22/></svg>')"><div class="bk-mark" style="font-size:78px">霸</div></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center;gap:2px"><div class="bk-mark" style="font-size:60px">霸</div><div class="serif" style="font-size:18px;font-weight:700">老火鍋</div></div>
+      <div class="mock" style="height:170px;display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:78px;background:linear-gradient(90deg,red,blue,green);-webkit-background-clip:text;background-clip:text;color:transparent">霸</div></div>
+    </div>
+    <p class="body" style="margin-top:18px;max-width:80ch;font-size:12px">不拉伸變形・不旋轉・不換非品牌色・不加陰影描邊・不換字體・不置於雜亂背景・不擅自縮排組合・不套漸層彩虹。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · MISUSE</span><span class="no eng">17</span></div>
+</section>
+
+<!-- 18 標誌背景應用 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">B.07 Logo on Backgrounds</span></div>
+  <div class="content" style="margin-top:88px">
+    <div class="kicker">Backgrounds</div>
+    <h1 class="title">標誌的安身之地</h1>
+    <p class="body" style="max-width:62ch">標誌須維持對比度 > 70%。優先順序：米白底正色 → 墨黑底反白 → 緋紅底反白。質感金僅限 VIP / 節慶。</p>
+    <div class="grid4" style="margin-top:26px">
+      <div class="mock" style="height:200px;background:var(--paper);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:100px;color:var(--ink)">霸</div></div>
+      <div class="mock" style="height:200px;background:var(--ink);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:100px;color:#fff">霸</div></div>
+      <div class="mock" style="height:200px;background:var(--crimson);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:100px;color:#fff">霸</div></div>
+      <div class="mock" style="height:200px;background:linear-gradient(150deg,var(--steel),var(--silver-lite));display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:100px;color:var(--crimson)">霸</div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">LOGO · BACKGROUNDS</span><span class="no eng">18</span></div>
+</section>
+
+<!-- ============ C 視覺基礎 ============ -->
+<!-- 19 章名 C -->
+<section class="page crim" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Section C</span></div>
+  <div class="content">
+    <div class="eng" style="font-size:120px;font-weight:800;opacity:.18;line-height:.8">C</div>
+    <h1 class="title serif" style="color:#fff;margin-top:-40px">視覺基礎</h1>
+    <h2 class="sub" style="color:rgba(255,255,255,.8)">Visual Foundations｜色彩・字體・網格・圖形。</h2>
+  </div>
+  <div class="pg-foot"><span class="eng">VISUAL FOUNDATIONS</span><span class="no eng">19</span></div>
+</section>
+
+<!-- 20 色彩主系統 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.01 Color Palette</span></div>
+  <div class="content" style="margin-top:78px">
+    <div class="kicker">Primary Color</div>
+    <h1 class="title">三色，撐起全部張力。</h1>
+    <div class="grid3" style="margin-top:26px">
+      <div class="sw" style="background:linear-gradient(160deg,#B11F37,var(--crimson) 45%,var(--crimson-deep))"><div class="nm">重慶深緋紅</div><div class="hex eng">HEX #9A1B2F</div></div>
+      <div class="sw" style="background:linear-gradient(160deg,#E7E9EC,var(--silver) 45%,var(--steel));color:var(--ink)"><div class="nm">金屬銀</div><div class="hex eng">HEX #C7CCD1</div></div>
+      <div class="sw" style="background:linear-gradient(160deg,var(--gold-lite),var(--gold) 55%,#9C7C2E)"><div class="nm">質感金</div><div class="hex eng">HEX #C2A14E</div></div>
+    </div>
+    <table class="spec" style="margin-top:26px">
+      <tr><th>色名</th><th>HEX</th><th>RGB</th><th>CMYK</th><th>Pantone</th><th>角色</th></tr>
+      <tr><td><span class="chip" style="background:var(--crimson)"></span>深緋紅</td><td class="eng">#9A1B2F</td><td class="eng">154·27·47</td><td class="eng">25·100·80·20</td><td class="eng">1955 C</td><td>主色・能量</td></tr>
+      <tr><td><span class="chip" style="background:var(--silver)"></span>金屬銀</td><td class="eng">#C7CCD1</td><td class="eng">199·204·209</td><td class="eng">8·5·5·0</td><td class="eng">429 C</td><td>大面・俐落</td></tr>
+      <tr><td><span class="chip" style="background:var(--gold)"></span>質感金</td><td class="eng">#C2A14E</td><td class="eng">194·161·78</td><td class="eng">28·36·82·5</td><td class="eng">871 C</td><td>點綴・尊榮</td></tr>
+    </table>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · COLOR</span><span class="no eng">20</span></div>
+</section>
+
+<!-- 21 色彩比例 + 中性 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.02 Color Ratio</span></div>
+  <div class="content" style="margin-top:84px">
+    <div class="kicker">Ratio &amp; Neutrals</div>
+    <h1 class="title">60 / 30 / 10 法則</h1>
+    <div style="display:flex;height:90px;border-radius:4px;overflow:hidden;margin-top:24px">
+      <div style="flex:6;background:var(--paper-2);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--steel)">米白 / 銀 60%</div>
+      <div style="flex:3;background:var(--crimson);display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff">緋紅 30%</div>
+      <div style="flex:1;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff">金 10%</div>
+    </div>
+    <p class="body" style="margin-top:18px;max-width:64ch">大面以中性銀／米白撐住高級感，緋紅作為品牌能量主角，質感金僅作畫龍點睛 —— 一旦金超過 15%，立刻顯俗。</p>
+    <div class="secno" style="margin-top:24px">中性色階 Neutrals</div>
+    <div style="display:flex;gap:0;margin-top:12px;height:60px;border-radius:4px;overflow:hidden">
+      <div style="flex:1;background:var(--ink)"></div><div style="flex:1;background:var(--ink-2)"></div><div style="flex:1;background:var(--steel)"></div><div style="flex:1;background:var(--silver)"></div><div style="flex:1;background:var(--silver-lite)"></div><div style="flex:1;background:var(--paper)"></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · RATIO</span><span class="no eng">21</span></div>
+</section>
+
+<!-- 22 字體系統 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.03 Typography</span></div>
+  <div class="content" style="margin-top:78px">
+    <div class="kicker">Typography</div>
+    <h1 class="title">字，是品牌的聲音。</h1>
+    <div class="grid2" style="margin-top:24px;align-items:flex-start">
+      <div>
+        <div class="secno">中文・標題</div>
+        <div class="serif" style="font-size:46px;font-weight:900;margin:8px 0">思源宋體 霸</div>
+        <div class="d" style="color:var(--steel)">Noto Serif TC · 文青質感、用於標題與標語</div>
+        <div class="secno" style="margin-top:22px">中文・內文</div>
+        <div style="font-family:'Noto Sans TC';font-size:30px;font-weight:500;margin:8px 0">思源黑體 周霸虎</div>
+        <div class="d" style="color:var(--steel)">Noto Sans TC · 俐落、用於內文與標示</div>
+      </div>
+      <div>
+        <div class="secno">英文・標準</div>
+        <div class="eng" style="font-size:34px;font-weight:700;margin:8px 0;letter-spacing:.08em">Montserrat</div>
+        <div class="d" style="color:var(--steel)">幾何無襯線・英文標準字與數字</div>
+        <div class="secno" style="margin-top:22px">排版規範</div>
+        <ul class="d" style="margin-top:8px;line-height:2;list-style:none">
+          <li>· 中英混排，英文取 0.8em（略小於中文）</li>
+          <li>· 全形標點「、」「『 』」，不用半形</li>
+          <li>· 中文字距 +5～10%，每行 12–18 字</li>
+          <li>· 標題可直排（雜誌感），內文一律橫排</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · TYPE</span><span class="no eng">22</span></div>
+</section>
+
+<!-- 23 字級階層 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.04 Type Scale</span></div>
+  <div class="content" style="margin-top:82px">
+    <div class="kicker">Type Scale</div>
+    <h1 class="title" style="margin-bottom:24px">字級階層</h1>
+    <div style="border-top:1px solid var(--line)">
+      <div style="display:flex;align-items:baseline;gap:24px;padding:14px 0;border-bottom:1px solid var(--line)"><span class="eng" style="width:120px;color:var(--steel);font-size:11px">H1 · 46/900</span><span class="serif" style="font-size:46px;font-weight:900">霸氣登場</span></div>
+      <div style="display:flex;align-items:baseline;gap:24px;padding:14px 0;border-bottom:1px solid var(--line)"><span class="eng" style="width:120px;color:var(--steel);font-size:11px">H2 · 28/700</span><span class="serif" style="font-size:28px;font-weight:700">川味本真</span></div>
+      <div style="display:flex;align-items:baseline;gap:24px;padding:14px 0;border-bottom:1px solid var(--line)"><span class="eng" style="width:120px;color:var(--steel);font-size:11px">H3 · 18/500</span><span style="font-size:18px;font-weight:500">小節標題用黑體中黑</span></div>
+      <div style="display:flex;align-items:baseline;gap:24px;padding:14px 0;border-bottom:1px solid var(--line)"><span class="eng" style="width:120px;color:var(--steel);font-size:11px">Body · 14/300</span><span style="font-size:14px;font-weight:300">內文用思源黑體 Light，行高 2.0，閱讀最舒適。</span></div>
+      <div style="display:flex;align-items:baseline;gap:24px;padding:14px 0"><span class="eng" style="width:120px;color:var(--steel);font-size:11px">Caption · 11</span><span class="eng" style="font-size:11px;letter-spacing:.16em;color:var(--steel)">CAPTION / LABEL · MONTSERRAT</span></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · SCALE</span><span class="no eng">23</span></div>
+</section>
+
+<!-- 24 網格系統 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.05 Grid System</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="grid2">
+      <div>
+        <div class="kicker">Grid System</div>
+        <h1 class="title">12 欄網格</h1>
+        <div class="rule silver"></div>
+        <p class="body">所有平面以 12 欄網格構成，欄間距 = 1 基準單位。大面留白，資訊靠左對齊或置中，禁止徒手亂排。網格給秩序，秩序給高級。</p>
+      </div>
+      <div style="height:520px;border:1px solid var(--line);border-radius:4px;display:grid;grid-template-columns:repeat(12,1fr);gap:6px;padding:30px;background:var(--paper-2)">
+        <div style="grid-column:span 12;background:rgba(154,27,47,.10);border-radius:2px;height:54px"></div>
+        <div style="grid-column:span 8;background:rgba(154,27,47,.18);border-radius:2px;height:200px"></div>
+        <div style="grid-column:span 4;background:rgba(194,161,78,.3);border-radius:2px;height:200px"></div>
+        <div style="grid-column:span 4;background:rgba(138,145,151,.3);border-radius:2px;height:120px"></div>
+        <div style="grid-column:span 4;background:rgba(138,145,151,.3);border-radius:2px;height:120px"></div>
+        <div style="grid-column:span 4;background:rgba(138,145,151,.3);border-radius:2px;height:120px"></div>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · GRID</span><span class="no eng">24</span></div>
+</section>
+
+<!-- 25 輔助圖形 霸線條 -->
+<section class="page dark">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.06 Graphic Element</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker" style="color:var(--gold)">Graphic Element</div>
+    <h1 class="title serif" style="color:var(--paper)">「霸」的延伸語言</h1>
+    <p class="body" style="color:rgba(244,241,236,.7);max-width:60ch">取霸字單一筆畫，發展為品牌專屬的「刀鋒線條」。可作為分隔線、邊框、版面引導，亦可放大為背景水印（透明度 8%）。</p>
+    <div class="grid3" style="margin-top:30px">
+      <div style="height:200px;border:1px solid rgba(255,255,255,.15);border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden"><div class="bk-mark" style="font-size:260px;color:rgba(255,255,255,.06)">霸</div></div>
+      <div style="height:200px;border:1px solid rgba(255,255,255,.15);border-radius:4px;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:30px"><div style="height:3px;background:var(--gold);width:80%"></div><div style="height:3px;background:var(--crimson);width:55%"></div><div style="height:3px;background:var(--silver);width:35%"></div></div>
+      <div style="height:200px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:repeating-linear-gradient(135deg,transparent 0 18px,rgba(194,161,78,.18) 18px 20px)"></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · GRAPHIC</span><span class="no eng">25</span></div>
+</section>
+
+<!-- 26 圖標系統 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.07 Iconography</span></div>
+  <div class="content" style="margin-top:82px">
+    <div class="kicker">Iconography</div>
+    <h1 class="title">線性圖標系統</h1>
+    <p class="body" style="max-width:60ch">統一 2px 線寬、圓角 2px、24×24 網格。風格與霸字線條一致 —— 俐落、單線、不填色。用於菜單、導視、數位介面。</p>
+    <div class="grid4" style="margin-top:30px;gap:14px">
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🍲</div><div class="eng" style="font-size:9px;color:var(--steel)">HOTPOT</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🌶️</div><div class="eng" style="font-size:9px;color:var(--steel)">SPICY</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🥩</div><div class="eng" style="font-size:9px;color:var(--steel)">BEEF</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🥬</div><div class="eng" style="font-size:9px;color:var(--steel)">VEG</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🍢</div><div class="eng" style="font-size:9px;color:var(--steel)">SKEWER</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🍶</div><div class="eng" style="font-size:9px;color:var(--steel)">SAUCE</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">🔥</div><div class="eng" style="font-size:9px;color:var(--steel)">FIRE</div></div>
+      <div class="mock" style="height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px"><div style="font-size:34px">⏱️</div><div class="eng" style="font-size:9px;color:var(--steel)">8 HRS</div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · ICONS</span><span class="no eng">26</span></div>
+</section>
+
+<!-- 27 攝影風格 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.08 Photography</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Photography</div>
+    <h1 class="title">深色背景，蒸氣為主角。</h1>
+    <p class="body" style="max-width:62ch">食物攝影採暗調（low-key），深墨背景襯托牛油紅湯的油光與翻騰蒸氣。側逆光、淺景深、保留真實顆粒感 —— 我們要「真人味」，不要 AI 般的過度完美。</p>
+    <div class="grid3" style="margin-top:26px">
+      <div class="mock" style="height:230px;background:linear-gradient(160deg,#3a1010,#1a0808);display:flex;align-items:flex-end;padding:16px"><span class="tag" style="border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.7)">紅湯特寫</span></div>
+      <div class="mock" style="height:230px;background:linear-gradient(160deg,#241f1a,#0e0c0a);display:flex;align-items:flex-end;padding:16px"><span class="tag" style="border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.7)">食材陳列</span></div>
+      <div class="mock" style="height:230px;background:linear-gradient(160deg,#2a2420,#100d0b);display:flex;align-items:flex-end;padding:16px"><span class="tag" style="border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.7)">用餐氛圍</span></div>
+    </div>
+    <p class="body" style="margin-top:14px;font-size:12px;color:var(--steel)">調性：對比 +15／飽和 −5／暖色溫。禁止：高彩濾鏡、白底擺拍、塑膠感打光。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · PHOTO</span><span class="no eng">27</span></div>
+</section>
+
+<!-- 28 動態與語氣總結 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">C.09 Motion</span></div>
+  <div class="content" style="margin-top:84px">
+    <div class="kicker">Motion Principles</div>
+    <h1 class="title">動態：穩、準、留白。</h1>
+    <div class="grid3" style="margin-top:30px">
+      <div class="li"><div class="num-dot">1</div><div><div class="t">慢進快出</div><div class="d">ease-out 為主，入場 0.6s，霸字筆畫由銀光描出。沉穩不浮躁。</div></div></div>
+      <div class="li"><div class="num-dot">2</div><div><div class="t">金光一閃</div><div class="d">轉場以一道質感金光掃過，象徵爐火。每段影片只用一次，留驚喜。</div></div></div>
+      <div class="li"><div class="num-dot">3</div><div><div class="t">蒸氣留白</div><div class="d">畫面恆留 ⅓ 呼吸空間，文字不滿版。動得越少，越顯貴。</div></div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FOUNDATION · MOTION</span><span class="no eng">28</span></div>
+</section>
+
+<!-- ============ D 商務物料 ============ -->
+<!-- 29 章名 D -->
+<section class="page dark" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Section D</span></div>
+  <div class="content">
+    <div class="eng" style="font-size:120px;font-weight:800;color:var(--gold);opacity:.22;line-height:.8">D</div>
+    <h1 class="title serif" style="color:#fff;margin-top:-40px">商務物料</h1>
+    <h2 class="sub" style="color:rgba(255,255,255,.78)">Business Collaterals｜對外的每一張紙都是門面。</h2>
+  </div>
+  <div class="pg-foot"><span class="eng">BUSINESS COLLATERALS</span><span class="no eng">29</span></div>
+</section>
+
+<!-- 30 名片 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">D.01 Business Card</span></div>
+  <div class="content" style="margin-top:78px">
+    <div class="kicker">Business Card · 90 × 54 mm</div>
+    <h1 class="title">名片</h1>
+    <div class="grid2" style="margin-top:24px">
+      <div class="mock" style="height:300px;background:var(--ink);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:150px;background:linear-gradient(150deg,var(--silver),var(--steel));-webkit-background-clip:text;background-clip:text;color:transparent">霸</div><span class="tag" style="position:absolute;bottom:14px;left:14px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">正面・燙銀</span></div>
+      <div class="mock" style="height:300px;background:var(--ink);padding:30px;display:flex;flex-direction:column;justify-content:space-between;color:#fff">
+        <div class="serif" style="color:var(--crimson);font-weight:700;letter-spacing:.2em">川味本真 · BUFF HOTPOT</div>
+        <div style="text-align:right">
+          <div style="font-weight:700;font-size:16px">周 霸 虎</div>
+          <div class="eng" style="font-size:9px;letter-spacing:.16em;color:var(--silver);margin-top:6px">OPERATIONS DIRECTOR</div>
+          <div class="eng" style="font-size:9px;letter-spacing:.12em;color:rgba(255,255,255,.55);margin-top:10px;line-height:1.8">T&nbsp;[ 預留電話 ]<br>E&nbsp;[ 預留信箱 ]<br>台中市西屯區漢口路二段 221 號</div>
+        </div>
+        <span class="tag" style="position:absolute;bottom:14px;left:14px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.5)">背面・資訊</span>
+      </div>
+    </div>
+    <p class="body" style="margin-top:14px;font-size:12px;color:var(--steel)">材質：500g 黑卡 / 觸感紙・正面燙亮銀霸字・背面緋紅標語 + 銀色資訊，右下對齊。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">COLLATERAL · CARD</span><span class="no eng">30</span></div>
+</section>
+
+<!-- 31 信紙信封 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">D.02 Stationery</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Letterhead &amp; Envelope</div>
+    <h1 class="title">信紙與信封</h1>
+    <div class="grid2" style="margin-top:24px">
+      <div class="mock" style="height:330px;padding:26px;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div class="bk-mark" style="font-size:40px;color:var(--crimson)">霸</div><div class="eng" style="font-size:9px;letter-spacing:.18em;color:var(--steel);text-align:right">周霸虎老火鍋<br>BUFF HOTPOT</div></div>
+        <div style="height:1px;background:var(--line);margin:16px 0"></div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="height:7px;background:var(--silver-lite);width:70%"></div><div style="height:7px;background:var(--silver-lite);width:88%"></div><div style="height:7px;background:var(--silver-lite);width:80%"></div><div style="height:7px;background:var(--silver-lite);width:60%"></div>
+        </div>
+        <div style="margin-top:auto;display:flex;justify-content:center"><div style="width:30px;height:2px;background:var(--gold)"></div></div>
+        <span class="tag" style="position:absolute;bottom:12px;right:12px">A4 信紙</span>
+      </div>
+      <div class="mock" style="height:330px;display:flex;flex-direction:column;justify-content:center;padding:30px;background:var(--paper-2)">
+        <div style="background:#fff;border:1px solid var(--line);border-radius:3px;height:150px;padding:18px;display:flex;flex-direction:column;justify-content:space-between">
+          <div class="bk-mark" style="font-size:34px;color:var(--crimson)">霸</div>
+          <div class="eng" style="font-size:8px;letter-spacing:.16em;color:var(--steel)">TAICHUNG · CHONGQING STYLE HOTPOT</div>
+        </div>
+        <span class="tag" style="position:absolute;bottom:12px;right:12px">中式信封 DL</span>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">COLLATERAL · STATIONERY</span><span class="no eng">31</span></div>
+</section>
+
+<!-- 32 菜單 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">D.03 Menu</span></div>
+  <div class="content" style="margin-top:78px">
+    <div class="kicker">Menu Design</div>
+    <h1 class="title">菜單</h1>
+    <div class="grid2" style="margin-top:22px">
+      <div class="mock" style="height:340px;background:var(--crimson);color:#fff;padding:30px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px">
+        <div class="bk-mark" style="font-size:120px;color:rgba(255,255,255,.92)">霸</div>
+        <div class="serif" style="font-weight:700;letter-spacing:.34em;padding-left:.34em">周霸虎老火鍋</div>
+        <div class="eng" style="font-size:10px;letter-spacing:.4em;color:var(--gold-lite)">M E N U · 2026</div>
+        <span class="tag" style="position:absolute;bottom:12px;left:12px;border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.6)">封面</span>
+      </div>
+      <div class="mock" style="height:340px;padding:26px;display:flex;flex-direction:column">
+        <div class="serif" style="font-weight:700;font-size:18px;border-bottom:2px solid var(--crimson);padding-bottom:8px;margin-bottom:12px">招牌鍋底 <span class="eng" style="font-size:10px;color:var(--steel)">SIGNATURE BASE</span></div>
+        <div style="display:flex;flex-direction:column;gap:11px;font-size:12.5px">
+          <div style="display:flex;justify-content:space-between"><span>霸氣牛油紅湯</span><span class="eng" style="color:var(--crimson)">$ 280</span></div>
+          <div style="display:flex;justify-content:space-between"><span>菌王養生白湯</span><span class="eng" style="color:var(--crimson)">$ 260</span></div>
+          <div style="display:flex;justify-content:space-between"><span>鴛鴦雙拼</span><span class="eng" style="color:var(--crimson)">$ 320</span></div>
+        </div>
+        <div class="serif" style="font-weight:700;font-size:18px;border-bottom:2px solid var(--gold);padding-bottom:8px;margin:16px 0 12px">本真肉品 <span class="eng" style="font-size:10px;color:var(--steel)">PRIME MEAT</span></div>
+        <div style="display:flex;flex-direction:column;gap:11px;font-size:12.5px">
+          <div style="display:flex;justify-content:space-between"><span>霸王毛肚</span><span class="eng" style="color:var(--crimson)">$ 220</span></div>
+          <div style="display:flex;justify-content:space-between"><span>現切肥牛</span><span class="eng" style="color:var(--crimson)">$ 240</span></div>
+        </div>
+        <span class="tag" style="position:absolute;bottom:12px;right:12px">內頁・網格排版</span>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">COLLATERAL · MENU</span><span class="no eng">32</span></div>
+</section>
+
+<!-- 33 桌牌 點餐單 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">D.04 Table &amp; Order</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Table Number &amp; Order Sheet</div>
+    <h1 class="title">桌牌與點餐單</h1>
+    <div class="grid3" style="margin-top:26px">
+      <div class="mock" style="height:280px;background:linear-gradient(160deg,var(--silver),var(--steel));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"><div class="eng" style="font-size:90px;font-weight:800;color:var(--ink)">08</div><div class="bk-mark" style="font-size:30px;color:var(--crimson)">霸</div><span class="tag" style="position:absolute;bottom:12px">金屬桌牌</span></div>
+      <div class="mock" style="height:280px;padding:20px;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px"><span class="bk-mark" style="font-size:24px;color:var(--crimson)">霸</span><span class="eng" style="font-size:9px;color:var(--steel)">ORDER NO.</span></div><div style="margin-top:12px;display:flex;flex-direction:column;gap:9px">​<div style="height:6px;background:var(--silver-lite);width:90%"></div><div style="height:6px;background:var(--silver-lite);width:75%"></div><div style="height:6px;background:var(--silver-lite);width:82%"></div><div style="height:6px;background:var(--silver-lite);width:60%"></div></div><span class="tag" style="position:absolute;bottom:12px;right:12px">點餐單</span></div>
+      <div class="mock" style="height:280px;background:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px"><div style="width:120px;height:120px;background:#fff;border-radius:6px;display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:60px;color:var(--ink)">霸</div></div><div class="eng" style="font-size:9px;letter-spacing:.2em;color:var(--silver)">SCAN TO ORDER</div><span class="tag" style="position:absolute;bottom:12px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">QR 數位點餐</span></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">COLLATERAL · TABLE</span><span class="no eng">33</span></div>
+</section>
+
+<!-- ============ E 空間 制服 ============ -->
+<!-- 34 章名 E -->
+<section class="page crim" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Section E</span></div>
+  <div class="content">
+    <div class="eng" style="font-size:120px;font-weight:800;opacity:.18;line-height:.8">E</div>
+    <h1 class="title serif" style="color:#fff;margin-top:-40px">空間與制服</h1>
+    <h2 class="sub" style="color:rgba(255,255,255,.8)">Space &amp; Uniform｜把江湖，蓋成一座場域。</h2>
+  </div>
+  <div class="pg-foot"><span class="eng">SPACE &amp; UNIFORM</span><span class="no eng">34</span></div>
+</section>
+
+<!-- 35 招牌門面 -->
+<section class="page dark">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">E.01 Facade &amp; Signage</span></div>
+  <div class="content" style="margin-top:78px">
+    <div class="kicker" style="color:var(--gold)">Facade · 旗艦店門面</div>
+    <h1 class="title serif" style="color:var(--paper)">漢口路上，<br>夜裡會發光的霸。</h1>
+    <div class="grid2" style="margin-top:20px;align-items:center">
+      <p class="body" style="color:rgba(244,241,236,.72)">拉絲不鏽鋼 + 清水模主體。招牌捨棄壓克力燈箱，改用懸浮式金屬背發光字 —— 白天冷冽銀質，夜晚從字背透出緋紅光暈，成為街區的視覺地標。</p>
+      <div class="mock" style="height:300px;background:radial-gradient(120% 100% at 50% 120%,rgba(154,27,47,.55),#0c0b0a);display:flex;align-items:center;justify-content:center;border:none"><div class="bk-mark" style="font-size:200px;color:#fff;text-shadow:0 0 40px rgba(154,27,47,.9),0 0 80px rgba(154,27,47,.5)">霸</div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">SPACE · FACADE</span><span class="no eng">35</span></div>
+</section>
+
+<!-- 36 室內導視 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">E.02 Interior &amp; Wayfinding</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Interior &amp; Wayfinding</div>
+    <h1 class="title">室內導視與光影</h1>
+    <div class="grid3" style="margin-top:26px">
+      <div class="mock" style="height:260px;background:var(--ink-2);display:flex;align-items:center;justify-content:center"><div class="serif" style="writing-mode:vertical-rl;font-size:40px;font-weight:900;color:var(--gold);letter-spacing:.3em">川味本真</div><span class="tag" style="position:absolute;bottom:12px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">主視覺牆・陰刻</span></div>
+      <div class="mock" style="height:260px;background:linear-gradient(160deg,var(--silver),var(--steel));display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"><div style="font-size:40px">🚻</div><div style="font-weight:700;color:var(--crimson)">洗手間</div><span class="tag" style="position:absolute;bottom:12px">金屬導視牌</span></div>
+      <div class="mock" style="height:260px;background:var(--ink);display:flex;align-items:flex-end;padding:18px"><div style="color:var(--gold);font-size:13px">暖金間接照明<br><span style="color:rgba(255,255,255,.5);font-size:11px">2700K · 洗牆射燈</span></div><span class="tag" style="position:absolute;top:12px;right:12px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">光影</span></div>
+    </div>
+    <p class="body" style="margin-top:14px;font-size:12px;color:var(--steel)">導視牌一體成型銀色金屬板・文字緋紅烤漆・極簡工業風。空間 = 冷冽金屬 × 暖金光 × 緋紅點綴。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">SPACE · WAYFINDING</span><span class="no eng">36</span></div>
+</section>
+
+<!-- 37 制服 T恤 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">E.03 Staff T-Shirt</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Uniform · Staff T-Shirt</div>
+    <h1 class="title">員工 T 恤</h1>
+    <div class="grid3" style="margin-top:24px">
+      <div class="mock" style="height:300px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px"><div class="eng" style="font-size:13px;letter-spacing:.3em;color:var(--silver);position:absolute;top:40px;left:40px">BUFF HOTPOT</div><div class="bk-mark" style="font-size:160px;color:rgba(255,255,255,.06)">霸</div><span class="tag" style="position:absolute;bottom:12px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">正面・小標</span></div>
+      <div class="mock" style="height:300px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex-direction:column"><div class="bk-mark" style="font-size:150px;color:var(--crimson)">霸</div><div class="serif" style="color:rgba(255,255,255,.5);font-size:11px;letter-spacing:.4em;margin-top:6px">川味本真</div><span class="tag" style="position:absolute;bottom:12px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">背面・大霸</span></div>
+      <div style="padding:10px">
+        <div class="secno">規格</div>
+        <ul class="d" style="margin-top:12px;line-height:2;list-style:none">
+          <li>· 重磅落肩寬版 Oversized</li>
+          <li>· 純黑 / 深灰純棉 230g</li>
+          <li>· 左胸銀字 BUFF HOTPOT</li>
+          <li>· 背面緋紅幾何霸 + 標語</li>
+          <li>· 員工下班願意穿上街</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">UNIFORM · T-SHIRT</span><span class="no eng">37</span></div>
+</section>
+
+<!-- 38 圍裙 老帽 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">E.04 Apron &amp; Cap</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Tech-wear Apron &amp; Dad Hat</div>
+    <h1 class="title">機能圍裙與老帽</h1>
+    <div class="grid2" style="margin-top:24px">
+      <div class="mock" style="height:320px;background:#3c4248;display:flex;align-items:center;justify-content:center;position:relative"><div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);width:60px;height:8px;background:var(--silver);border-radius:4px"></div><div class="bk-mark" style="font-size:80px;color:var(--crimson)">霸</div><span class="tag" style="position:absolute;bottom:12px;left:12px;border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.7)">鐵灰防潑帆布・銀色五金</span></div>
+      <div class="mock" style="height:320px;background:linear-gradient(160deg,#aeb4b9,#7d8489);display:flex;align-items:center;justify-content:center;position:relative"><div class="bk-mark" style="font-size:46px;background:linear-gradient(150deg,var(--gold-lite),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent">霸</div><span class="tag" style="position:absolute;bottom:12px;left:12px">銀灰老帽・側標川味本真・正面金繡小霸</span></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">UNIFORM · APRON</span><span class="no eng">38</span></div>
+</section>
+
+<!-- ============ F 包裝 數位 ============ -->
+<!-- 39 章名 F -->
+<section class="page dark" style="justify-content:center">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Section F</span></div>
+  <div class="content">
+    <div class="eng" style="font-size:120px;font-weight:800;color:var(--gold);opacity:.22;line-height:.8">F</div>
+    <h1 class="title serif" style="color:#fff;margin-top:-40px">包裝 · 數位 · 加盟</h1>
+    <h2 class="sub" style="color:rgba(255,255,255,.78)">Packaging · Digital · Franchise｜走出店外的品牌。</h2>
+  </div>
+  <div class="pg-foot"><span class="eng">PACKAGING &amp; DIGITAL</span><span class="no eng">39</span></div>
+</section>
+
+<!-- 40 外帶包裝 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.01 Takeaway</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Takeaway Packaging</div>
+    <h1 class="title">外帶系統</h1>
+    <div class="grid4" style="margin-top:26px">
+      <div class="mock" style="height:260px;background:var(--crimson);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:90px;color:#fff">霸</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.3);color:#fff">紙提袋</span></div>
+      <div class="mock" style="height:260px;background:var(--ink);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:70px;background:linear-gradient(150deg,var(--gold-lite),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent">霸</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.7)">湯桶</span></div>
+      <div class="mock" style="height:260px;background:var(--paper-2);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:60px;color:var(--crimson)">霸</div><span class="tag" style="position:absolute;bottom:10px">餐盒封條</span></div>
+      <div class="mock" style="height:260px;background:linear-gradient(160deg,var(--silver),var(--steel));display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:60px;color:var(--ink)">霸</div><span class="tag" style="position:absolute;bottom:10px">保溫袋</span></div>
+    </div>
+    <p class="body" style="margin-top:14px;font-size:12px;color:var(--steel)">主色緋紅 + 燙金霸字，封條跨越開口處兼具封緘功能。環保牛皮為輔，呼應「本真」。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">PACKAGING · TAKEAWAY</span><span class="no eng">40</span></div>
+</section>
+
+<!-- 41 餐具 桌面 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.02 Tableware</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Tableware &amp; Tabletop</div>
+    <h1 class="title">餐具與桌面</h1>
+    <div class="grid4" style="margin-top:26px">
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:var(--paper-2)"><div style="width:120px;height:120px;border-radius:50%;background:#fff;border:6px solid var(--crimson);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:46px;color:var(--crimson)">霸</div></div><span class="tag" style="position:absolute;bottom:10px">醬料碟</span></div>
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center"><div style="writing-mode:vertical-rl;font-family:'Noto Serif TC';font-weight:700;font-size:16px;letter-spacing:.3em;color:var(--ink)">周霸虎・川味本真</div><span class="tag" style="position:absolute;bottom:10px">筷套</span></div>
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:var(--ink)"><div class="bk-mark" style="font-size:60px;color:var(--silver)">霸</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">濕紙巾</span></div>
+      <div class="mock" style="height:240px;display:flex;align-items:center;justify-content:center;background:var(--crimson)"><div class="eng" style="color:#fff;font-size:11px;letter-spacing:.2em;text-align:center;line-height:1.8">PLACEMAT<br>餐墊紙</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.3);color:#fff">餐墊</span></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">PACKAGING · TABLEWARE</span><span class="no eng">41</span></div>
+</section>
+
+<!-- 42 會員卡 優惠券 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.03 Membership</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Membership &amp; Voucher</div>
+    <h1 class="title">會員卡與禮券</h1>
+    <div class="grid3" style="margin-top:26px">
+      <div class="mock" style="height:200px;background:var(--ink);padding:20px;display:flex;flex-direction:column;justify-content:space-between"><div style="display:flex;justify-content:space-between"><span class="bk-mark" style="font-size:36px;color:var(--gold)">霸</span><span class="eng" style="font-size:9px;color:var(--gold);letter-spacing:.2em">VIP</span></div><div><div class="eng" style="font-size:13px;letter-spacing:.2em;color:#fff">**** **** **** 0888</div><div class="eng" style="font-size:8px;color:var(--silver);margin-top:6px">BUFF HOTPOT MEMBER</div></div><span class="tag" style="position:absolute;bottom:10px;right:10px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.5)">黑金 VIP</span></div>
+      <div class="mock" style="height:200px;background:linear-gradient(160deg,var(--silver),var(--steel));padding:20px;display:flex;flex-direction:column;justify-content:space-between"><span class="bk-mark" style="font-size:36px;color:var(--crimson)">霸</span><div style="color:var(--ink)"><div style="font-weight:700">一般會員</div><div class="eng" style="font-size:8px;color:var(--ink-2)">MEMBER CARD</div></div><span class="tag" style="position:absolute;bottom:10px;right:10px">銀卡</span></div>
+      <div class="mock" style="height:200px;background:var(--crimson);padding:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff"><div class="serif" style="font-size:30px;font-weight:900;color:var(--gold-lite)">$ 500</div><div style="font-size:11px;letter-spacing:.2em;margin-top:6px">現金禮券</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.3);color:#fff">禮券</span></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">DIGITAL · MEMBERSHIP</span><span class="no eng">42</span></div>
+</section>
+
+<!-- 43 社群模板 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.04 Social Templates</span></div>
+  <div class="content" style="margin-top:78px">
+    <div class="kicker">Social Media · IG / Threads</div>
+    <h1 class="title">社群貼文模板</h1>
+    <p class="body" style="max-width:60ch">前 200ms 之戰：封面必中「對比 + 緋紅」。霸字或主圖占視覺權重中心，標題右上，CTA 用緋紅／金。每月 30 張，風格一致 = 護城河。</p>
+    <div class="grid4" style="margin-top:22px">
+      <div class="mock" style="height:240px;background:var(--ink);display:flex;flex-direction:column;padding:18px;justify-content:space-between"><div class="eng" style="font-size:9px;color:var(--gold);align-self:flex-end;letter-spacing:.2em">NEW</div><div class="bk-mark" style="font-size:90px;color:var(--crimson);align-self:center">霸</div><div style="color:#fff;font-size:13px;font-weight:700">霸氣牛油<br>紅湯登場</div><span class="tag" style="position:absolute;bottom:8px;right:8px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.5)">主視覺</span></div>
+      <div class="mock" style="height:240px;background:var(--crimson);display:flex;flex-direction:column;padding:18px;color:#fff;justify-content:center;gap:8px"><div class="serif" style="font-size:24px;font-weight:900;line-height:1.3">熬足<br>8 小時</div><div style="height:2px;background:var(--gold);width:40px"></div><div style="font-size:11px;opacity:.85">老灶牛油・川味本真</div></div>
+      <div class="mock" style="height:240px;background:var(--paper);display:flex;flex-direction:column;padding:18px;justify-content:space-between"><div class="bk-mark" style="font-size:30px;color:var(--crimson)">霸</div><div style="font-weight:700;font-size:15px;line-height:1.4">本週<br>限定菜單</div><div style="background:var(--crimson);color:#fff;font-size:10px;text-align:center;padding:7px;border-radius:30px">立即訂位 →</div></div>
+      <div class="mock" style="height:240px;background:linear-gradient(160deg,#241f1a,#0e0c0a);display:flex;align-items:flex-end;padding:18px"><div style="color:#fff"><div style="font-size:14px;font-weight:700">食材開箱</div><div class="eng" style="font-size:9px;color:var(--gold);margin-top:4px">REELS COVER</div></div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">DIGITAL · SOCIAL</span><span class="no eng">43</span></div>
+</section>
+
+<!-- 44 數位介面 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.05 Digital UI</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Website &amp; App</div>
+    <h1 class="title">數位介面</h1>
+    <div class="grid3" style="margin-top:24px">
+      <div class="mock" style="height:300px;display:flex;flex-direction:column"><div style="background:var(--ink);flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"><div class="bk-mark" style="font-size:80px;color:var(--crimson)">霸</div><div class="eng" style="font-size:8px;color:var(--silver);letter-spacing:.3em">BUFF HOTPOT</div><div style="background:var(--gold);color:var(--ink);font-size:9px;padding:6px 16px;border-radius:30px;margin-top:6px">線上訂位</div></div><span class="tag" style="position:absolute;bottom:10px;left:10px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">官網首頁</span></div>
+      <div class="mock" style="height:300px;background:var(--paper);padding:18px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><span class="bk-mark" style="font-size:24px;color:var(--crimson)">霸</span><span style="font-size:18px">☰</span></div><div style="height:90px;background:var(--ink);border-radius:6px;margin-bottom:12px;display:flex;align-items:center;justify-content:center"><span class="bk-mark" style="font-size:44px;color:var(--gold)">霸</span></div><div style="display:flex;gap:8px"><div style="flex:1;height:50px;background:var(--silver-lite);border-radius:6px"></div><div style="flex:1;height:50px;background:var(--silver-lite);border-radius:6px"></div></div><span class="tag" style="position:absolute;bottom:10px;right:10px">App</span></div>
+      <div style="padding:6px">
+        <div class="secno">UI 規範</div>
+        <ul class="d" style="margin-top:12px;line-height:2;list-style:none">
+          <li>· 主按鈕緋紅，次按鈕描線</li>
+          <li>· 點綴金僅用於 VIP / 強調</li>
+          <li>· 卡片圓角 8px・大留白</li>
+          <li>· 深色模式以墨黑為底</li>
+          <li>· 圖標沿用 C.07 線性系統</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">DIGITAL · UI</span><span class="no eng">44</span></div>
+</section>
+
+<!-- 45 周邊 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.06 Merchandise</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Merchandise · 周邊商品</div>
+    <h1 class="title">行動的廣告牌</h1>
+    <div class="grid4" style="margin-top:26px">
+      <div class="mock" style="height:230px;background:var(--paper-2);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:80px;color:var(--crimson)">霸</div><span class="tag" style="position:absolute;bottom:10px">帆布袋</span></div>
+      <div class="mock" style="height:230px;background:var(--ink);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:70px;color:var(--gold)">霸</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.6)">保溫瓶</span></div>
+      <div class="mock" style="height:230px;background:var(--crimson);display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:60px;color:#fff">霸</div><span class="tag" style="position:absolute;bottom:10px;border-color:rgba(255,255,255,.3);color:#fff">貼紙</span></div>
+      <div class="mock" style="height:230px;background:linear-gradient(160deg,var(--silver),var(--steel));display:flex;align-items:center;justify-content:center"><div class="bk-mark" style="font-size:50px;color:var(--ink)">霸</div><span class="tag" style="position:absolute;bottom:10px">鑰匙圈</span></div>
+    </div>
+    <p class="body" style="margin-top:14px;font-size:12px;color:var(--steel)">節慶版紅包袋：緋紅燙金霸字，標語直排 —— 把品牌送進顧客家裡。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">PACKAGING · MERCH</span><span class="no eng">45</span></div>
+</section>
+
+<!-- 46 加盟招商 -->
+<section class="page dark">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">F.07 Franchise Kit</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker" style="color:var(--gold)">Franchise &amp; Expansion</div>
+    <h1 class="title serif" style="color:var(--paper)">一個符號，<br>開到任何一座城。</h1>
+    <div class="grid3" style="margin-top:26px">
+      <div class="li"><div class="num-dot" style="background:var(--gold);color:var(--ink)">1</div><div><div class="t" style="color:#fff">超級符號可複製</div><div class="d" style="color:rgba(244,241,236,.65)">霸字適配金屬切割、雷雕、刺繡、霓虹，跨材質不失真。</div></div></div>
+      <div class="li"><div class="num-dot" style="background:var(--gold);color:var(--ink)">2</div><div><div class="t" style="color:#fff">三色即裝修指南</div><div class="d" style="color:rgba(244,241,236,.65)">緋紅 × 金屬銀 × 暖金光，任何分店一套色票照搬。</div></div></div>
+      <div class="li"><div class="num-dot" style="background:var(--gold);color:var(--ink)">3</div><div><div class="t" style="color:#fff">手冊即 SOP</div><div class="d" style="color:rgba(244,241,236,.65)">本手冊就是加盟主的視覺聖經，照做即一致。</div></div></div>
+    </div>
+  </div>
+  <div class="pg-foot"><span class="eng">FRANCHISE</span><span class="no eng">46</span></div>
+</section>
+
+<!-- 47 品牌檢核表 -->
+<section class="page">
+  <div class="pg-head"><span class="bk">霸</span><span class="eng">Brand Checklist</span></div>
+  <div class="content" style="margin-top:80px">
+    <div class="kicker">Before You Publish · 出街前自檢</div>
+    <h1 class="title">五問，才算設計。</h1>
+    <table class="spec" style="margin-top:22px">
+      <tr><th>檢核</th><th>問自己</th></tr>
+      <tr><td>① 對象</td><td>這件物料服務誰？場景對嗎？</td></tr>
+      <tr><td>② 識別</td><td>0.5 秒內認得出是周霸虎嗎？霸字在嗎？</td></tr>
+      <tr><td>③ 三色</td><td>只用了緋紅／銀／金？金 ≤ 10%？</td></tr>
+      <tr><td>④ 留白</td><td>砍到不能再砍了嗎？焦點 ≤ 4 個？</td></tr>
+      <tr><td>⑤ 記憶</td><td>閉眼五秒，還記得一件事嗎？</td></tr>
+    </table>
+    <p class="body" style="margin-top:20px;max-width:60ch">五題全過，才送印、才上稿。說不出為什麼，就是裝飾，不是設計。</p>
+  </div>
+  <div class="pg-foot"><span class="eng">CHECKLIST</span><span class="no eng">47</span></div>
+</section>
+
+<!-- 48 封底 -->
+<section class="page cover">
+  <div class="big" style="font-size:200px">霸</div>
+  <div style="margin-top:24px;font-family:'Noto Serif TC';font-weight:700;font-size:22px;letter-spacing:.5em;color:#fff;padding-left:.5em">周霸虎老火鍋</div>
+  <div class="eng" style="color:var(--silver);font-size:12px;letter-spacing:.42em;margin-top:12px">BUFF HOTPOT</div>
+  <div style="margin-top:30px;width:40px;height:2px;background:var(--gold)"></div>
+  <div style="margin-top:20px;font-family:'Noto Serif TC';font-weight:600;font-size:14px;letter-spacing:.4em;color:var(--gold-lite)">川味本真</div>
+  <div class="pg-foot" style="color:rgba(255,255,255,.35);justify-content:center"><span class="eng" style="text-align:center">© 2026 BUFF HOTPOT · 周霸虎老火鍋 · 品牌識別系統手冊 VIS MANUAL · 台中市西屯區漢口路二段 221 號</span></div>
+</section>
+
+</body>
+</html>
