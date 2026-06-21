@@ -77,14 +77,31 @@ app.add_middleware(RequestContextMiddleware)
 app.add_exception_handler(DomainError, domain_error_handler)  # type: ignore[arg-type]
 
 
-# Mount routers. Each router module's tests also self-mount with a guard,
-# so the import order doesn't matter — mounting here is the "real prod"
-# wiring; the in-test self-mount becomes a no-op once we're already here.
+# Mount routers. ``main.py`` is the single source of truth for prod wiring;
+# the test suite reuses this same ``app`` (via ``from restaurant_api.main
+# import app``) rather than self-mounting.
+def _is_mounted(prefix: str) -> bool:
+    """True if a router covering ``prefix`` is already attached to the app.
+
+    FastAPI 0.138 stopped flattening ``include_router`` results into
+    ``app.routes``; each include becomes an ``_IncludedRouter`` wrapper that
+    has no ``.path`` (the prefix lives on ``original_router.prefix``). The
+    old ``r.path.startswith(...)`` guard silently broke under 0.138 — it
+    never matched, so every guarded include ran twice. Handle both shapes.
+    """
+    for r in app.routes:
+        if getattr(r, "path", "").startswith(prefix):
+            return True
+        original = getattr(r, "original_router", None)
+        if original is not None and getattr(original, "prefix", "").startswith(prefix):
+            return True
+    return False
+
+
 def _mount_router(module, prefix_hint: str) -> None:
-    """Idempotent include_router — skip if any route under prefix already exists."""
-    if any(getattr(r, "path", "").startswith(prefix_hint) for r in app.routes):
-        return
-    app.include_router(module.router)
+    """Idempotent include_router — skip if the prefix is already mounted."""
+    if not _is_mounted(prefix_hint):
+        app.include_router(module.router)
 
 
 _mount_router(orders_router, "/orders")
@@ -97,13 +114,13 @@ _mount_router(campaigns_router, "/campaigns")
 _mount_router(ugc_router, "/ugc")
 _mount_router(membership_router, "/membership")
 # Reservations module exports two routers (one per prefix); mount each with
-# the path-based idempotency guard.
-if not any(getattr(r, "path", "").startswith("/reservations") for r in app.routes):
+# the same idempotency guard.
+if not _is_mounted("/reservations"):
     app.include_router(reservations_router.reservations_router)
-if not any(getattr(r, "path", "").startswith("/queue") for r in app.routes):
+if not _is_mounted("/queue"):
     app.include_router(reservations_router.queue_router)
 app.include_router(health_router.router)
-if not any(getattr(r, "path", "").startswith("/admin") for r in app.routes):
+if not _is_mounted("/admin"):
     app.include_router(auth_router.router)
 
 # Static wheel-spin demo page (門口 QR Code 指向 /demo/?campaign=<id>). Same-origin

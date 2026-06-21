@@ -21,7 +21,7 @@
 | 層 | 技術 | 版本 |
 |---|---|---|
 | Python | CPython | 3.12 |
-| 後端框架 | FastAPI | 0.136 |
+| 後端框架 | FastAPI | 0.138 |
 | ORM | SQLAlchemy async | 2.x |
 | 資料庫 | PostgreSQL | 16 (+ pgvector 0.6) |
 | Async driver | asyncpg | 0.30+ |
@@ -188,6 +188,14 @@ DB 沒起：`sudo service postgresql start`。
 
 ### ruff 抱怨中文標點
 demo / seed 腳本已加 `RUF001` per-file ignore。
+
+### 「Duplicate Operation ID」警告 / 路由被掛兩次
+FastAPI 0.138 起 `include_router` 不再把子路由展平進 `app.routes`，而是包成
+`_IncludedRouter`（沒有 `.path`，prefix 在 `original_router.prefix`）。任何用
+`r.path.startswith(prefix)` 判斷「是否已掛載」的 guard 都會失效→重複掛載。
+偵測已掛載請用 `main.py::_is_mounted()`（同時看 `.path` 與
+`original_router.prefix`）。掛載的唯一真實來源是 `main.py`；測試直接
+`from restaurant_api.main import app`，**不要**在測試裡再 self-mount。
 
 ---
 
