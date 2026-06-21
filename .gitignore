@@ -53,6 +53,15 @@ ENV/
 poetry.lock.bak
 .pdm-python
 
+# scripts/to_md.py 轉出的 Markdown（雙副檔名，給 Claude 暫讀用，非原始碼）
+*.pdf.md
+*.docx.md
+*.pptx.md
+*.xlsx.md
+*.epub.md
+*.html.md
+*.htm.md
+
 # ──────────────────────────────────────────────────────────────────────────
 # Node / Next.js (for future restaurant frontend)
 # ──────────────────────────────────────────────────────────────────────────

@@ -167,6 +167,13 @@
 - workspace/ 永遠不 commit
 - commit message 用 `feat:` / `fix:` / `docs:` / `chore:` / `test:` 前綴
 
+### PR 工作流（Ivan 的預設 — 不用每次問）
+- **一個任務完整做完 + 測試綠了 → 自動開 PR**，不用再問 Ivan「要不要開」。
+- PR 標題寫人話、內文寫「改了什麼 / 為什麼 / 怎麼驗證」，給看結果不看程式碼的指揮官審核。
+- **不開 PR 的情況**：半成品/進行中、純問答查資料不改檔、大任務拆成多步（全部做完**合成一個** PR，不要每步一個）。
+- Ivan 在 GitHub（手機或電腦）審核後按 Merge 進 main；要改就在同個 PR 上修。
+- 例外：Ivan 明講「先不要開 PR / 留分支就好」時就不開。
+
 ---
 
 ## 經常踩到的坑（解法已就位）
@@ -191,6 +198,33 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 
 ---
 
+## 檔案攝取 — 看到檔案自己選武器（不用我下指令）
+
+> 目的：Ivan 丟檔案進來，Claude **自動**判斷怎麼讀最省 token、結構最乾淨，
+> 不要每次問、也不要 Ivan 記指令。規則如下，遇到就照做、不用確認。
+
+**判斷流程（拿到一個檔案路徑時）：**
+
+1. 先看副檔名與大小，對照下表決定「直接 Read」還是「先轉 Markdown 再 Read」。
+2. 若要轉：跑 `uv run scripts/to_md.py <檔>`（或 `make to-md FILE=<檔>`），
+   它會在原檔旁產生 `<檔>.md`，然後你 Read 那個 `.md`。
+3. markitdown 走 `uv run` 隔離環境（PEP 723），**不進 pyproject.toml、碰不到 .venv**。
+   首次執行會下載、之後快取秒級。離線無 API key 也能跑（OCR 才需 `--llm`）。
+
+| 檔案 | 怎麼處理 | 為什麼 |
+|---|---|---|
+| `.md` `.txt` `.csv` `.json` `.xml` `.py` 等純文字 / 小 PDF（≲20 頁文字型） | **直接 `Read`** | 原生就讀得好，轉了沒意義 |
+| 大型 PDF（幾十～幾百頁、文字型） | **先 `to_md.py` 轉**再 Read `.md` | 省大量 token、避免分批 |
+| Office 檔 `.docx` `.pptx` `.xlsx` `.epub` | **先 `to_md.py` 轉** | Read 不直接吃這些；轉完表格/標題結構乾淨 |
+| 複雜 HTML（多層表格） | **先 `to_md.py` 轉** | 去殼留結構，省 token |
+| 掃描檔 / 照片型發票（需 OCR） | 先用 `Read` 看圖；要抽文字再 `to_md.py --llm`（需 `OPENAI_API_KEY`） | 一般「看」用原生即可 |
+
+**鐵律**：`to_md.py` 只做「檔案→文字」。**任何要入帳的金額/品項，仍須走
+`restaurant_api` 結構化驗證 + 人工覆核，不可直接信轉出來的純文字**（呼應
+「金錢永遠不用 float、ledger 可稽核」法則）。
+
+---
+
 ## 我希望 Claude Code 怎麼做事
 
 1. **動手前先看 `docs/06_execution_plan.md`** 確認還沒做什麼、Phase 排在哪
@@ -210,6 +244,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 
 | 我說 | 你做 |
 |---|---|
+| 「讀這個檔 / 我丟 PDF·Office·大檔給你」 | 照「檔案攝取」規則自動判斷：直接 Read 或先 `make to-md FILE=<檔>` 轉再讀 |
 | 「跑 demo」 | `make demo`（DevSwarm 跑 specs/profit_calc.md，需 API key） |
 | 「跑全部 spec」 | for s in specs/*.md; do make swarm REQ="$(cat $s)"; done |
 | 「補 spec」 | 用 `.claude/agents/spec-writer` |
