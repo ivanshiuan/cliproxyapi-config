@@ -118,6 +118,7 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/seed_demo_data.py" = ["RUF001"]
 "scripts/seed_wheel_campaign.py" = ["RUF001"]
 "scripts/seed_growth_demo.py" = ["RUF001"]
+"scripts/line_check.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"
