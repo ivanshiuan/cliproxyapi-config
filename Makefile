@@ -148,6 +148,10 @@ seed-reset: install ## Wipe seed tenant first, then seed fresh
 wheel-demo: install ## Seed an active 開幕輪盤 campaign and print the demo URL (then `make api`)
 	$(PY) scripts/seed_wheel_campaign.py
 
+.PHONY: line-check
+line-check: install ## Send a test LINE push (usage: make line-check USER=<line_user_id>)
+	$(PY) scripts/line_check.py $(USER)
+
 .PHONY: growth-demo
 growth-demo: install ## Seed the full 成長飛輪 demo (儲值/裂變/UGC/RFM) and print the dashboards
 	$(PY) scripts/seed_growth_demo.py

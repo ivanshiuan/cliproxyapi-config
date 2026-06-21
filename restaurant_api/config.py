@@ -55,6 +55,21 @@ class Settings(BaseSettings):
     session_secret: str = "dev-insecure-session-secret-change-me"
     admin_session_ttl_seconds: int = Field(default=43_200, ge=60)  # 12h
 
+    # ─── LINE Messaging API ─────────────────────────────────────────────
+    # When the channel access token is set, the app switches from the
+    # in-memory stub to the real LINE Messaging API (see
+    # integrations/line/messenger.py::get_messenger). These use the LINE
+    # community-standard env names (no RESTO_ prefix) via validation_alias,
+    # so dropping LINE_CHANNEL_ACCESS_TOKEN into .env "just works".
+    # The secret is only needed for inbound webhook signature validation;
+    # outbound push/reply/multicast need the token alone.
+    line_channel_access_token: str = Field(
+        default="", validation_alias="LINE_CHANNEL_ACCESS_TOKEN"
+    )
+    line_channel_secret: str = Field(
+        default="", validation_alias="LINE_CHANNEL_SECRET"
+    )
+
     # ─── Locale ─────────────────────────────────────────────────────────
     default_timezone: str = "Asia/Taipei"
     default_currency: str = "TWD"
