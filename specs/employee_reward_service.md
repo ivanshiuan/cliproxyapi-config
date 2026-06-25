@@ -181,10 +181,23 @@ async def process_queued_for_period(
     4. 回傳本次被轉成 pending 的 redemptions list。
     註：此函式只轉 queued→pending，不自動 approve（人工審核閘仍在）。
     """
+
+
+async def list_pending_redemptions(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+) -> list[EmployeeRewardRedemption]:
+    """店長/老闆待審清單：status IN ('pending','queued')（scope 到 store，
+    依 requested_at ASC）。read-only，router admin 端委派。"""
 ```
 
 > 私有 helper（`_` 前綴）：`_load_pool`、`_gold_egg_balance`、`_resolve_cash_amount`、
 > `_next_month_first`、`_assert_status`。所有公開函式皆有完整 type hints。
+>
+> **router admin 端不呼叫 `review_redemption`（不存在）**：依 `decision` 直接分派到
+> `approve_redemption` / `reject_redemption` / `mark_paid`。
 
 ---
 

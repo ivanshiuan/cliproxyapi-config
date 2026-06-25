@@ -5,7 +5,7 @@
 > **Status:** Spec, ready for orchestrator hand-implementation
 > **Implementation target:** 一個新 job 模組 `restaurant_api/jobs/employee_egg_settlement.py` + 排程註冊掛進 `restaurant_api/jobs/__init__.py`
 > **依賴契約:** `specs/employee_pet_models.md`(7 表 + 帳本不變式)、`docs/18_employee_pet_gamification.md`(PRD、附錄 B/C、§5.3)
-> **服務契約:** `employee_pet_service`、`employee_reward_service`(spec 待寫;本 job **呼叫** service 發蛋/兌換,不自寫帳本邏輯)
+> **服務契約:** `employee_pet_service`、`employee_reward_service`(spec 已定稿,見 `specs/employee_pet_service.md` / `specs/employee_reward_service.md`;本 job **呼叫** service 發蛋/兌換,不自寫帳本邏輯)
 
 ---
 
@@ -95,10 +95,10 @@ DB 一律存 UTC;準時/曠職判定以 **Asia/Taipei** 的 calendar date 為準
 2. **計算 UTC 視窗**:把 `for_date` 整個台北日(`00:00:00`–`23:59:59.999999 +08:00`)轉成 `[day_start_utc, day_end_utc)` 半開區間,所有 time_clocks / shifts / leave_requests 查詢都用這個 UTC 視窗 filter。
 3. **載資料源**(scope 到該視窗):該日所有 `shifts`(scheduled_start 落在視窗內)、所有 `time_clocks`(clock_in 落在視窗內)、所有 `approved` `leave_requests`(`[start_at, end_at]` 與視窗重疊)。
 4. **逐 (employee, shift) 判定**(見下方判定表)→ 分類為 ontime / late / early_leave / absent / on_leave。
-5. **發考勤蛋**:ontime 者透過 `employee_pet_service.grant_attendance_egg(session, employee_id, business_date=for_date)`;service 內靠 partial unique 冪等,撞 unique 視為「已發」記入 `ontime_skipped_idempotent`、不報錯。
-6. **記曠職紅蛋**:absent 且非 on_leave 者透過 `employee_pet_service.apply_penalty_redegg(session, employee_id, business_date=for_date, reason="penalty.redegg")`(只遊戲內 health);自帶冪等(見冪等策略)。
-7. **活力衰退**:掃 `employee_pets` 中 `last_fed_at < (for_date - DECAY_AFTER_DAYS)` 或 `last_fed_at IS NULL` 且建立超過 `DECAY_AFTER_DAYS` 的 pet → `employee_pet_service.apply_decay(session, pet_id, business_date=for_date)`;同日同 pet 只衰退一次(冪等)。
-8. **月初判定**:若 `for_date` 是其所屬月份的最後一日 → `monthly_pool_reset=True`,呼叫 `employee_reward_service.process_queued_for_period(session, period=date(next_year, next_month, 1))`。
+5. **發考勤蛋**:ontime 者透過 `employee_pet_service.grant_eggs(session, tenant_id=, employee_id=, egg_type="white", qty=1, reason="attendance.ontime", business_date=for_date)`;靠 `uq_egg_attendance_once` partial unique 冪等,撞 unique 視為「已發」記入 `ontime_skipped_idempotent`、不報錯。
+6. **記曠職紅蛋**:absent 且非 on_leave 者透過 `employee_pet_service.grant_eggs(session, tenant_id=, employee_id=, egg_type="red", qty=1, reason="penalty.redegg", business_date=for_date)`(只遊戲內 health,PRD D1);冪等見下方策略(可加 red 的同日冪等檢查)。
+7. **活力衰退**:掃 `employee_pets` 中 `last_fed_at < (for_date - DECAY_AFTER_DAYS)` 或 `last_fed_at IS NULL` 且建立超過 `DECAY_AFTER_DAYS` 的 pet → `employee_pet_service.apply_decay(session, tenant_id=, employee_id=, on_date=for_date)`;同日同 pet 只衰退一次(冪等,由 service 保證)。
+8. **月初判定**:若 `for_date` 是其所屬月份的最後一日 → `monthly_pool_reset=True`,逐 store 呼叫 `employee_reward_service.process_queued_for_period(session, tenant_id=, store_id=, new_period=date(next_year, next_month, 1))`。
 9. **commit**(僅 `session is None` 自開時)、組 `SettlementReport`、`logger.info("employee_egg_settlement.complete", extra=report.model_dump_compatible)`、回傳。
 
 ---
@@ -228,8 +228,8 @@ scheduler.add_job(
 | `restaurant_api/jobs/membership_lifecycle.py` | **多段結算 + 結構化 report 範本** |
 | `restaurant_api/models/hr.py` | 判定資料源:`Shift` / `TimeClock` / `LeaveRequest`(+ `LeaveStatus.APPROVED`) |
 | `restaurant_api/models/gamification.py`(待 models spec 落地) | 讀 `employee_pets`(`last_fed_at`);寫入經 service |
-| `employee_pet_service`(待 spec) | `grant_attendance_egg` / `apply_penalty_redegg` / `apply_decay`(job 呼叫;冪等由 service 保證) |
-| `employee_reward_service`(待 spec) | `process_queued_for_period(session, period)`(月初呼叫;period 冪等) |
+| `employee_pet_service`(spec 已定稿) | `grant_eggs`(考勤白蛋 `attendance.ontime` / 曠職紅蛋 `penalty.redegg`)、`apply_decay`(job 呼叫;冪等由 service+partial unique 保證) |
+| `employee_reward_service`(spec 已定稿) | `process_queued_for_period(session, tenant_id, store_id, new_period)`(月初逐 store 呼叫;同 period 冪等) |
 | `restaurant_api/config.py` | `settings.default_timezone`(Asia/Taipei) |
 | `restaurant_api/services/audit_service.audit()` | 由 service 內呼叫(本 job 不直接寫) |
 
@@ -237,7 +237,7 @@ scheduler.add_job(
 
 ## 給 PM Agent 的提醒
 
-- **service 介面尚未定稿**:`employee_pet_service` / `employee_reward_service` spec 還沒寫。本 job 假設的方法名(`grant_attendance_egg` / `apply_penalty_redegg` / `apply_decay` / `process_queued_for_period`)是**契約期望**;若後續 service spec 命名不同,以 service spec 為準並回頭調整本 job,但「job 呼叫 service、不自寫帳本」的分工不變。
+- **service 介面已對齊**(一致性檢查後校正):本 job 呼叫 `employee_pet_service.grant_eggs`(考勤/曠職)、`apply_decay`(衰退)、`employee_reward_service.process_queued_for_period`(月初)。函式名以 service spec 為準;「job 呼叫 service、不自寫帳本」的分工不變。
 - **反焦慮是設計核心**(PRD §4.5):遲到/早退**只計數不懲罰**,曠職才罰紅蛋;請假日不斷 streak。不要為了「更嚴格」加扣分,會反噬留任。
 - **D1 紅線**:紅蛋/衰退**只動遊戲內數值**。任何測試或實作只要碰到 Money 欄位或建 redemption 就是 bug。
 - **冪等是這支 job 的命脈**:scheduler 可能 misfire 補跑、手動補算整月。考勤蛋靠 DB partial unique 天然冪等;紅蛋/衰退靠 service 存在性檢查 —— AC-2/7/10 必須真的連跑兩次驗 row 數不變。

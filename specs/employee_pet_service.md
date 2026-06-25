@@ -45,17 +45,20 @@ service 慣例**：只 `flush()`、**不** `commit()`（commit 在 DI 層）；�
 - `feed_pet(...)`：餵蛋（推升級/進化）或餵飼料（維持健康），寫 `employee_pet_care_events`、扣資源、更新 health/vitality/feeding_streak_days/last_fed_at/level；之後呼叫進化判定。
 - `_maybe_evolve(...)`：依 PRD 附錄 A.2 門檻判定階段晉升；門檻為模組層級常數（無 magic number）。
 - `recompute_balances(...)`：從 `employee_egg_ledger` 加總重算 pet 的白/銀/金/紅快取餘額（對帳/修復用）。
+- `apply_decay(...)`：久未餵食的活力衰退 —— 降 vitality、寫 `decay` care_event（**只遊戲內**，不碰真錢/薪資，PRD D1）。由 job 每日呼叫。
 - streak 計算：連續餵養天數；請假日不斷 streak（反焦慮，PRD A.3/4.5）。
+- **任務流與讀取 API（router 委派）**：`create_pet`、`get_pet_dashboard`、`store_leaderboard`、`list_today_tasks`、`submit_task_completion`、`review_completion`（核可時內部呼叫 `grant_eggs`，靠 `egg_granted` 旗標冪等）、`list_pending_completions`。
 - 每個變更動作寫 `audit_service.audit()`（dotted action namespace）。
 
 ### Out of scope（延後到其他模組，明確排除避免 drift）
 
 - **真錢 redemption**（gold_egg/emperor/monthly_goal 兌現、月池扣抵、排隊）→ `employee_reward_service` spec。本 service 帝王雞達標**只標記資格**（回傳 flag / 寫稽核），不寫 `employee_reward_redemptions`、不碰 `employee_reward_pool` 金額。
-- **考勤每日結算**（準時自動發白蛋、曠職紅蛋、久未餵活力衰退）→ `employee_egg_settlement_job` spec。本 service 只提供被 job 呼叫的 `grant_eggs`，不自含排程/批次掃描。
-- **HTTP / FastAPI router / Pydantic 請求回應 schema** → `employee_pets` router spec。
+- **考勤每日結算的排程與判定**（準時/遲到/曠職判定、cron）→ `employee_egg_settlement_job` spec。本 service 提供 job 呼叫的 `grant_eggs`（attendance.ontime 白蛋 / penalty.redegg 紅蛋）與 `apply_decay`，**不自含排程/批次掃描**。
+- **HTTP / FastAPI router / Pydantic 請求回應 schema** → `employee_pets` router spec。本 service 提供 router 委派的 `create_pet` / `get_pet_dashboard` / `store_leaderboard` / 任務流函式。
+- **真錢 redemption 工作流**（兌現/月池/排隊）→ `employee_reward_service` spec（本 service 帝王雞只標資格旗標）。
+- **任務「定義」(employee_tasks) 的後台 CRUD**（建立/編輯任務模板）→ Phase B 管理後台；本 service 只做「完成提交 + 核可發蛋 + 今日清單查詢」。
 - **顧客雙邊**（顧客餵店員、養店雞）→ Phase 2。
 - **同儕互送蛋 / 紅蛋 debuff 互動** → Phase 2（D8）。
-- **任務定義/完成審核流**（`employee_tasks` / `employee_task_completions` 的 CRUD 與核可）→ 另支 spec；本 service 僅在被通知「任務已核可」時被呼叫 `grant_eggs`。
 - **多幣別**：金額一律 TWD（`Decimal`）。
 - **持久化交易邊界**：不 `commit()`、不開新 session、不管連線生命週期。
 
@@ -124,13 +127,68 @@ async def recompute_balances(
     寫回 pet。對帳/修復用；不寫 ledger（不改 SSOT）。回傳修正後的 pet。"""
 
 
+async def apply_decay(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    on_date: date | None = None,
+) -> EmployeePet:
+    """活力衰退：若 last_fed_at 距 on_date 超過門檻天數，降 vitality（clamp 0..100）、
+    寫一筆 care_event(event_type='decay', vitality_delta<0)。只影響遊戲內（PRD D1）。
+    同員工同日冪等（重跑不重複衰退）。回傳更新後的 pet。"""
+
+
 async def _maybe_evolve(pet: EmployeePet, *, all_attendance_this_month: bool) -> bool:
     """依進化常數判定 pet.stage 是否晉升；就地更新 pet.stage（必要時 nest_level）。
     帝王雞達標僅設資格旗標（emperor_eligible），真錢兌換在 reward service。
     回傳是否發生晉升。模組私有（_ 前綴）。"""
 ```
 
-> 公開 API = 前四個函式 + 例外類別。其他 helper（streak 計算、等值換算）以 `_` 開頭視為私有。
+### 任務流與讀取 API（router 委派；reads 比照 orders_router 的 GET 慣例）
+
+```python
+async def create_pet(
+    session: AsyncSession, *, tenant_id, employee_id, store_id, name: str,
+) -> EmployeePet:
+    """首次建立並命名雞（一員工一雞）。已存在 → ConflictError。"""
+
+async def get_pet_dashboard(
+    session: AsyncSession, *, tenant_id, employee_id,
+) -> EmployeePet:
+    """主畫面資料（雞狀態 + 蛋包餘額 + streak + 階段）。不存在 → NotFoundError。"""
+
+async def store_leaderboard(
+    session: AsyncSession, *, tenant_id, store_id, limit: int = 20,
+) -> list[EmployeePet]:
+    """本店排行榜（依 level/stage 排序，scope 到 store）。"""
+
+async def list_today_tasks(
+    session: AsyncSession, *, tenant_id, employee_id, on_date: date | None = None,
+) -> list[dict]:
+    """今日有效任務 + 該員工當日完成狀態（submitted/approved/rejected/未做）。"""
+
+async def submit_task_completion(
+    session: AsyncSession, *, tenant_id, employee_id, task_id, evidence_url: str | None = None,
+    on_date: date | None = None,
+) -> EmployeeTaskCompletion:
+    """提交任務完成。需佐證卻沒給 → ValidationError。同員工同任務同日已 submitted/approved
+    → ConflictError（靠 uq_task_completion_daily）。不需審核的任務：直接 approved 並呼叫 grant_eggs。"""
+
+async def review_completion(
+    session: AsyncSession, *, tenant_id, completion_id, reviewer_id, approve: bool,
+) -> EmployeeTaskCompletion:
+    """核可/退回任務完成。approve=True → status=approved + 呼叫 grant_eggs(task.egg_type,
+    task.egg_qty, reason='task.complete')，靠 egg_granted 旗標防重複發；approve=False → rejected。
+    非 submitted 狀態再審 → ConflictError。"""
+
+async def list_pending_completions(
+    session: AsyncSession, *, tenant_id, store_id,
+) -> list[EmployeeTaskCompletion]:
+    """店長待審：status='submitted' 的任務完成（scope 到 store）。"""
+```
+
+> 公開 API = 上述全部 async 函式 + 例外類別。其他 helper（streak 計算、等值換算）以 `_` 開頭視為私有。
 
 ---
 
@@ -251,8 +309,8 @@ VITALITY_MIN, VITALITY_MAX = 0, 100
 - **每日結算 job**（準時發蛋、曠職紅蛋、活力衰退掃描）→ `employee_egg_settlement_job`。
 - **HTTP / FastAPI router / Pydantic 請求回應 schema** → `employee_pets` router。
 - **顧客雙邊 / 同儕互送蛋** → Phase 2。
-- **任務 CRUD 與完成審核流** → 另支 spec（本 service 僅被呼叫 `grant_eggs`）。
-- **建立新雛雞（pet onboarding/命名）** → router/onboarding，不在本 service。
+- **任務「定義」模板的後台 CRUD（建立/編輯 employee_tasks）** → Phase B 管理後台。
+  （注意：任務「完成提交 / 核可發蛋 / 今日清單」**在本 service**，見上方任務流 API；建立並命名雞 `create_pet` 也**在本 service**。）
 - **多幣別** → TWD only。
 
 ---

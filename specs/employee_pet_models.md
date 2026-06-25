@@ -70,6 +70,7 @@
 | `nest_level` | Integer | no | 0 | 雞窩等級 |
 | `feeding_streak_days` | Integer | no | 0 | 連續餵養天數 |
 | `last_fed_at` | timestamptz | yes | NULL | 最後餵食 |
+| `emperor_eligible` | Boolean | no | false | 帝王雞資格旗標（`_maybe_evolve` 達標時設；reward service 兌現帝王獎金時檢查） |
 | `white_balance` | Integer | no | 0 | 快取：白蛋餘額（SSOT=帳本） |
 | `silver_balance` | Integer | no | 0 | 快取：銀蛋餘額 |
 | `gold_balance` | Integer | no | 0 | 快取：金蛋餘額 |
