@@ -124,6 +124,9 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/seed_wheel_campaign.py" = ["RUF001"]
 "scripts/seed_growth_demo.py" = ["RUF001"]
 "scripts/line_check.py" = ["RUF001"]
+# 開店財務試算器：docstring/輸出/註解刻意用中文標點寫給 Ivan 看；
+# RUF009 對 Decimal 預設值是誤報（Decimal 不可變，且金錢依鐵律必須用 Decimal、禁 float）。
+"scripts/launch_model.py" = ["RUF001", "RUF002", "RUF003", "RUF009"]
 
 [tool.ruff.format]
 quote-style = "double"
