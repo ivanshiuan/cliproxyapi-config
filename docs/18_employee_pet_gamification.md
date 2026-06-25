@@ -1,313 +1,379 @@
-# 18 — 員工電子雞養成（考勤／任務／學習 遊戲化）
+# 18 — 養成遊戲化行銷系統 PRD（員工×顧客 · 餐飲留才引擎）
 
-> 把員工的考勤、任務、學習、考核，換皮成「養一隻電子雞」。
-> 員工登入自己的畫面看到自己的雞，每天餵食、完成任務領蛋、把雞養大。
-> **核心理念（Ivan 拍板）**：真實金錢**只做正向加碼**，從老闆設定的固定獎勵池發放；
-> 紅蛋／生病／沒活力**只影響遊戲內**健康值與升級速度，**不扣真實薪資**（避開勞基法工資爭議）。
+> **這是什麼**：把員工的考勤／任務／學習／士氣，與顧客的回流，包裝成一套「養成遊戲」的
+> 行銷產品需求文件（PRD）。終局是員工版養雞 + 顧客版養雞的**雙邊飛輪**；起手是**單店、員工單邊**的 pilot。
 >
-> 本文是設計稿，待 Ivan 審核規則後再寫程式。實作前不動任何 schema。
+> **文件狀態**：`Draft for Review` — 規劃定稿前不寫任何程式、不動 schema。
+> **產品負責人**：Ivan　**撰寫/PM**：Claude（扮演矽谷產品 + 資深行銷企劃 + 遊戲經濟設計）
+> **本次升級**：從「遊戲機制設計稿」→「頂級 PRD」（補策略、指標、行為科學、經濟系統、ROI、pilot、風險）。
+> 原始機制細節保留於**附錄 A**。
 
 ---
 
-## 〇、一句話總結與為什麼這樣設計
+## 決策日誌（已拍板，不再重議）
 
-驅動方式從「每天念員工」改成「每天養自己的雞」。完成考勤／任務／學習 → 領蛋 → 餵雞 → 雞升級 → 達到里程碑領真實獎金。
-
-**為什麼這套幾乎不用從零造**：顧客端早就有成熟的遊戲化骨架，員工版只是換皮 + 換資料來源：
-
-| 員工版概念 | 直接複用的既有模式 | 檔案 |
+| # | 決策 | 拍板 |
 |---|---|---|
-| 蛋帳本（append-only、可稽核、餘額由帳本重算） | `customer_points_ledger`（signed delta + dotted reason + recompute balance） | `models/customers.py:160` |
-| 兌換真錢／獎品 + 審核 | `campaigns`（marketing_campaigns / campaign_prizes / campaign_spins / campaign_vouchers） | `models/campaigns.py` |
-| 發蛋的資料來源（準時上下班） | `time_clocks`（已預分桶工時）、`shifts`（排班 ground truth）、`leave_requests` | `models/hr.py` |
-| 員工主檔 | `employees` | `models/employees.py:39` |
-| 每日結算 job | `jobs/`（expiry / points / COGS 已有同型背景任務） | `restaurant_api/jobs/` |
-| 寫稽核 | `services/audit_service.audit()` | 法則：不可直接 INSERT AuditLog |
+| D1 | 真實金錢**只做正向加碼**，從固定獎勵池發；懲罰只在遊戲內（不扣薪資） | Ivan |
+| D2 | 先**單店 pilot** 驗證，再談擴張 | Ivan |
+| D3 | 終局做**員工＋顧客雙邊**；但 pilot **先員工單邊**，雙邊列 Phase 2 | PM 建議, Ivan 同意方向 |
+| D4 | North Star 改用**週活躍成長率**，非日活（理由見 §2.3） | PM 專業修正 |
+| D5 | Pilot 第一個月**聚焦考勤楔子**，訓練／士氣第二三層解鎖（「全部都要」當終局，不當起手） | PM 專業修正 |
 
 ---
 
-## 一、蛋經濟（Egg Economy）
+## 1. TL;DR（一頁讀懂）
 
-### 蛋種
-
-| 蛋 | 性質 | 取得 | 價值定位 |
-|---|---|---|---|
-| 🥚 白蛋 white | 正向・基礎 | 完成一件任務／當日準時考勤／學習上傳 | 最小單位 |
-| 🥈 銀蛋 silver | 正向・進階 | 10 顆白蛋兌換升級 | 中階里程碑 |
-| 🥇 金蛋 gold | 正向・高價值 | 10 顆銀蛋兌換升級 | **可兌真錢**（值約 NT$500，由獎勵池設定） |
-| ❤️ 紅蛋 red | **負向・debuff** | 做錯事／曠職／主管或同儕標記 | **不換錢**，只讓雞生病 |
-
-### 兌換階梯（升級制）
-
-```
-10 白蛋  ─┐
-          ├─►  1 銀蛋
-10 銀蛋  ─┘
-          ├─►  1 金蛋
-1 金蛋   ──►  NT$500（需走兌換審核，見第六節）
-```
-
-兌換比率（`10:1`、金蛋現值）全部存在 `employee_reward_pool`，老闆可調，**不寫死在程式**。
-
-### 怎麼賺蛋（每一件「做到」= 一顆白蛋）
-
-- **考勤**：當日有打卡、無遲到、無早退 → 1 白蛋（每日上限 1，由每日 job 結算）
-- **任務**：完成任一指派任務（出勤前準備、清潔、盤點…）→ 1 白蛋
-- **學習**：上傳學習資料／完成線上課程章節 → 1 白蛋
-- **連續**：連續餵養／連續達標另有 streak 加碼（見第三節）
-
-> 鐵律：發蛋一律寫進 `employee_egg_ledger`（append-only），雞身上的餘額由帳本重算，
-> 跟顧客點數一樣「never UPDATE / never DELETE，修正用反向 row」。
+- **問題**：餐飲業最貴的不是食材，是**人的流動**。招募＋訓練一個新人 ≈ 1–2 個月薪資；老鳥三個月內離職等於白燒。考勤鬆散、訓練難落地、回饋都是「事後被念」。
+- **洞察**：我們手上已經有**考勤資料（time_clocks）、點數帳本（points_ledger）、行銷活動引擎（campaigns）、LINE 通道**。把「管理」改寫成「養成遊戲」，邊際成本極低、見效快。
+- **解法**：員工登入看到**自己養的一隻電子雞**。準時、完成任務、上傳學習 → 領蛋 → 餵雞 → 雞升級（小雞→母雞→大雞→帝王雞）→ 里程碑換**真實獎金**（正向、需審核、有預算上限）。
+- **North Star**：**週活躍成長率**（當週有餵食/完成任務、且雞有實際成長的在職員工占比）。
+- **Pilot 賭注**：單店 8 週，先賭「考勤 streak 楔子能把準時率與 W4 留存拉起來」。
+- **成功長相**：準時率 +15pp、新人 W4 留存 +10pp、店長每日操作 < 5 分鐘、零薪資爭議申訴。
 
 ---
 
-## 二、雞的進化（Chicken Progression）
+## 2. 策略框架（Why）
 
-```
-🐣 小雞 chick  ──►  🐔 母雞 hen  ──►  🦃 大雞 rooster  ──►  👑 帝王雞 emperor
-```
+### 2.1 問題陳述（真正的痛，不是表面的痛）
 
-| 階段 | enum | 升級條件（建議初值，可調） | 里程碑獎勵 |
-|---|---|---|---|
-| 小雞 | `chick` | 起始 | — |
-| 母雞 | `hen` | 累積 10 白蛋 等值 + 連續餵養 ≥ 7 天 | 解鎖蓋雞窩 |
-| 大雞 | `rooster` | 累積 1 金蛋 等值 + 健康 ≥ 70 | 進階外觀 |
-| 帝王雞 | `emperor` | 累積 3 金蛋 等值 + 當月全勤 | **真實獎金 NT$3,000–5,000**（獎勵池設定，需審核） |
-
-升級條件全部存 `employee_reward_pool` / 設定表，**不寫死**。雞窩 `nest_level`、房子是長期養成的視覺成就（提升升級速度的小 buff）。
-
----
-
-## 三、餵食與照護迴圈（Daily Loop = 日活誘因）
-
-- **每天餵食**：登入畫面點「餵雞」。可以用蛋餵，也可以用飼料餵，效果不同：
-  - 用蛋餵 → 直接推進升級（消耗蛋）
-  - 用飼料餵 → 維持健康／活力（不消耗蛋）
-- **連續餵養 streak**：每連續 3 天餵養 → 額外得「淨化飼料」（高級飼料，健康回復更多）。中斷歸零。
-- **飼料 = 養分**：可買養分讓雞更健康，或蓋雞窩／房子做長期養成。
-- 所有餵食／照護動作寫進 `employee_pet_care_events`（append-only），健康值由事件重算。
-
----
-
-## 四、健康與生病（**只在遊戲內**，不碰真錢）
-
-員工問的「紅蛋讓雞生病、要補很多金雞蛋才補得回來、同儕可送紅蛋」這段，**全部留在遊戲層**：
-
-- 雞有 `health`（0–100）與 `vitality`（活力）兩個遊戲內數值。
-- **扣健康**：收到紅蛋 / 連續曠職 / 做錯事被標記 → 扣 health。
-- **生病表現**：health 低 → 雞外觀變憔悴、活力低、**升級速度變慢**（這就是懲罰，驅動力還在）。
-- **補救**：餵金蛋／淨化飼料回復健康。**只消耗遊戲內的蛋與飼料，不換算、不扣真實薪資。**
-- **同儕／主管送紅蛋**：先做成「需主管核准才生效」的標記，避免私下互整變成勞資糾紛（見第七節）。
-
-> 與最初構想的差異：構想裡「補金雞蛋換算獎金價值」被改成「補金雞蛋＝遊戲內資源」。
-> 真錢只在第六節的正向兌換出現。這是 Ivan 選的「正向發錢＋懲罰只在遊戲內」路線。
-
----
-
-## 五、資料表設計（schema-only，沿 docs/04 體例）
-
-> 全部遵守專案法則：UUIDv7 主鍵、`tenant_id` / `created_at` / `updated_at`、
-> 金錢用 `Money = Numeric(14,4)`、帳本表 append-only（DB RULE 擋 UPDATE/DELETE）、蛋數量用整數。
-
-### 1. `employee_pets` — 一名員工一隻雞（快照，餘額可由帳本重算）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` | uuid (v7) | PK |
-| `tenant_id` | uuid | 租戶 |
-| `employee_id` | uuid FK→employees | **unique**（一人一隻雞） |
-| `name` | text | 員工自取的雞名 |
-| `stage` | enum chick/hen/rooster/emperor | 進化階段 |
-| `health` | int 0–100 | 健康值（由 care_events 重算） |
-| `vitality` | int 0–100 | 活力 |
-| `level` | int | 數值等級 |
-| `nest_level` | int | 雞窩／房子等級 |
-| `white_balance` / `silver_balance` / `gold_balance` | int | 蛋餘額快照（SSOT 是帳本） |
-| `red_count` | int | 紅蛋累計（debuff 計數） |
-| `feed_balance` | int | 飼料餘額 |
-| `feeding_streak_days` | int | 連續餵養天數 |
-| `last_fed_at` | timestamptz | 上次餵食 |
-
-### 2. `employee_egg_ledger` — 蛋帳本（**append-only，SSOT**，仿 customer_points_ledger）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` | uuid (v7) | PK |
-| `tenant_id` | uuid | 租戶 |
-| `employee_id` | uuid FK | 索引 |
-| `egg_type` | enum white/silver/gold/red | 蛋種 |
-| `delta` | int (signed) | +發放 / −消耗或兌換 |
-| `reason` | varchar(64) | dotted namespace：`attendance.ontime`、`task.complete`、`learning.upload`、`streak.bonus`、`exchange.up`（10換1）、`exchange.down`、`redeem.cash`、`penalty.redegg`、`manual.adjust` |
-| `source_ref` | uuid null | 來源（task_completion_id / time_clock_id） |
-| `note` | text null | 備註 |
-| `created_at` | timestamptz | |
-
-DB-level idempotency（仿顧客點數的 partial unique index）：`attendance.ontime` 對 `(employee_id, 日期)` 唯一 → **同一天準時只發一次**，多 instance / job 重跑也不重複發。
-
-### 3. `employee_pet_care_events` — 餵食／照護事件（append-only）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` / `tenant_id` / `created_at` | | 標配 |
-| `pet_id` | uuid FK→employee_pets | |
-| `event_type` | enum feed_egg/feed_pellet/build_nest/heal/streak_bonus/sick | |
-| `egg_type` | enum null | 用蛋餵時記哪種蛋 |
-| `amount` | int | 消耗數量 |
-| `health_delta` | int (signed) | 對健康的影響 |
-| `note` | text null | |
-
-### 4. `employee_tasks` — 任務定義（什麼能領蛋）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` / `tenant_id` / `store_id` / `created_at` / `updated_at` | | 標配 |
-| `title` / `description` | text | |
-| `category` | enum attendance/learning/duty/performance/course | 把考核也綁進來 |
-| `egg_type` / `egg_qty` | enum / int | 完成發什麼蛋、幾顆 |
-| `recurrence` | enum once/daily/monthly | 出功課用 |
-| `requires_evidence` | bool | 是否需上傳資料才算 |
-| `requires_approval` | bool | 是否需主管核准才發蛋 |
-| `is_active` | bool | |
-
-### 5. `employee_task_completions` — 任務完成（append-only）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` / `tenant_id` / `created_at` | | 標配 |
-| `task_id` | uuid FK | |
-| `employee_id` | uuid FK | |
-| `evidence_url` | text null | 上傳的學習／完成證明 |
-| `status` | enum submitted/approved/rejected | |
-| `reviewed_by` | uuid null FK→employees | |
-| `reviewed_at` | timestamptz null | |
-| `egg_granted` | bool | 是否已發蛋（連到 ledger，防重發） |
-
-### 6. `employee_reward_pool` — 老闆設定的獎勵池與兌換率（一租戶一筆設定）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` / `tenant_id` / `updated_at` | | |
-| `white_per_silver` / `silver_per_gold` | int | 兌換階梯（預設 10 / 10） |
-| `gold_egg_cash_value` | Money | 金蛋現值（預設 500） |
-| `emperor_bonus` | Money | 帝王雞獎金（3,000–5,000） |
-| `monthly_goal_bonus` | Money | 當月達標獎金（1,000） |
-| `monthly_pool_budget` | Money | **每月獎勵池上限**（風控：發超過就擋／轉人工） |
-| `monthly_pool_spent` | Money | 本月已發（重算自 redemptions） |
-
-### 7. `employee_reward_redemptions` — 真錢兌換（**需人工審核**）
-
-| 欄位 | 型別 | 說明 |
-|---|---|---|
-| `id` / `tenant_id` / `created_at` | | |
-| `employee_id` | uuid FK | |
-| `redemption_type` | enum gold_egg/emperor/monthly_goal | |
-| `eggs_spent` | int | 消耗蛋數（連到 ledger 的 `redeem.cash`） |
-| `cash_amount` | Money | 對應現金 |
-| `status` | enum pending/approved/paid/rejected | |
-| `requested_at` / `approved_by` / `approved_at` / `paid_at` | | 審核軌跡 |
-
----
-
-## 六、真實金錢流（只正向、需審核、有預算上限）
-
-```
-員工累積到 1 金蛋 / 帝王雞 / 當月達標
-        │
-        ▼
-建立 reward_redemption (status=pending)   ← 消耗蛋寫 ledger: reason=redeem.cash
-        │
-        ▼
-老闆 / 店長在後台審核  ──► approved ──► 出納發放 ──► paid
-        │                                    │
-        └──► rejected（蛋退回，寫反向 ledger row）
-                                             ▼
-                            每筆都走 audit_service.audit() 留稽核
-```
-
-風控三道閘：
-1. **只正向**：兌換金額永遠 ≥ 0，系統沒有「扣真錢」的路徑。
-2. **預算上限**：`monthly_pool_budget` 擋住超發；接近上限轉人工。
-3. **人工審核**：真錢一律 pending → approved，不自動出款。
-
----
-
-## 七、勞基法／合規注意（呼應 docs/08）
-
-| 風險點 | 處理 |
+| 表面痛 | 底層痛（要打的） |
 |---|---|
-| 工資不得任意扣減（勞基法 §22、§26） | 遊戲內懲罰**不碰薪資**；紅蛋只扣遊戲健康值 |
-| 同儕互送懲罰易生霸凌／勞資糾紛 | 送紅蛋**需主管核准才生效**，且全程 `audit_log` 可追 |
-| 獎金變相成「應得工資」的爭議 | 文件明定為**恩惠性／激勵性獎金**，發放條件公開、由獎勵池支應 |
-| 個資（學習上傳、考核） | 沿用既有 tenant 隔離 + 軟刪除；上傳檔走既有 asset 流程 |
+| 員工常遲到早退 | 準時沒有**即時正回饋**，只有遲到才被念 → 負向迴圈 |
+| 教育訓練沒人看 | 學習**沒有成就感、跟我有什麼好處不明** |
+| 留不住人 | 新人前 90 天**沒有歸屬感與成長可視性** → 隨時可走 |
+| 店長忙到沒空帶人 | 激勵全靠店長**人治**、不可規模化、不公平 |
 
-> 實作前建議讓 `restaurant-domain-expert` agent 再過一次第六、七節。
+> 設計北極星：讓員工每天有「**我在養一個會長大、屬於我、且能變現的東西**」的感覺，把抽象的「好好工作」變成具體、可累積、看得見的進度。
 
----
+### 2.2 為什麼是遊戲化、為什麼是現在（Why now）
 
-## 八、和既有資料的觸發點（每日 job）
+1. **資產已就位**（邊際成本低）：`customer_points_ledger`（蛋帳本範本）、`campaigns`（兌換/抽獎引擎）、`time_clocks/shifts/leave_requests`（發蛋資料源）、LINE（推播觸發）。
+2. **行為科學成熟**：Hook 模型、自我決定論（SDT）、損失趨避，皆有實證；養成類（Tamagotchi/Duolingo/螞蟻森林）已驗證「擬物化成長 + streak」對日常行為的拉力。
+3. **市場時機**：缺工是結構性問題，留才工具就是行銷工具——**對內招募/留任，就是降低最大的隱性成本**。
 
-仿 `jobs/`（expiry / points / COGS）新增一支每日結算 job：
+### 2.3 North Star 與指標樹（PM 的關鍵修正）
 
-```python
-# 每日 02:00 跑（台北時間），結算前一日
-for emp in active_employees(tenant):
-    tc = time_clocks_for(emp, yesterday)
-    if tc and not late(tc) and not early_leave(tc):
-        grant_egg(emp, white=1, reason="attendance.ontime", source_ref=tc.id)
-        # partial unique index 保證同日只發一次
-    if absent(emp, yesterday):           # 排班有、打卡無、且非請假
-        add_red_egg(emp, reason="penalty.absence")   # 只扣遊戲健康
-    decay_health_if_unfed(emp)           # 久未餵食活力下降
-```
+> **為什麼不用日活（DAU）**：餐飲排班輪休，工讀生一週可能只排 3 班。用 DAU 當北極星會
+> (a) 系統性低估投入度、(b) 逼出「沒上班也硬登入刷蛋」的假互動、(c) 對兼職不公平。
+> **改用週活躍**更誠實、可跨班別比較。
 
-考勤判定（遲到／早退）直接讀 `shifts.scheduled_start/end` vs `time_clocks.clock_in/out`，不重造輪子。
+**North Star = 週活躍成長率（Weekly Engaged Growth Rate）**
+> 定義：當週「有效互動（餵食／完成任務／學習上傳）且雞有實際數值成長」的在職員工 ÷ 當週在職員工數。
 
----
-
-## 九、員工自己的畫面（前端，Phase 2）
-
-登入後一頁：
+**輸入指標樹（North Star 拆解）**
 
 ```
-┌─────────────────────────────┐
-│   🐔 「咕咕」 Lv.7  母雞       │   ← 雞的圖 + 名字 + 階段
-│   健康 ███████░░ 78          │
-│   活力 ████████░ 85          │
-│   連續餵養 🔥 5 天            │
-├─────────────────────────────┤
-│  🥚×7  🥈×2  🥇×1  ❤️×0      │   ← 蛋包
-│  [ 餵蛋 ]  [ 餵飼料 ]  [ 兌換 ] │
-├─────────────────────────────┤
-│  今日任務                     │
-│  ☑ 準時打卡        +🥚        │
-│  ☐ 完成清潔SOP      +🥚  [上傳] │
-│  ☐ 線上課程：食安   +🥚  [去上] │
-├─────────────────────────────┤
-│  排行榜：本店帝王雞 👑 ×2      │
-└─────────────────────────────┘
+週活躍成長率
+├─ Activation 啟用   ：首登後完成「命名雞+第一次餵食」的比例（aha moment）
+├─ Engagement 投入   ：人均每週餵食次數、任務完成數、streak 維持率
+├─ Retention 留存    ：W2 / W4 / W8 員工留存（在職 × 仍養雞）★ 真正的錢
+├─ Progression 成長  ：升上母雞/大雞/帝王雞的人數與時間中位數
+└─ Monetization(對企業) ：留任省下的招募訓練成本 − 獎勵池支出 = 淨 ROI
+```
+
+**護欄指標（Counter-metrics，惡化就要踩煞車）**
+- **刷蛋率**：異常發蛋占比（同人短時間爆量、無工作事實的領蛋）
+- **薪資/公平爭議申訴數**（目標 = 0）
+- **店長管理負擔**：店長每日花在系統的時間（目標 < 5 分鐘）
+- **內在動機擠出訊號**：移除某任務獎勵後該行為是否崩跌（見 §4 反模式）
+
+### 2.4 聚焦序列（兌現「全部都要」又不失焦）
+
+```
+第 1 個月  楔子：考勤 streak（最快見效、最易量測）
+第 2 個月  疊加：每日任務 / 清潔 SOP / 交接
+第 3 個月  疊加：線上課程 / 學習上傳 / 技能認證
+Phase 2    疊加：士氣（同儕鼓勵）＋ 顧客雙邊飛輪
 ```
 
 ---
 
-## 十、Phase 切分與待做
+## 3. 用戶與場景（Who）
 
-**Phase A（先做，本次若 Ivan 點頭）**：核心後端
-- 7 張表 + Alembic migration（蛋帳本 append-only RULE）
-- `egg_service`（發蛋／兌換階梯／餘額重算）、`pet_service`（餵食／健康重算）
-- 每日結算 job（考勤發蛋）
-- router：`/pets/me`、`/pets/me/feed`、`/eggs/exchange`、`/tasks`、`/tasks/{id}/complete`
-- 真錢兌換 router + 審核流（pending→approved→paid）+ audit
-- pytest 整合測（沿 conftest 的 savepoint fixture）
+| Persona | 核心訴求（JTBD） | 設計重點 |
+|---|---|---|
+| **正職員工** | 「我想看到努力被看見、能變現、能成長」 | 進化可視化、帝王雞變現、技能認證 |
+| **兼職／工讀** | 「我排班少，但也想公平拿到獎勵」 | 週活非日活、按出勤比例計、低門檻白蛋 |
+| **廚師（後場）** | 「我不直接面客，貢獻怎麼算」 | 任務型（出餐效率、備料、零客訴）發蛋 |
+| **店長（也是用戶！）** | 「不要再增加我的工作」 | **零負擔**：自動發蛋、批次審核、一鍵核可 |
+| **老闆** | 「這到底有沒有 ROI」 | 獎勵池上限、留任 ROI 儀表板 |
+| **顧客（Phase 2）** | 「我想跟喜歡的店員/店家有連結」 | 餵服務之星、養店雞換優惠 |
 
-**Phase B**：員工前端畫面、排行榜、線上課程整合
-**Phase C**：考核綁定、自訂任務模板、推播（LINE）提醒餵雞
+> **最大成敗變數 = 店長體驗**。任何增加店長日常負擔的設計，pilot 一定失敗。
+> 鐵則：**90% 的蛋由系統自動結算發放，店長只做例外審核。**
 
 ---
 
-## 十一、留給 Ivan 的決策（實作前再確認）
+## 4. 行為設計核心（這套會不會「上癮」的關鍵）
 
-1. **發蛋顆粒度**：一件任務固定 1 白蛋，還是不同任務不同蛋／不同顆數？（目前設計支援「每任務自訂」）
-2. **金蛋現值**：NT$500 是預設值，要不要分店／分職級不同？
-3. **帝王雞門檻**：3 金蛋 + 全勤是建議值，會不會太難／太易？
-4. **紅蛋來源**：只限主管核准，還是開放同儕送（需核准）？預設「需核准」。
-5. **獎勵池上限**：每月每店預算抓多少？（風控用）
+### 4.1 Hook 上癮迴圈（Nir Eyal）
+```
+觸發 Trigger        →  動作 Action      →  變動獎勵 Variable Reward →  投入 Investment
+(上班打卡/LINE提醒)    (餵雞/完成任務)      (開出白蛋…偶爾蹦銀蛋!)      (蓋雞窩/命名/累積→捨不得走)
+```
+- **投入(Investment)** 是留存關鍵：員工在雞身上累積得越多（窩、名字、進度），離職的心理成本越高 → 直接打到「降低流動率」目標。
+
+### 4.2 自我決定論 SDT（內在動機三支柱）
+- **自主 Autonomy**：自選任務、自己命名雞、自己決定蓋窩/升級路線。
+- **勝任 Competence**：升級看得見、技能認證徽章、進度條。
+- **連結 Relatedness**：排行榜、同儕鼓勵、（Phase 2）顧客互動。
+
+### 4.3 損失趨避與變動獎勵（強，但要克制）
+- **Streak（連續）**：連續餵養/全勤的累積，怕中斷 → 強留存力。
+- **變動獎勵**：白蛋偶爾隨機升級為銀蛋（小驚喜），維持期待感。
+- ⚠️ **克制原則（呼應 D1）**：損失趨避只作用在**遊戲資源**（雞會餓、streak 會斷），
+  **絕不**讓「雞生病」連結到真實薪資或公開羞辱，否則變壓力來源、反噬留任。
+
+### 4.4 Octalysis 八角檢視（確保不只靠「給錢」單核驅動）
+史詩意義(養成自己的夥伴) / 成就(進化) / 賦能(自選路線) / 擁有(我的雞) / 社交(排行/鼓勵) /
+稀缺(帝王雞限量感) / 不確定性(變動蛋) / 損失趨避(streak)。——八核越均衡越耐玩。
+
+### 4.5 反模式警示（頂級設計師才會主動防的坑）
+| 反模式 | 後果 | 設計對策 |
+|---|---|---|
+| **過度獎勵擠出內在動機**（Overjustification） | 一旦沒蛋就不做事 | 蛋偏向「肯定」而非「賄賂」；保留無償的榮譽性成就；定期觀測護欄指標 |
+| **刷量 Gaming** | 假互動、指標失真 | 發蛋需「工作事實」佐證 + idempotency + 異常偵測 |
+| **製造焦慮** | streak 壓力、離職 | 設「保護卡/補餵寬限」；請假日不斷 streak |
+| **不公平感** | 後場/兼職覺得被忽略 | 按出勤比例、任務型補償後場、週活非日活 |
+
+---
+
+## 5. 遊戲經濟系統設計（最容易做爛、最能體現頂級的地方）
+
+> 蛋 = **軟貨幣**（遊戲內無限流通），真錢 = **硬兌現**（受控閘門）。經濟設計的全部工作 = 控制
+> 軟貨幣的**水龍頭(faucet)與水槽(sink)**，讓它不通膨、不被刷、且硬兌現可預算。
+
+### 5.1 Faucet（發放源）× Sink（消耗匯）
+
+| Faucet 水龍頭（蛋進） | 上限/節流 |
+|---|---|
+| 考勤準時（每日） | 每日上限 1 白蛋，DB idempotency 防重 |
+| 任務完成 | 每任務定額；需證明/審核者才發 |
+| 學習上傳/課程 | 每課程一次；防重複領 |
+| streak / 里程碑 | 規則化、可關 |
+
+| Sink 水槽（蛋出） | 作用 |
+|---|---|
+| 餵雞升級 | 主要消耗，推進進化 |
+| 兌換階梯 10→1 | 白→銀→金，回收基礎貨幣 |
+| 蓋窩/養分/外觀 | 長期消耗、提供「擁有感」 |
+| 真錢兌換 | 終極 sink（金蛋/帝王雞），**受預算閘** |
+
+> **平衡準則**：sink 永遠要追得上 faucet。若白蛋發太兇又無處可花 → 通膨、貶值、無聊。
+> 對策：兌換率（`white_per_silver` 等）與發放量**全存設定表、可即時調**，pilot 期週週校準。
+
+### 5.2 防通膨三閘
+1. **每日發蛋硬上限**（考勤 1 顆、任務有限）。
+2. **兌換率可調**（通膨就調高 10→12）。
+3. **月獎勵池硬上限** `monthly_pool_budget`：真錢總額封頂，超過轉純榮譽或下月發。
+
+### 5.3 防刷（Integrity）
+- 考勤蛋靠 `(employee_id, 日期)` partial unique index → 同日只發一次。
+- 任務蛋需 `evidence_url` / 主管核可才入帳。
+- 異常偵測：單人短時爆量、非排班時段領蛋 → 標記人工。
+- 所有發放/兌換寫 `audit_service.audit()`，可回溯。
+
+### 5.4 真錢 ROI 模型（證明獎勵池划算 — 數字為**假設待校準**）
+
+```
+假設（單店、需用真實數據校準）：
+  招募+訓練一個新人成本 C_replace ≈ 1.5 個月薪 ≈ NT$45,000
+  pilot 店在職員工         N = 12 人
+  目標：年化離職率從 80% → 60%（少走 ~2.4 人/年）
+  避免的流失成本          ≈ 2.4 × 45,000 = NT$108,000 / 年
+
+獎勵池支出（上限）：
+  monthly_pool_budget    = NT$6,000 / 月  → 72,000 / 年
+  淨 ROI                 ≈ 108,000 − 72,000 = +36,000 / 年（且尚未計訓練/服務品質提升）
+```
+> 結論：只要能**少走 1.6 人/年**就回本。pilot 的核心就是驗證這條因果。**真實數字請用店家 HR 資料替換**。
+
+---
+
+## 6. 雙邊飛輪（員工 × 顧客 — Phase 2 設計，pilot 不做）
+
+```
+        員工把服務做好
+              │
+              ▼
+   顧客結帳後「餵」服務他的店員的雞（好評 → 餵蛋）
+              │                         │
+              ▼                         ▼
+   員工雞成長更快、士氣↑        顧客也在養「店雞」，累積 → 換優惠
+              │                         │
+              ▼                         ▼
+     員工更願意做好服務   ◄────  顧客回流、好評、UGC（接 campaigns/membership）
+```
+- 串接點：顧客端 `customer_points_ledger` / `campaigns` / `ugc_submissions` 已存在。
+- **為何 pilot 不做**：單店 + 雙邊複雜度同時上，會驗不準歸因（到底是員工機制還是顧客機制起作用）。先單邊跑出乾淨訊號，再開雙邊。
+
+---
+
+## 7. 產品範圍（What）— MoSCoW（針對 Pilot）
+
+| 優先 | 功能 |
+|---|---|
+| **Must** | 員工雞主畫面、蛋帳本、考勤自動發蛋 job、餵食、兌換階梯、真錢兌換審核流、店長批次審核、稽核 |
+| **Should** | 每日任務、streak、LINE 餵雞提醒、基本排行榜 |
+| **Could** | 學習上傳/課程、蓋窩/外觀、變動獎勵、保護卡 |
+| **Won't（pilot 不做）** | 顧客雙邊、跨店競賽、AI 個人化任務、複雜社交 |
+
+---
+
+## 8. Pilot 計畫（單店 · 8 週）
+
+### 8.1 要驗證的假設
+- **H1（核心）**：考勤 streak 楔子 → 準時率上升。
+- **H2**：養成投入（streak/進度）→ 新人 W4 留存上升。
+- **H3**：店長日操作 < 5 分鐘（不增負擔才可規模化）。
+- **H4**：零薪資/公平爭議（D1 合規設計有效）。
+
+### 8.2 量化 Go / No-Go（第 8 週檢核）
+| 指標 | Go 門檻 | No-Go |
+|---|---|---|
+| 員工啟用率 | ≥ 70% 員工命名雞+首餵 | < 40% |
+| 週活躍成長率 | W4 後穩定 ≥ 50% | 持續 < 30% |
+| 準時率變化 | +10pp 以上 | 無變化/惡化 |
+| 新人 W4 留存 | 較基期 +8pp | 無改善 |
+| 店長日操作時間 | < 5 分鐘 | > 15 分鐘 |
+| 爭議申訴 | 0 | ≥ 1 起實質爭議 |
+
+### 8.3 退場條件（Kill criteria，誠實面對失敗）
+- 出現任何**薪資/勞檢風險**或員工集體反感 → 立即暫停。
+- 第 4 週活躍 < 20% 且無上升趨勢 → 不續、改設計。
+- 刷蛋率 > 15% 且擋不住 → 經濟系統重設計再談。
+
+### 8.4 量測方法（單店難做 A/B）
+- **前後對照**：pilot 前 8 週 vs pilot 中 8 週的準時率/留存。
+- **鄰店對照**（若有）：同期未上線的店當對照組。
+- **質性**：第 2、5、8 週各做一次員工＋店長訪談。
+
+### 8.5 週節奏
+```
+W0 設定獎勵池/任務/兌換率、員工 onboarding、命名雞
+W1-2 只開考勤楔子，觀察啟用與護欄
+W3-4 疊加每日任務 + streak，第一次經濟校準
+W5-6 疊加學習，第一次真錢兌換審核演練
+W7   凍結變更、收數據
+W8   Go/No-Go 評審 + 訪談 + 報告
+```
+
+---
+
+## 9. 指標與埋點（Instrumentation）
+
+- 事件：`pet.created`、`pet.fed`、`egg.granted`、`egg.exchanged`、`task.completed`、`reward.requested/approved/paid`、`streak.broken`。
+- 每事件帶 `tenant_id / store_id / employee_id / role / 班別`，供切片（正職vs兼職、前場vs後場）。
+- 儀表板：North Star 趨勢、漏斗（啟用→投入→留存）、護欄、ROI。
+- 不可把敏感薪資塞進事件 extra（沿用既有 redact 法則）。
+
+---
+
+## 10. 風險矩陣（擴充）
+
+| 風險 | 衝擊 | 機率 | 緩解 |
+|---|---|---|---|
+| 勞基法工資爭議（§22/§26） | 高 | 中 | D1：懲罰只在遊戲內；獎金定義為恩惠性、條件公開、池支應 |
+| 同儕送紅蛋變霸凌 | 高 | 中 | 需主管核可才生效、全程 audit；pilot 先不開同儕互動 |
+| 內在動機被擠出 | 中 | 中 | 蛋偏肯定非賄賂、保留榮譽性成就、監測護欄 |
+| 刷量 gaming | 中 | 高 | 工作事實佐證 + idempotency + 異常偵測 |
+| 店長負擔增加 → 推不動 | 高 | 中 | 自動發放 90%、批次一鍵審核、< 5 分鐘 |
+| 公平性（後場/兼職） | 中 | 中 | 任務型補償、按出勤比例、週活非日活 |
+| 個資（學習/考核上傳） | 中 | 低 | tenant 隔離 + 軟刪除 + 既有 asset 流程 |
+| 新鮮感衰退 | 中 | 高 | 月度活動、季節限定蛋、Phase 2 雙邊延長壽命 |
+
+> 建議：第 6、10 節由 `restaurant-domain-expert` agent 再過一次法遵與在地化。
+
+---
+
+## 11. Roadmap（階段）
+
+| 階段 | 內容 | 對應 |
+|---|---|---|
+| **Phase 0** | 本 PRD 定稿 + Ivan 審 §13 決策 | now |
+| **Phase A** | 單店 pilot 後端（7 表 + service + job + router + 測試） | 附錄 B |
+| **Phase B** | 員工前端畫面、排行榜、LINE 提醒 | — |
+| **Phase C** | 學習/課程、考核綁定、自訂任務 | — |
+| **Phase 2** | 顧客雙邊飛輪、跨店競賽、ROI 儀表板 | §6 |
+
+---
+
+## 12. 既有架構複用對照（為什麼幾乎不用從零造）
+
+| 本系統概念 | 複用既有 | 檔案 |
+|---|---|---|
+| 蛋帳本（append-only、餘額重算） | `customer_points_ledger` | `models/customers.py:160` |
+| 兌換/抽獎/獎品 + 審核 | `campaigns` 系列 | `models/campaigns.py` |
+| 發蛋資料源（準時判定） | `time_clocks` / `shifts` / `leave_requests` | `models/hr.py` |
+| 員工主檔 | `employees` | `models/employees.py:39` |
+| 每日結算 job | `jobs/`（expiry/points/COGS） | `restaurant_api/jobs/` |
+| 顧客雙邊接點 | `customer_points_ledger` / `ugc_submissions` | `models/customers.py` / `models/ugc.py` |
+| 稽核 | `services/audit_service.audit()` | — |
+| 推播觸發 | `integrations/line` | — |
+
+---
+
+## 13. 未解決決策（請 Ivan 在審 PRD 時一起回）
+
+1. **獎勵池預算**：單店每月真錢上限抓多少？（ROI 模型用 6,000 假設，需校準）
+2. **基期數據**：能不能提供 pilot 店過去的準時率、離職率、招募成本？（驗 ROI 的關鍵）
+3. **帝王雞門檻與獎金**：3,000–5,000 哪個數字？門檻 3 金蛋+全勤合理嗎？
+4. **pilot 店選哪一間**、何時開始、誰是現場負責人？
+5. **同儕互動**：pilot 要不要開「同事互相鼓勵送蛋」（正向版），還是 Phase 2 再說？
+6. **線上課程**：用現成平台（YouTube/Google 表單）先接，還是等自建？
+
+---
+
+# 附錄 A — 遊戲機制細節（蛋種 / 進化 / 照護 / 健康）
+
+### A.1 蛋經濟
+| 蛋 | 性質 | 取得 | 價值 |
+|---|---|---|---|
+| 🥚 白蛋 | 正向基礎 | 任務/準時/學習各 1 顆 | 最小單位 |
+| 🥈 銀蛋 | 正向進階 | 10 白蛋兌換 | 中階里程碑 |
+| 🥇 金蛋 | 正向高值 | 10 銀蛋兌換 | 可兌真錢（≈NT$500，池設定） |
+| ❤️ 紅蛋 | **負向 debuff** | 做錯事/曠職/主管核可標記 | **不換錢**，只讓雞生病 |
+
+兌換階梯：`10 白 → 1 銀`、`10 銀 → 1 金`、`1 金 → 真錢（需審核）`。比率全存設定表。
+
+### A.2 進化
+`🐣小雞 → 🐔母雞 → 🦃大雞 → 👑帝王雞`；條件（建議初值，全可調）：
+- 母雞：累積 10 白蛋等值 + 連續餵養 ≥ 7 天 → 解鎖雞窩
+- 大雞：累積 1 金蛋等值 + 健康 ≥ 70
+- 帝王雞：累積 3 金蛋等值 + 當月全勤 → **真錢 NT$3,000–5,000（審核）**
+
+### A.3 餵食/照護迴圈
+每日餵食（蛋=推升級 / 飼料=維持健康）；連續 3 天餵養得淨化飼料（streak）；
+請假日不斷 streak、提供補餵寬限（反焦慮）。寫 `employee_pet_care_events`（append-only）。
+
+### A.4 健康/生病（只在遊戲內，呼應 D1）
+`health 0–100` + `vitality`；紅蛋/曠職/做錯事扣健康 → 雞憔悴、升級變慢；
+餵金蛋/淨化飼料回復（只耗遊戲資源、**不碰真錢**）。同儕送紅蛋需主管核可。
+
+---
+
+# 附錄 B — 資料表（schema-only，沿 docs/04 體例）
+
+> 全遵守：UUIDv7 PK、`tenant_id/created_at/updated_at`、金錢 `Money=Numeric(14,4)`、
+> 帳本 append-only（DB RULE 擋 UPDATE/DELETE）、蛋數量用整數。
+
+1. **`employee_pets`** — 一員工一雞（快照，餘額可重算）：stage / health / vitality / level / nest_level / white·silver·gold_balance / red_count / feed_balance / feeding_streak_days / last_fed_at。
+2. **`employee_egg_ledger`** — 蛋帳本（**append-only SSOT**，仿 customer_points_ledger）：egg_type / delta(signed) / reason(dotted: `attendance.ontime`,`task.complete`,`learning.upload`,`streak.bonus`,`exchange.up/down`,`redeem.cash`,`penalty.redegg`,`manual.adjust`) / source_ref / note。partial unique `(employee_id, 日期) where reason='attendance.ontime'`。
+3. **`employee_pet_care_events`** — 餵食/照護（append-only）：event_type / egg_type / amount / health_delta。
+4. **`employee_tasks`** — 任務定義：category(attendance/learning/duty/performance/course) / egg_type / egg_qty / recurrence / requires_evidence / requires_approval / is_active。
+5. **`employee_task_completions`** — 完成（append-only）：evidence_url / status(submitted/approved/rejected) / reviewed_by / egg_granted。
+6. **`employee_reward_pool`** — 獎勵池設定：white_per_silver / silver_per_gold / gold_egg_cash_value / emperor_bonus / monthly_goal_bonus / monthly_pool_budget / monthly_pool_spent。
+7. **`employee_reward_redemptions`** — 真錢兌換（需審核）：redemption_type(gold_egg/emperor/monthly_goal) / eggs_spent / cash_amount / status(pending/approved/paid/rejected) / 審核軌跡。
+
+真錢流：`達標 → redemption(pending) →（扣蛋寫 redeem.cash）→ 老闆審 → approved → 出納 paid`；
+rejected 退蛋寫反向 row；每筆走 `audit()`。三閘：只正向、預算上限、人工審核。
+
+---
+
+# 附錄 C — 每日結算 job 與員工畫面（草圖）
+
+每日 02:00（台北）結算前一日：準時→發白蛋（idempotent）；曠職→紅蛋（只扣遊戲健康）；久未餵→活力衰退。
+遲到/早退讀 `shifts` vs `time_clocks` 判定。
+
+員工主畫面：雞圖+名字+階段、健康/活力條、streak、蛋包(🥚🥈🥇❤️)、[餵蛋][餵飼料][兌換]、今日任務清單(可上傳)、本店排行榜。
