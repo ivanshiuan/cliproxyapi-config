@@ -7,6 +7,13 @@
 
 ---
 
+> 🧭 **總指揮看這份：[`docs/20_master_plan.md`](docs/20_master_plan.md)（一條龍總綱 SSOT）。**
+> **真實關鍵路徑不是寫程式——軟體(Phase 1 後端)已實質完工(12 router/~26 表/289 測試全綠)。**
+> 瓶頸是 ① **Gate 0**：填 `docs/19 §0`(店 concept/資本)+ 用 `scripts/launch_model.py` 把財務跑到「會賺」+ 拍板 **D1–D4**;
+> ② 店還沒存在(pre-launch)。**Gate 0 未過 → 不投錢、不寫新程式。** 下方清單是過 Gate 0 後的執行細節。
+
+---
+
 ## ✅ 我已完成（不需要你動手）
 
 ### 🆕 開幕輪盤行銷程式收尾（本 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）

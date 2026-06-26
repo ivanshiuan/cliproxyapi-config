@@ -3,6 +3,10 @@
 > 從現狀（Phase 0 完成、Phase 1 骨架）走到「全產業 AI 智慧營運系統」的具體排程。
 > 本文與 `03_roadmap.md` 互補：roadmap 講「為什麼分階段」、本文講「具體下一步做什麼」。
 
+> ⚠️ **總指揮 SSOT = [`./20_master_plan.md`](./20_master_plan.md)**。本文的「T1 估時 8 週」是**軟體交付週期**,
+> 它**嵌進**開店籌備(T-90 共 12 週,見 [`./19_restaurant_launch_blueprint.md`](./19_restaurant_launch_blueprint.md))的**最後 2–3 週**,不是另一條獨立 12 週。
+> **下方 4 個指揮官決策(D1–D4)是 docs/20 Gate 0 的一部分**：Gate 0(決策+財務驗證 `scripts/launch_model.py`)未過,不投錢開店。
+
 ---
 
 ## 三層完成定義
