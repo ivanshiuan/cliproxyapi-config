@@ -1,0 +1,30 @@
+# Auto-Montage 收稿骨架（複製一份填寫）
+# 跟使用者對齊這些欄位後，再用 knowledge/ 塑形、丟給引擎。
+
+project: my-signature-beef-noodle      # 專案代號（英數，用作 OpenMontage projects/<name>）
+topic: 招牌紅燒牛肉麵介紹               # 題材
+type: 菜色介紹                          # 菜色介紹 / 上新優惠 / 店家宣傳 / 紀錄片montage
+duration_sec: 30                       # 目標時長
+orientation: 9:16                      # 9:16 直式 / 16:9 橫式（鎖定，不混用）
+language:
+  primary: zh                          # 主語言
+  secondary: en                        # 輔語言（雙語字幕；不要可設 null）
+tone: 溫暖、食慾、有節奏                # 語氣
+footage:
+  mode: generated                      # generated 生成素材 / real 真實素材(紀錄片) / mixed
+  user_assets_dir: null                # 若有自備素材的路徑
+music:
+  source: library                      # library 自備 / generate 生成(付費,先問) / none
+  track: null                          # library 時指定曲目
+voiceover:
+  provider: piper                      # piper 免費 / 付費(先報價: elevenlabs...)
+budget_usd_max: 0                       # 預算上限；0 = 只用零金鑰免費基線
+cta: 到店點這道，地址見資訊卡            # 單一 CTA
+outro:                                  # 餐飲到店型必填
+  store_name: ________
+  address: ________
+  hours: ________
+must_pass:
+  - subtitle_align                      # 交片前必過字幕對齊閘
+  - no_bgm_over_voice                    # BGM 不蓋人聲
+  - hook_in_first_2s                     # 前 2 秒有鉤子
