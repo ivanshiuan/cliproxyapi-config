@@ -8,6 +8,12 @@
 
 > 本文不寫 vague aspiration。每個 phase 的 exit criteria 都可以被一條 `pytest` 或一份 KPI dashboard 證明已達成。
 
+> ⚠️ **時序/階段/資本口徑的 SSOT 是 [`./20_master_plan.md`](./20_master_plan.md)（總綱）**。本文(03)聚焦各 Phase 的 exit criteria 與成本;
+> 與總綱衝突處以總綱為準。兩點重大收斂(細節見 docs/20)：
+> 1. **本文假設「店已存在」,缺 pre-launch 軸**。開店前 T-90 籌備(選址/財務/證照/人力)見 [`./19_restaurant_launch_blueprint.md`](./19_restaurant_launch_blueprint.md);**Gate 0 財務驗證未過,不啟動 Phase 1 的開店。**
+> 2. **養成遊戲化(員工留任)階段對位**：最小子集屬 **P1 開店 Day-1**、完整後端(5 spec)屬 **P1.5(T0+1~2 月)**,見 [`./18_employee_pet_gamification.md`](./18_employee_pet_gamification.md);本文 §6.1.3 的「人資/現場調度**自動閉環**」仍屬 P5。
+> 3. **成本表(§7)只含研發 ~470 萬,未含開店本體 CapEx+週轉 ~250 萬**;真實總資本需求 ~720 萬,見 docs/20 §6。
+
 ---
 
 ## 0. 大局時間軸
