@@ -15,6 +15,7 @@ _MODULES = [
     "devswarm.cli",
     "devswarm.config",
     "devswarm.graph",
+    "devswarm.hermes",
     "devswarm.llm",
     "devswarm.sandbox",
     "devswarm.state",

@@ -477,9 +477,19 @@ python -m devswarm \
 
 > 退出碼 2 時看 `final_state.json` 的 `review_findings` vs `qa_report` 哪個非空，即知卡在審查還是測試。
 
----
+### 13.1 Hermes（對外通知層）
 
-## 14. 與其他文件的關係
+蜂群在 CLI 終局後,由 **Hermes**（`devswarm/hermes.py`）把終態推送出去,讓不盯 terminal 的指揮官也收得到。`build_event(final_state)` 把終態分類成單一事件:
+
+| kind | 觸發 | 要不要人介入 |
+|---|---|---|
+| `succeeded` | 審查放行且 tests pass | 否 |
+| `failed` | 一般未通過 | 是 |
+| `heal_exhausted` | QA self-heal 回合用盡 | 是 |
+| `review_exhausted` | 對抗式審查回合用盡(QA 沒跑) | 是 |
+| `budget_halted` | 預算軟上限先攔下 | 是 |
+
+事件走 `Notifier` 協定送出。v1 內建 `ConsoleNotifier`（預設,終端推一行精簡通知)、`StubNotifier`（測試捕捉)、`NullNotifier`（靜音);通道由 `DEVSWARM_NOTIFY=console|stub|none` 選。**真實 LINE/Slack/webhook 是再加一個 `Notifier` 實作即可**,掛在 `make_notifier` 後面,呼叫端不用動。Hermes 的 `notify` 一律被呼叫端 try/except 包住——通知失敗只降級成 warning,絕不弄丟產出物。
 
 | 文件 | 關係 |
 |---|---|

@@ -38,6 +38,9 @@ class Config:
     request_timeout_sec: int
     max_retries: int
 
+    # Hermes — outbound notification channel: "console" | "stub" | "none".
+    notify_channel: str
+
 
 def _env_int(name: str, default: int) -> int:
     raw = os.getenv(name)
@@ -69,6 +72,7 @@ def load_config(workspace_root: Path | None = None) -> Config:
         sandbox_timeout_sec=_env_int("DEVSWARM_SANDBOX_TIMEOUT", 60),
         request_timeout_sec=_env_int("DEVSWARM_REQUEST_TIMEOUT", 120),
         max_retries=_env_int("DEVSWARM_MAX_RETRIES", 2),
+        notify_channel=(os.getenv("DEVSWARM_NOTIFY") or "console").strip().lower(),
     )
 
 

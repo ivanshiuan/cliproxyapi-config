@@ -27,6 +27,7 @@ from rich.table import Table
 
 from .config import load_config
 from .graph import build_graph
+from .hermes import build_event, make_notifier
 from .llm import make_client
 from .state import initial_state
 from .workspace import WorkspaceManager
@@ -309,6 +310,14 @@ def main(argv: list[str] | None = None) -> int:
         return 3
 
     _print_final_summary(final_state, task_id, ws.root)
+
+    # Hermes — push a terminal notification. Must never break the run.
+    try:
+        notifier = make_notifier(cfg.notify_channel, console=console)
+        notifier.notify(build_event(final_state, task_id, str(ws.root)))
+    except Exception as e:  # pragma: no cover - defensive; notification is best-effort
+        console.print(f"[yellow]warning:[/yellow] Hermes notification failed: {type(e).__name__}: {e}")
+
     return 0 if final_state.get("tests_passed") else 1
 
 
