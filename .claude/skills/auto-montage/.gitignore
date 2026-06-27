@@ -1,0 +1,23 @@
+# Engine + secrets (never commit)
+OpenMontage/
+.env
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Generated media / projects
+projects/
+renders/
+*.mp4
+*.mov
+*.wav
+*.mp3
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
