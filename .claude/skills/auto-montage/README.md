@@ -7,6 +7,7 @@ voiceover → edit → **bilingual subtitles** → render, all **headless from t
 > 一個**嚴謹、授權乾淨**的影片自動化 Skill。對 AI agent 說一句需求，它就無頭（headless）
 > 跑完整條產線並過**雙語字幕品質閘**。**不需要 CapCut、不需要 Computer Use、不需要桌面 GUI。**
 
+[![CI](https://github.com/ivanshiuan/auto-montage/actions/workflows/ci.yml/badge.svg)](https://github.com/ivanshiuan/auto-montage/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE) · zero-API-key baseline · headless · clean-room
 
 ---
