@@ -31,14 +31,8 @@ services:
     dockerfilePath: restaurant_api/Dockerfile
     dockerContext: .
     healthCheckPath: /health/live
-    # 綁定 Render 給的 $PORT；先跑 migration + seed 再起服務。
-    # 用 venv 絕對路徑避免 PATH 在啟動 shell 沒對到 (exit 127)；各步以 ; 分隔，
-    # 即使 migration/seed 暫時出錯，uvicorn 仍會起來讓服務上線、health 通過。
-    dockerCommand: >-
-      sh -c "cd /app/restaurant_api && /opt/venv/bin/alembic upgrade head || true;
-      cd /app && /opt/venv/bin/python scripts/seed_wheel_campaign.py || true;
-      exec /opt/venv/bin/uvicorn restaurant_api.main:app --host 0.0.0.0 --port $PORT
-      --proxy-headers --forwarded-allow-ips '*'"
+    # CMD is handled by restaurant_api/start.sh (baked into the image).
+    # It runs: alembic upgrade head → seed_wheel_campaign → uvicorn $PORT.
     envVars:
       # 雲端 Postgres 連線字串：自動從上面的 resto-db 注入（內網、免 SSL 設定）
       - key: DATABASE_URL

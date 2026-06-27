@@ -68,7 +68,8 @@ WORKDIR /app
 # Drop privileges; readonly app dir would be ideal but Alembic writes
 # version-history under restaurant_api/alembic/versions/ if we ever
 # autogenerate inside the container — left writeable on purpose.
-RUN chown -R resto:resto /app
+RUN chown -R resto:resto /app \
+    && chmod +x /app/restaurant_api/start.sh
 USER resto
 
 EXPOSE 8000
@@ -77,13 +78,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8000/health/live || exit 1
 
-# tini = PID-1 reaping; uvicorn = single worker by default. Scale by
-# replicas, not by --workers (in-process scheduler must run as exactly one
-# replica with `python -m restaurant_api.jobs`).
+# tini = PID-1 reaping; start.sh = migrate → seed → uvicorn.
+# PORT is injected by Render; defaults to 8000 locally.
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["uvicorn", "restaurant_api.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--proxy-headers", \
-     "--forwarded-allow-ips", "*", \
-     "--log-config", "/dev/null"]
+CMD ["/app/restaurant_api/start.sh"]
