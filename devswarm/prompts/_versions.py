@@ -31,7 +31,10 @@ from __future__ import annotations
 
 PM_PROMPT_VERSION = "1.0.0"
 ARCHITECT_PROMPT_VERSION = "1.0.0"
-CODER_PROMPT_VERSION = "1.0.0"
+# Coder bumped to 1.1.0: now handles a second heal source (Reviewer findings)
+# in addition to QA reports — see prompts/coder.py CODER_REVIEW_HEAL_USER_TEMPLATE.
+CODER_PROMPT_VERSION = "1.1.0"
+REVIEWER_PROMPT_VERSION = "1.0.0"
 QA_PROMPT_VERSION = "1.0.0"
 
 
@@ -39,6 +42,7 @@ PROMPT_VERSIONS: dict[str, str] = {
     "pm": PM_PROMPT_VERSION,
     "architect": ARCHITECT_PROMPT_VERSION,
     "coder": CODER_PROMPT_VERSION,
+    "reviewer": REVIEWER_PROMPT_VERSION,
     "qa": QA_PROMPT_VERSION,
 }
 
@@ -54,5 +58,6 @@ __all__ = [
     "PM_PROMPT_VERSION",
     "PROMPT_VERSIONS",
     "QA_PROMPT_VERSION",
+    "REVIEWER_PROMPT_VERSION",
     "get_version",
 ]

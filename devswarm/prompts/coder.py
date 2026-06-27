@@ -197,3 +197,20 @@ You may use `read_file` to inspect the current code. Then issue `write_file` cal
 
 Output: brief plan (<=3 sentences) -> tool calls -> brief summary.
 """
+
+
+CODER_REVIEW_HEAL_USER_TEMPLATE = """\
+A Reviewer adversarially inspected your files BEFORE tests ran and BLOCKED them. Review round {review_iter} of {max_review_iters}.
+
+These are correctness / compliance defects the Reviewer found by reading the code against the PRD and the project invariants — they are NOT test failures (pytest has not run yet). Each finding cites the acceptance criterion or invariant it violates.
+
+## Blocking findings
+{review_findings}
+
+## Current files in workspace
+{file_tree}
+
+Use `read_file` to inspect the current code, then issue `write_file` calls to fix EVERY blocking finding. Fix the implementation to satisfy the invariant — do not weaken a test to dodge a finding. If a finding targets a test that mis-encodes an acceptance criterion, correct the test to match the PRD. After your fixes the files will be re-reviewed, then tested.
+
+Output: brief plan (<=3 sentences) -> tool calls -> brief summary.
+"""

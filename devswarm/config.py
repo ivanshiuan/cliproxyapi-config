@@ -19,10 +19,14 @@ class Config:
     model_pm: str
     model_architect: str
     model_coder: str
+    model_reviewer: str
     model_qa: str
 
     # Self-heal loop bound.
     max_heal_iters: int
+
+    # Adversarial review loop bound.
+    max_review_iters: int
 
     # Filesystem layout.
     workspace_root: Path
@@ -57,8 +61,10 @@ def load_config(workspace_root: Path | None = None) -> Config:
         model_pm=os.getenv("DEVSWARM_MODEL_PM", "claude-opus-4-7"),
         model_architect=os.getenv("DEVSWARM_MODEL_ARCHITECT", "claude-opus-4-7"),
         model_coder=os.getenv("DEVSWARM_MODEL_CODER", "claude-sonnet-4-6"),
+        model_reviewer=os.getenv("DEVSWARM_MODEL_REVIEWER", "claude-opus-4-7"),
         model_qa=os.getenv("DEVSWARM_MODEL_QA", "claude-haiku-4-5-20251001"),
         max_heal_iters=_env_int("DEVSWARM_MAX_HEAL_ITERS", 5),
+        max_review_iters=_env_int("DEVSWARM_MAX_REVIEW_ITERS", 3),
         workspace_root=ws.expanduser().resolve(),
         sandbox_timeout_sec=_env_int("DEVSWARM_SANDBOX_TIMEOUT", 60),
         request_timeout_sec=_env_int("DEVSWARM_REQUEST_TIMEOUT", 120),

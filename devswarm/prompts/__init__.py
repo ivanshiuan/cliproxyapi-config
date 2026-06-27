@@ -16,23 +16,32 @@ from ._versions import (
     PM_PROMPT_VERSION,
     PROMPT_VERSIONS,
     QA_PROMPT_VERSION,
+    REVIEWER_PROMPT_VERSION,
     get_version,
 )
 from .architect import ARCHITECT_SYSTEM
-from .coder import CODER_HEAL_USER_TEMPLATE, CODER_SYSTEM
+from .coder import (
+    CODER_HEAL_USER_TEMPLATE,
+    CODER_REVIEW_HEAL_USER_TEMPLATE,
+    CODER_SYSTEM,
+)
 from .pm import PM_SYSTEM
 from .qa import QA_SYSTEM
+from .reviewer import REVIEWER_SYSTEM
 
 __all__ = [
     "ARCHITECT_PROMPT_VERSION",
     "ARCHITECT_SYSTEM",
     "CODER_HEAL_USER_TEMPLATE",
     "CODER_PROMPT_VERSION",
+    "CODER_REVIEW_HEAL_USER_TEMPLATE",
     "CODER_SYSTEM",
     "PM_PROMPT_VERSION",
     "PM_SYSTEM",
     "PROMPT_VERSIONS",
     "QA_PROMPT_VERSION",
     "QA_SYSTEM",
+    "REVIEWER_PROMPT_VERSION",
+    "REVIEWER_SYSTEM",
     "get_version",
 ]
