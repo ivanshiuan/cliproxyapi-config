@@ -42,7 +42,11 @@ FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app
+# PYTHONPATH=/app: the editable install (pip install -e /build) records the
+# source path as /build, but runtime copies source to /app — so point Python at
+# /app to keep restaurant_api/devswarm importable regardless of the egg-link.
 
 # libpq for psycopg / asyncpg; tini for proper PID-1 signal handling;
 # curl for the container healthcheck.
