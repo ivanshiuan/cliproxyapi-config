@@ -32,6 +32,12 @@ dependencies = [
     # those module paths, so stay on 3.x.
     "apscheduler>=3.10,<4.0",
     "qrcode>=7.4,<9.0",
+    # Auth / RBAC (Phase 2 — see specs/auth_rbac_system.md). Added in
+    # PR-A so all five PRs share one lockfile bump; PR-A itself only
+    # imports passlib in the bootstrap script — pyjwt/slowapi land in PR-B.
+    "passlib[argon2]>=1.7.4,<2.0",
+    "pyjwt[crypto]>=2.9,<3.0",
+    "slowapi>=0.1.9,<1.0",
 ]
 
 [project.scripts]

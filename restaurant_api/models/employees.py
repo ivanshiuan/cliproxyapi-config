@@ -10,7 +10,7 @@ from decimal import Decimal
 from sqlalchemy import Boolean, Date, ForeignKey, Index, String
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import (
     Base,
@@ -76,6 +76,24 @@ class Employee(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
 
     __table_args__ = (
         Index("ix_employees_tenant_store", "tenant_id", "store_id"),
+    )
+
+    # auth/rbac wiring — added in PR-A of the auth_rbac_system spec.
+    # back-populates only; no FK columns on employees. The reverse side
+    # (UserCredential.employee_id UNIQUE) enforces the 1:1.
+    credential = relationship(
+        "UserCredential",
+        back_populates="employee",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    # Functional roles granted to this employee. viewonly because we go
+    # through the EmployeeRoleGrant join model directly when granting
+    # (it carries granted_by + granted_at audit fields).
+    roles = relationship(
+        "Role",
+        secondary="employee_roles",
+        viewonly=True,
     )
 
 

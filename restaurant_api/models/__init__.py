@@ -8,6 +8,14 @@ sub-modules.
 from __future__ import annotations
 
 from .audit import AuditLog
+from .auth import (
+    EmployeeRoleGrant,
+    Permission,
+    RefreshToken,
+    Role,
+    RolePermission,
+    UserCredential,
+)
 from .base import (
     Base,
     Money,
@@ -119,6 +127,13 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "PublicHoliday",
     # audit trail
     "AuditLog",
+    # auth / rbac
+    "EmployeeRoleGrant",
+    "Permission",
+    "RefreshToken",
+    "Role",
+    "RolePermission",
+    "UserCredential",
     # customers / loyalty
     "Customer",
     "CustomerTier",
