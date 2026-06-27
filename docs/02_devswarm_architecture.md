@@ -50,6 +50,18 @@
 
 這條隔離是 architecture invariant，不可為了省 token 把 Coder 的 messages 餵給 Reviewer（見 §4 invariant 6）。
 
+### 2.2 Codex（不變法則的單一真相源）
+
+專案不變法則（金錢用 Decimal、ledger append-only、軟刪除、稽核走 service、tz-aware、typed 例外）以前**同時散在三處**：`CLAUDE.md` 散文、Architect 的 prompt、Reviewer 的 rubric。改一次要改三份、還會漂移。
+
+**Codex（`devswarm/codex.py`）** 把它們收斂成一份**結構化、可程式化讀取**的 registry。每條 `Invariant` 帶 `id / title / severity / tags / rule / rationale / check_hint`，例如 `MONEY-001`、`LEDGER-001`。
+
+- **Architect** 與 **Reviewer** 的 system prompt 在 import 時注入**同一份** `codex.render_markdown()` 輸出 → 零漂移。Architect 把每條 invariant 落成本任務的 Security Constraints;Reviewer 用同一份審查,findings 的 `basis` 直接引用 invariant id。
+- **`CODEX_VERSION`** 比照 `prompts/_versions.py`;Codex 文字一改,嵌入它的 `ARCHITECT_PROMPT_VERSION` / `REVIEWER_PROMPT_VERSION` 也要 bump(嵌入文字是該 prompt 的一部分),telemetry 才能釘住「這次跑用哪版法典」。
+- 漂移守衛:`tests/test_codex.py` 斷言每條 invariant id 與版本號**確實出現在兩個 prompt 裡**,任一邊漏掉就紅。
+
+> 後續可把 Architect prompt 內既有的逐條 hard rule 逐步改成「引用 Codex」,讓 Codex 成為唯一手改處。v1 先讓兩個 agent 引用同源,既有細則作為闡述並存。
+
 ---
 
 ## 3. Graph topology（圖結構）

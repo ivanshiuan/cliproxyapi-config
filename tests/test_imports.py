@@ -13,6 +13,7 @@ import pytest
 _MODULES = [
     "devswarm",
     "devswarm.cli",
+    "devswarm.codex",
     "devswarm.config",
     "devswarm.graph",
     "devswarm.hermes",

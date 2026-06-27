@@ -30,11 +30,15 @@ the top of the corresponding prompt file.
 from __future__ import annotations
 
 PM_PROMPT_VERSION = "1.0.0"
-ARCHITECT_PROMPT_VERSION = "1.0.0"
+# Architect bumped to 1.1.0: now embeds the Codex invariant block (single source
+# of truth) — see prompts/architect.py. Bump again whenever Codex changes.
+ARCHITECT_PROMPT_VERSION = "1.1.0"
 # Coder bumped to 1.1.0: now handles a second heal source (Reviewer findings)
 # in addition to QA reports — see prompts/coder.py CODER_REVIEW_HEAL_USER_TEMPLATE.
 CODER_PROMPT_VERSION = "1.1.0"
-REVIEWER_PROMPT_VERSION = "1.0.0"
+# Reviewer bumped to 1.1.0: invariant rubric now injected from the Codex instead
+# of hand-maintained — see prompts/reviewer.py. Bump again whenever Codex changes.
+REVIEWER_PROMPT_VERSION = "1.1.0"
 QA_PROMPT_VERSION = "1.0.0"
 
 
