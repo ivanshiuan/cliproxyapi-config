@@ -1,79 +1,67 @@
 ---
-description: Write a new DevSwarm task spec following the project pattern
+description: Write a new DevSwarm task spec (structured YAML frontmatter + 4-section body, gated by validate_spec.py)
 argument-hint: <module_name> [— short description of what the module should do]
-allowed-tools: Read, Write, Glob
+allowed-tools: Read, Write, Glob, Bash
 ---
 
 You are writing a new DevSwarm task brief for `specs/$ARGUMENTS.md` (or the name you parse from $ARGUMENTS).
 
 ## Required reference reading (in order, no skipping)
 
-1. `specs/profit_calc.md` — canonical reference (best AC structure, best constraints)
-2. `specs/uniform_invoice_validator.md` — second reference (simpler example)
-3. `docs/04_data_schema.md` — for any column/type alignment
-4. `docs/08_safety_compliance.md` — if the module touches 食安 / 勞檢 / 個資 / 發票
+1. `specs/profit_calc.md` — canonical **pure-function** spec (15 ACs, full frontmatter)
+2. `specs/orders_router.md` — canonical **router** spec
+3. `scripts/validate_spec.py` — the gate your spec must pass before this command returns
+4. `docs/04_data_schema.md` — for any column/type alignment
+5. `docs/08_safety_compliance.md` — if the module touches 食安 / 勞檢 / 個資 / 發票
 
-## Required spec sections (in order)
+## Mandatory frontmatter
 
-```markdown
-# Task Brief: <Module Name>
+Every spec MUST start with this YAML block (between `---` fences):
 
-## Background — 1-2 paragraphs. Why this exists in the Taiwan F&B context.
-
-## Goal — 1 paragraph. Pure function, what input/output looks like.
-
-## Scope
-### In scope — bullets
-### Out of scope — bullets (THIS prevents Coder over-scoping)
-
-## Inputs (Pydantic v2)
-\`\`\`python
-class XxxInput(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    # fields with Decimal/Literal/datetime types
-\`\`\`
-
-## Output (Pydantic v2)
-\`\`\`python
-class XxxOutput(BaseModel):
-    ...
-\`\`\`
-
-## Public Interface
-\`\`\`python
-def compute_xxx(input: XxxInput) -> XxxOutput:
-    """One-line docstring."""
-\`\`\`
-
-## Acceptance Criteria (≥10, ≤15, each testable)
-
-1. **AC-1 happy path**: Given <concrete numbers>, output equals <concrete numbers>.
-2. **AC-2 ...**: ...
-... (with worked numbers, not just shapes)
-
-## Edge cases — bullets
-## Constraints (hard requirements) — bullets
-## Out of scope (be explicit so Coder doesn't drift) — bullets
-
-## 給 PM Agent 的提醒
-- ...
+```yaml
+---
+id: <filename_stem>          # matches the .md filename
+title: <Human Title>
+module: <snake_case>         # the .py file Coder produces
+kind: pure-function          # OR `router`
+status: draft                # draft|ready|implemented|deprecated
+preferred_model: sonnet      # opus|sonnet|haiku
+budget_usd: 5.0
+tags: [domain, mvp, pure-function]
+ac_count: 12                 # # of unique AC-N markers in body
+---
 ```
 
-## Hard rules for the spec content
+## Body sections (kind-specific)
 
-- Single .py module + single test_*.py (DevSwarm Coder is constrained to this)
-- Stdlib + `pydantic>=2.5` only (no pandas/numpy)
-- `Decimal` everywhere for money/qty, never float
-- All ACs have **concrete worked numbers**, not just shapes
-- `model_config = ConfigDict(frozen=True)` on inputs; **do not** specify `strict=True` (breaks JSON UUID parsing)
-- Out-of-scope ≥3 bullets; at minimum: persistence, HTTP, multi-currency
+**kind: pure-function** → `Background → Goal → Scope (In/Out) → Inputs → Output → Public Interface → Acceptance Criteria → Edge cases → Constraints`
 
-## Length target
+**kind: router** → `Background → Routes → Pydantic Schemas → Database writes → Acceptance Criteria → Error responses → Out of scope`
 
-180-280 lines. Less means the Coder gets ambiguous; more means we're scoping too big.
+## Hard rules
 
-## When done
+- Body 100-400 lines (hard); target 150-280
+- ≥10 ACs with concrete worked numbers, not just shapes
+- Pydantic v2 `frozen=True`, NEVER `strict=True`
+- All money/qty as `Decimal`
+- Single .py + single test_*.py (Coder is single-file by design)
 
-1. Show me the spec content
-2. Add it to `make backlog` view (it auto-detects new specs/*.md files)
-3. Suggest the next step: review, then `/swarm <name>.md` to run it
+## Mandatory post-write step
+
+```bash
+python3.12 scripts/validate_spec.py specs/<id>.md
+```
+
+If exit code != 0, fix the spec and re-run. Do not finish until it's green.
+If `ac_count` warns of mismatch, run:
+
+```bash
+python3.12 scripts/validate_spec.py --fix-counts specs/<id>.md
+```
+
+## When done — show me
+
+1. Validator output (must be ✅)
+2. Frontmatter block
+3. AC count + body line count
+4. Suggested next step: `/swarm <id>.md` to run it, or `/bakeoff specs/<id>.md` to compare model tiers first
