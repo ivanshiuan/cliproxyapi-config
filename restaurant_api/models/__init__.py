@@ -38,6 +38,14 @@ from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
+from .knowledge import (
+    ACTOR_KINDS,
+    SOURCE_TYPES,
+    KnowledgeChunk,
+    KnowledgeDocument,
+    KnowledgeQuery,
+    KnowledgeScope,
+)
 from .menu import MenuCategory, MenuItem
 from .orders import (
     DiscountKind,
@@ -139,4 +147,11 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     # embeddings (AI data asset seed)
     "Embedding",
     "VECTOR_DIM",
+    # knowledge base (BUFF OS — RAG corpus + append-only query ledger)
+    "KnowledgeDocument",
+    "KnowledgeChunk",
+    "KnowledgeQuery",
+    "KnowledgeScope",
+    "SOURCE_TYPES",
+    "ACTOR_KINDS",
 ]
