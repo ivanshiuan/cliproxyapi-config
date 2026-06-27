@@ -1,0 +1,28 @@
+{
+  "match_id": "2026-wc-egypt-iran",
+  "kickoff_utc": "2026-06-26T19:00:00+00:00",
+  "home": "Egypt",
+  "away": "Iran",
+  "group_context": {
+    "standings_summary": "Both on 3 pts going into final round; draw eliminates whoever has worse GD; parallel kickoff.",
+    "final_round": true,
+    "same_time_kickoff": true
+  },
+  "team_need": {
+    "home": "must_win",
+    "away": "must_win"
+  },
+  "market": {
+    "line": "-0.25",
+    "favorite": "home",
+    "home_price": "1.94",
+    "away_price": "1.88"
+  },
+  "totals": {
+    "line": "2.0",
+    "over_price": "1.78",
+    "under_price": "2.05"
+  },
+  "bankroll": "5000",
+  "risk_flags": ["final_round_pressure"]
+}

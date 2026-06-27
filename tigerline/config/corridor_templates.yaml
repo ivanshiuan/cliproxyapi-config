@@ -1,0 +1,33 @@
+# TIGER LINE PRIME — Score corridors per scenario.
+#
+# ``primary`` MUST appear in ``scores``. Scores are [home_goals, away_goals]
+# assuming the favorite is the home side. The corridor builder flips them
+# when the away side is the favorite.
+
+- scenario: two_goal_landing
+  primary: [2, 0]
+  scores: [[2, 0], [3, 0], [3, 1], [2, 1], [4, 1]]
+
+- scenario: must_win_pressure
+  primary: [2, 0]
+  scores: [[1, 0], [2, 0], [2, 1], [3, 1]]
+
+- scenario: pressure_under
+  primary: [1, 1]
+  scores: [[0, 0], [1, 0], [1, 1], [0, 1]]
+
+- scenario: goal_market
+  primary: [2, 1]
+  scores: [[2, 1], [2, 2], [1, 2], [3, 1], [1, 3]]
+
+- scenario: narrow_win
+  primary: [1, 0]
+  scores: [[1, 0], [2, 1], [2, 0], [1, 1]]
+
+- scenario: rotation_trap
+  primary: [1, 1]
+  scores: [[1, 1], [0, 1], [1, 2]]
+
+- scenario: unclear_skip
+  primary: [1, 1]
+  scores: [[1, 1]]
