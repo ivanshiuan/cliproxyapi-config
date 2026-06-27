@@ -7,6 +7,7 @@
 > **Models touched:** new `restaurant_api/models/visual_assets.py`
 > **External weights:** `google/siglip2-so400m-patch16-naflex` (Apache 2.0)
 > **Decision context:** `docs/18_vision_encoder_strategy.md`
+> **Depends on:** `specs/auth_rbac_system.md`（必須先實作；本 router 用其 `get_current_user` / `require_permission` deps）
 
 ---
 
@@ -38,10 +39,71 @@ embedding 計算、pgvector 索引、語意搜尋四端點。
 | 距離度量 | **cosine** via `vector_cosine_ops` | SigLIP 2 訓練時用 sigmoid logit，cosine 對齊語意檢索 |
 | pgvector index | **HNSW**, `m=16, ef_construction=64` | 比 IVFFlat 在中小 corpus（< 1M）recall 更穩 |
 | 多租戶隔離 | **scalar filter on tenant_id**, NOT partial index per tenant | 早期 row 量 < 100K，filter 夠快；row > 1M 時改 partitioning |
+| 角色可見性 | **`visible_to_roles JSONB` 欄位 + GIN 索引 + search 端 role overlap filter** | 由 `auth_rbac_system` 提供的 `roles` 表名稱集（marketing/supplier/...），素材建立時可指定哪些角色看得到；search 端依 JWT 帶的 roles 自動過濾 |
+| 預設可見性規則 | kind → default roles 對映表（見下節 §RBAC Integration）| 上傳時若不指定 `visible_to_roles`，依 kind 套預設；上傳者可覆寫 |
 | 同步 vs 非同步 embedding | **API 內 inline embedding**（< 1 sec on L4）| 不引入 Redis/Celery，PoC 階段過度設計 |
 | 模型權重存放 | HuggingFace cache mounted volume `/var/lib/hf-cache` | 不 commit 進 git；首次 pull ~1.6 GB |
 | 圖片來源 | **multipart upload OR URL**（兩種都支援） | URL 給後端批次匯入用，multipart 給前端直接上傳 |
 | 圖片儲存責任 | **本 spec 不負責**；spec 收到的是「已落地的 URL」或 byte stream | 物件儲存另外抽 service |
+
+### RBAC Integration
+
+本 router 依賴 `specs/auth_rbac_system.md` 提供的下列基礎建設：
+
+| 依賴項 | 用途 |
+|---|---|
+| `Depends(get_current_user)` | 所有 endpoint（除 `/visual/health`）必掛，取得 `CurrentUser(employee_id, tenant_id, roles)` |
+| `Depends(require_permission("visual_assets:write"))` | POST /visual/assets、DELETE |
+| `Depends(require_permission("visual_assets:read"))` | GET、search 端點 |
+| `CurrentUser.roles` | search 端用來過濾 `visible_to_roles` |
+| `CurrentUser.tenant_id` | scope 所有 query；不再從 `X-Tenant-Id` header 取（auth spec 已 deprecate）|
+
+#### Permissions 加進 `auth_rbac_system` permission catalog
+
+| Permission name | 描述 | 預設給哪些 role |
+|---|---|---|
+| `visual_assets:read` | 讀取 / 搜尋素材 | owner, store_manager, marketing, supplier, staff |
+| `visual_assets:write` | 上傳 / 軟刪除素材 | owner, marketing |
+| `visual_assets:read_all` | bypass role-based visibility filter（看所有素材，含其他角色限定）| owner |
+| `visual_assets:manage_visibility` | 編輯既有素材的 `visible_to_roles` | owner, marketing |
+
+#### kind → default visible_to_roles 對映
+
+上傳 asset 時若 `visible_to_roles` 為 null，依下表套預設；
+若上傳者明確帶 list，使用該 list（須為其 tenant 已存在的 role names）：
+
+| kind | default `visible_to_roles` | 理由 |
+|---|---|---|
+| `hero` | `["*"]`（所有 role）| 公開行銷素材 |
+| `dish` | `["*"]` | 菜色照各角色都會用到 |
+| `social` | `["*"]` | 社群素材可參考 |
+| `ui_ref` | `["*"]` | UI/UX 參考圖公開 |
+| `brand_ref` | `["owner", "marketing"]` | 品牌指南僅核心團隊 |
+| `ingredient` | `["owner", "store_manager", "supplier"]` | 食材照給供應鏈與店管 |
+| `other` | `["owner", "marketing"]` | 安全預設值 |
+
+`["*"]` 是 sentinel，search 端解讀為「不過濾 roles」。
+
+#### Search-end role overlap filter
+
+帶 `visual_assets:read_all` permission 的 user → bypass role filter。
+其他 user → SQL filter 加：
+
+```sql
+AND (
+  visible_to_roles ?| ARRAY['*']
+  OR visible_to_roles ?| :current_user_roles
+)
+```
+
+`?|` 是 jsonb 的 array overlap operator。GIN 索引在 `visible_to_roles` 上提供加速。
+
+#### Public endpoint 例外
+
+| Endpoint | Auth 要求 |
+|---|---|
+| `GET /visual/health` | **public**（liveness 檢查，不掛 auth）|
+| 其他全部 | 掛 `Depends(get_current_user)` + 對應 permission dep |
 
 ### Sequence diagram (POST /visual/assets, multipart path)
 
@@ -75,9 +137,12 @@ client            FastAPI            VisualAssetService          GPU(SigLIP 2)  
 | `GET`  | `/visual/health` | 模型已載入 + GPU 可用 |
 
 所有路由 prefix：`/visual`；OpenAPI tag：`visual`。
-所有路由都注入 `session: AsyncSession = Depends(get_session)` 與
-`tenant_id: UUID = Depends(get_tenant_id)`（PoC 階段 `get_tenant_id` 從 header
-`X-Tenant-Id` 取，或回 default tenant；Phase 2 換成 JWT claim）。
+所有路由（除 `/visual/health`）都注入：
+- `session: AsyncSession = Depends(get_db)`
+- `user: CurrentUser = Depends(get_current_user)` — from `specs/auth_rbac_system.md`
+- 對應 permission dep（見上節 §RBAC Integration）
+
+`user.tenant_id` 直接從 JWT claim 取，**不**再讀 `X-Tenant-Id` header。
 
 ### POST /visual/assets
 
@@ -93,6 +158,7 @@ client            FastAPI            VisualAssetService          GPU(SigLIP 2)  
 | `text_caption` | str | no | ≤ 500 chars，人工標記 |
 | `tags` | str (JSON) | no | JSON-encoded `list[str]`, each tag ≤ 50 chars, total ≤ 20 tags |
 | `source_label` | str | no | 來源標籤（如 `"line_upload"`、`"web_admin"`），≤ 50 chars |
+| `visible_to_roles` | str (JSON) | no | JSON-encoded `list[str]`，每項是 role name（須 tenant 已存在）；null 則套 kind 預設；`["*"]` 表全公開 |
 
 **JSON body (URL upload):**
 
@@ -103,7 +169,8 @@ client            FastAPI            VisualAssetService          GPU(SigLIP 2)  
   "store_id": null,
   "text_caption": "招牌牛肉麵 hero",
   "tags": ["beef", "noodle", "signature"],
-  "source_label": "menu_team"
+  "source_label": "menu_team",
+  "visible_to_roles": ["*"]
 }
 ```
 
@@ -117,16 +184,18 @@ fetch timeout 10 秒。
 3. PIL `Image.open` decode；若失敗 422 `invalid_image`。
 4. resize 到 SigLIP 2 接受的 patch 倍數（384×384 或 naflex 動態，看載入的變體）。
 5. 呼叫 `VisualAssetService.embed(image)` → `np.ndarray(shape=(1152,), dtype=float32)`。
-6. INSERT `visual_assets` row：
-   - `tenant_id`（從 dep）
+6. **解析 `visible_to_roles`**：
+   - 若為 null → 套 kind 預設（見 §RBAC Integration 對映表）
+   - 若為 list → 驗證每個 role name 在 `roles` 表內且屬於 current tenant；若有 unknown role → 422
+   - `["*"]` 直接通過（sentinel）
+7. INSERT `visual_assets` row：
+   - `tenant_id`（從 `user.tenant_id`）
    - `store_id`（可 null）
-   - `kind`
-   - `embedding`（pgvector）
-   - `source_url`（multipart 時為 null，未來填 S3 path；URL 時填原 URL）
-   - `mime_type`、`width`、`height`、`bytes_size`
+   - `kind`、`embedding`、`source_url`、`mime_type`、`width`、`height`、`bytes_size`
    - `text_caption`、`tags`、`source_label`
-   - `created_by`（從 dep；PoC null 即可）
-7. Response 201 `VisualAssetResponse`（**不**回 embedding 內容，太大）。
+   - `visible_to_roles`（resolved JSONB）
+   - `created_by` = `user.employee_id`
+8. Response 201 `VisualAssetResponse`（**不**回 embedding 內容，太大）。
 
 **Idempotency:**
 本 PoC 不做。同一張圖重複上傳會建多筆 row。Phase 2 加 perceptual hash 去重。
@@ -175,15 +244,22 @@ fetch timeout 10 秒。
    SELECT id, kind, text_caption, tags, store_id,
           1 - (embedding <=> :q) AS score
      FROM visual_assets
-    WHERE tenant_id = :tenant_id
+    WHERE tenant_id = :tenant_id            -- from user.tenant_id (JWT)
       AND deleted_at IS NULL
       AND (:kind_filter IS NULL OR kind = ANY(:kind_filter))
       AND (:store_id_filter IS NULL OR store_id = :store_id_filter)
       AND (:tags_filter = ARRAY[]::text[] OR tags ?& :tags_filter)
+      -- Role-based visibility filter (skip if user has visual_assets:read_all)
+      AND (
+        :bypass_role_filter
+        OR visible_to_roles ?| ARRAY['*']
+        OR visible_to_roles ?| :current_user_roles
+      )
       AND (1 - (embedding <=> :q)) >= :min_score
     ORDER BY embedding <=> :q
     LIMIT :top_k;
    ```
+   `:bypass_role_filter` 為 boolean，若 user 有 `visual_assets:read_all` permission 則 true。
 3. Response 200 `SearchResponse`：
 
 ```json
@@ -246,6 +322,8 @@ class VisualAssetCreateJSON(BaseModel):
     text_caption: str | None = Field(default=None, max_length=500)
     tags: list[str] = Field(default_factory=list, max_length=20)
     source_label: str | None = Field(default=None, max_length=50)
+    visible_to_roles: list[str] | None = Field(default=None, max_length=20,
+                                              description="None = inherit kind default; ['*'] = public")
 
 class VisualAssetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -261,6 +339,8 @@ class VisualAssetResponse(BaseModel):
     text_caption: str | None
     tags: list[str]
     source_label: str | None
+    visible_to_roles: list[str]    # resolved value (never null on response)
+    created_by: UUID | None
     created_at: datetime   # Asia/Taipei
     updated_at: datetime
 
@@ -334,7 +414,8 @@ CREATE TABLE visual_assets (
     text_caption    TEXT,
     tags            JSONB NOT NULL DEFAULT '[]'::jsonb,
     source_label    TEXT,
-    created_by      UUID,
+    visible_to_roles JSONB NOT NULL DEFAULT '["*"]'::jsonb,
+    created_by      UUID REFERENCES employees(id),
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ
@@ -354,6 +435,9 @@ CREATE INDEX visual_assets_kind_idx
 
 CREATE INDEX visual_assets_tags_gin_idx
     ON visual_assets USING gin (tags);
+
+CREATE INDEX visual_assets_visibility_gin_idx
+    ON visual_assets USING gin (visible_to_roles);
 
 -- HNSW for cosine; m=16, ef_construction=64 are pgvector defaults
 -- and work well for our expected corpus size (< 1M rows).
@@ -398,7 +482,9 @@ class VisualAsset(Base):
     text_caption: Mapped[str | None] = mapped_column(String)
     tags: Mapped[list] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     source_label: Mapped[str | None] = mapped_column(String)
-    created_by: Mapped[UUID | None] = mapped_column(PgUUID)
+    visible_to_roles: Mapped[list] = mapped_column(JSONB, nullable=False,
+                                                   server_default=text("'[\"*\"]'::jsonb"))
+    created_by: Mapped[UUID | None] = mapped_column(PgUUID, ForeignKey("employees.id"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True),
                                                  nullable=False, server_default=text("now()"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True),
@@ -560,6 +646,14 @@ CUDA OOM 處理：catch `torch.cuda.OutOfMemoryError` → `torch.cuda.empty_cach
 | AC-23 | URL fetch timeout → 504 | mock httpx 模擬 10s+ → 504 |
 | AC-24 | 重複上傳允許 | 同圖 POST 兩次 → 兩個 asset_id（不做去重，PoC 限制）|
 | AC-25 | retrieval recall 基準 | 用 `tests/fixtures/visual_recall_set/` 1000 張公開測試集（dish 500、scene 300、ui 200），text query 至各 caption → **recall@10 ≥ 0.85** |
+| AC-26 | RBAC: unauthenticated 拒絕 | 不帶 JWT 呼叫任何 endpoint（除 /visual/health）→ 401 |
+| AC-27 | RBAC: 缺 visual_assets:write 拒絕 | 只有 `visual_assets:read` 的 user POST → 403 |
+| AC-28 | RBAC: kind 預設可見性 | upload brand_ref 不帶 visible_to_roles → DB 寫入 `["owner","marketing"]` |
+| AC-29 | RBAC: search 自動過濾 | tenant 內 marketing user search → 看不到僅 supplier 可見的素材；supplier user 反之亦然 |
+| AC-30 | RBAC: read_all bypass filter | owner（有 `visual_assets:read_all`）search → 看得到所有 visibility 的素材 |
+| AC-31 | RBAC: 公開 sentinel | `visible_to_roles=["*"]` → 所有 role 都看得到 |
+| AC-32 | RBAC: unknown role 拒收 | POST with `visible_to_roles=["nonexistent_role"]` → 422 |
+| AC-33 | RBAC: created_by 寫入 JWT user | POST → DB `created_by` = JWT `sub` (employee_id) |
 
 ---
 
@@ -605,7 +699,10 @@ CUDA OOM 處理：catch `torch.cuda.OutOfMemoryError` → `torch.cuda.empty_cach
 
 ## Out of Scope
 
-- **Auth / authz**：複用 phase 2 全域認證；本 spec 只接 `get_tenant_id` dep
+- **Auth / authz 本身**：由 `specs/auth_rbac_system.md` 提供；本 spec 只**消費**
+  其 deps（`get_current_user`、`require_permission`）並定義自己的 4 個
+  permission（見 §RBAC Integration）
+- **角色定義 / 角色管理 UI**：roles CRUD、grant/revoke 由 auth spec 負責
 - **物件儲存**：上傳的 image bytes 不存（PoC）。Phase 2 接 S3/MinIO，本 router
   加 `source_url` 寫入
 - **Perceptual hash 去重**：同圖重複上傳會建多筆 row。Phase 2 加 `phash` 欄位
@@ -626,7 +723,8 @@ CUDA OOM 處理：catch `torch.cuda.OutOfMemoryError` → `torch.cuda.empty_cach
 |---|---|
 | `restaurant_api/main.py` | `app.include_router(visual_assets.router, prefix="/visual")`，並在 lifespan startup 呼叫 `await warmup_visual_model()` |
 | `restaurant_api/database.py` | 共用 async session；pgvector extension 已在 migration 啟用 |
-| `restaurant_api/api/deps.py` | 注入 `session`、`tenant_id`；PoC 從 `X-Tenant-Id` header 取，Phase 2 改 JWT |
+| `restaurant_api/api/deps.py` | 注入 `session` (`get_db`)；認證相關 deps（`get_current_user` / `require_permission`）由 `auth_rbac_system` spec 實作後本 spec 直接 import |
+| **`specs/auth_rbac_system.md`** | **強依賴**：必須先實作。本 spec 用其 JWT 認證、CurrentUser 模型、permission catalog；本 spec 在 catalog 加 4 個 `visual_assets:*` permission |
 | `restaurant_api/api/errors.py` | 用既有 `DomainError`、`NotFoundError`；新增 `ModelUnavailableError`（→ 503）、`SourceFetchError`（→ 504） |
 | `restaurant_api/middleware/` | 結構化 log 自動帶 `request_id`、`tenant_id`；search latency 進 `extra={...}` |
 | `models/visual_assets.py`（本 spec 新建）| `VisualAsset` 一個 model；不關聯 `orders` / `menu` / `inventory`（純獨立 feature）|
@@ -635,16 +733,20 @@ CUDA OOM 處理：catch `torch.cuda.OutOfMemoryError` → `torch.cuda.empty_cach
 
 ---
 
-## Implementation Plan（3 天）
+## Implementation Plan（4 天，原 3 天 + 1 天 RBAC 整合）
+
+**前置條件**：`specs/auth_rbac_system.md` PR-A 到 PR-D 已 merge（auth 基礎建設 + 既有 router 接認證 + test fixture 改造完成）。
 
 | Day | 任務 | 驗收 |
 |---|---|---|
-| 1 上午 | Alembic migration + SQLAlchemy model + pgvector extension 啟用 | `make db-smoke` 跑得通；本機 INSERT/SELECT 一筆 |
+| 1 上午 | Alembic migration（visual_assets 表含 `visible_to_roles` + GIN）+ SQLAlchemy model | `make db-smoke` 跑得通；本機 INSERT/SELECT 一筆 |
 | 1 下午 | `VisualAssetService` + warmup + mock fixture | unit test AC 1-4 過 |
-| 2 上午 | Pydantic schemas + multipart router + JSON router + GET/DELETE | AC 5-12 過 |
-| 2 下午 | Text search + image search endpoints | AC 13-21 過 |
-| 3 上午 | Error paths + 503 / 504 / 415 / 413 + 整合測 setup | AC 22-24 過 |
-| 3 下午 | 1000 張 fixture set + recall benchmark + PR | AC-25 過、`make full-check` 全綠 |
+| 2 上午 | Pydantic schemas + multipart router + JSON router + GET/DELETE（含 `Depends(get_current_user)` + permission check）| AC 5-12 過 |
+| 2 下午 | Text search + image search endpoints（含 role-overlap filter SQL）| AC 13-21 過 |
+| 3 上午 | Error paths + 503 / 504 / 415 / 413 / 401 / 403 + 整合測 setup | AC 22-24 過 |
+| 3 下午 | RBAC AC（AC-26 到 AC-33）— 角色預設、search filter、bypass、role validation | AC-26 到 AC-33 過 |
+| 4 上午 | Permission catalog seed migration（4 個 `visual_assets:*` 加進 auth spec 的 permissions 表）| owner / marketing 預設拿到對應 permission |
+| 4 下午 | 1000 張 fixture set + recall benchmark + PR | AC-25 過、`make full-check` 全綠 |
 
 **Risk register**：
 
