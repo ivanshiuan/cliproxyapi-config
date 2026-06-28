@@ -22,6 +22,13 @@ from rich.table import Table
 
 from tigerline import __version__
 from tigerline.classifier import classify
+from tigerline.odds_snapshot_collector import (
+    SnapshotRejected,
+    record_snapshot,
+)
+from tigerline.odds_snapshot_collector import (
+    load_snapshot as parse_snapshot_file,
+)
 from tigerline.parser import load_match as parse_match_file
 from tigerline.recommender import recommend
 from tigerline.review import review as run_review
@@ -34,7 +41,9 @@ from tigerline.rules import (
 from tigerline.storage import (
     connect,
     latest_plan,
+    latest_snapshot,
     list_backlog,
+    list_snapshots,
     load_match,
     save_classification,
     save_match,
@@ -51,6 +60,9 @@ app = typer.Typer(
 )
 rules_app = typer.Typer(help="Inspect and validate YAML rule files.")
 app.add_typer(rules_app, name="rules")
+
+snapshot_app = typer.Typer(help="V3.0 odds-snapshot collector (Sprint 1).")
+app.add_typer(snapshot_app, name="snapshot")
 
 console = Console()
 
@@ -166,6 +178,85 @@ def stats(
             f"{100 * agg['main_win'] / n:.0f}",
         )
     console.print(table)
+
+
+@snapshot_app.command("add")
+def snapshot_add(
+    snapshot_file: Annotated[Path, typer.Argument(exists=True, readable=True)],
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Validate + persist one odds snapshot (SQLite + JSONL mirror)."""
+    snap = parse_snapshot_file(snapshot_file)
+    conn = connect()
+    try:
+        warnings = record_snapshot(conn, snap)
+    except SnapshotRejected as e:
+        console.print(f"[red]REJECTED[/red] {e}")
+        raise typer.Exit(code=1) from e
+
+    if as_json:
+        typer.echo(snap.model_dump_json(indent=2))
+        return
+    console.print(f"[green]OK[/green] {snap.snapshot_id} → {snap.match_id}")
+    for w in warnings:
+        console.print(f"  [yellow]warn[/yellow] [{w.code}] {w.message}")
+
+
+@snapshot_app.command("list")
+def snapshot_list(
+    match_id: Annotated[str, typer.Argument(help="Canonical match ID.")],
+    market: Annotated[str | None, typer.Option("--market")] = None,
+    bookmaker: Annotated[str | None, typer.Option("--book")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """List every snapshot for a match (filter by market and/or book)."""
+    conn = connect()
+    rows = list_snapshots(conn, match_id, market_type=market, bookmaker=bookmaker)
+    if as_json:
+        typer.echo(json.dumps([r.model_dump(mode="json") for r in rows], indent=2))
+        return
+    if not rows:
+        console.print("[dim]No snapshots.[/dim]")
+        return
+    table = Table(title=f"Snapshots for {match_id}")
+    table.add_column("collected_at")
+    table.add_column("book")
+    table.add_column("market")
+    table.add_column("selection")
+    table.add_column("line")
+    table.add_column("price")
+    for r in rows:
+        table.add_row(
+            r.metadata.collected_at.isoformat(),
+            r.bookmaker,
+            r.market_type,
+            r.selection,
+            "" if r.line is None else str(r.line),
+            str(r.price),
+        )
+    console.print(table)
+
+
+@snapshot_app.command("latest")
+def snapshot_latest(
+    match_id: Annotated[str, typer.Argument()],
+    market: Annotated[str, typer.Option("--market", help="Market type, e.g. AH_full")],
+    bookmaker: Annotated[str | None, typer.Option("--book")] = None,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Show the most recent snapshot for a (match, market) pair (and optional book)."""
+    conn = connect()
+    snap = latest_snapshot(conn, match_id, market_type=market, bookmaker=bookmaker)
+    if snap is None:
+        raise typer.Exit(code=1)
+    if as_json:
+        typer.echo(snap.model_dump_json(indent=2))
+        return
+    console.print(
+        f"{snap.metadata.collected_at.isoformat()}  "
+        f"{snap.bookmaker}  {snap.market_type}  {snap.selection}  "
+        f"line={snap.line if snap.line is not None else '-'}  price={snap.price}"
+    )
 
 
 @rules_app.command("show")

@@ -66,6 +66,24 @@ MarketKind = Literal["AH", "totals", "correct_score", "BTTS"]
 
 Adjustment = Literal["upgrade", "normal", "downgrade", "skip"]
 
+# V3.0 — Snapshot collector vocabulary.
+# ``OddsFormat`` is the wire format of ``price``; the snapshot collector keeps the
+# original ``odds_format`` so downstream consumers can normalise without losing
+# precision. Internal computations should still use decimal/normalised odds, but
+# we preserve the input form for audit.
+OddsFormat = Literal["decimal", "hk", "malay", "indo", "american"]
+MarketType = Literal[
+    "AH_full",
+    "AH_first_half",
+    "totals_full",
+    "totals_first_half",
+    "moneyline",
+    "BTTS",
+    "correct_score",
+]
+SourceKind = Literal["manual", "api", "screenshot", "system"]
+SourceConfidence = Literal["high", "medium", "low"]
+
 # ──────────────────────────────────────────────────────────────────────────
 # Input — what the user (or tiger-pm) hands to ``tiger analyze``
 # ──────────────────────────────────────────────────────────────────────────
@@ -214,3 +232,50 @@ class ReviewResult(BaseModel):
     main_result: MainResult
     score: int = Field(ge=0, le=100)
     suggestions: list[str] = Field(default_factory=list)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# V3.0 — Snapshot collector + source metadata (Sprint 1)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class SourceMetadata(BaseModel):
+    """Provenance for every line/snapshot landing in the system.
+
+    Every snapshot — manual entry, API pull, screenshot OCR, or system-generated
+    consensus — must declare where it came from, when it was observed, and how
+    confident the collector is in the value. Downstream engines (movement,
+    consensus, precision) refuse to score snapshots that lack this envelope.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    source: SourceKind
+    collected_at: datetime
+    source_confidence: SourceConfidence
+    is_verified: bool = False
+    notes: str = Field(default="", max_length=500)
+
+
+class OddsSnapshot(BaseModel):
+    """One observed line at one moment from one book.
+
+    The collector writes these append-only — never UPDATE, never DELETE. The
+    full history is the foundation for line movement, consensus, and CLV.
+
+    ``line`` is None for markets without a numeric handicap (moneyline, BTTS).
+    For correct_score the ``selection`` carries the score (e.g. "2-0") and
+    ``line`` is None.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    snapshot_id: str = Field(min_length=1, pattern=r"^[a-z0-9\-_]+$")
+    match_id: str = Field(min_length=1, pattern=r"^[a-z0-9\-]+$")
+    bookmaker: str = Field(min_length=1, max_length=64)
+    market_type: MarketType
+    selection: str = Field(min_length=1, max_length=64)
+    line: StrictDecimal | None = None
+    price: StrictDecimal = Field(gt=Decimal("1"))
+    odds_format: OddsFormat
+    metadata: SourceMetadata

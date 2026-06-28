@@ -19,10 +19,20 @@ from tigerline.models import (
     BetPlan,
     MatchClassification,
     MatchInput,
+    OddsSnapshot,
     ReviewResult,
+    SourceMetadata,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Migrations to run when ``PRAGMA user_version`` is below SCHEMA_VERSION.
+# Index is the target version (1 → init.sql, 2 → migrations/002_*.sql, ...).
+# ``init.sql`` covers everything up to v1; v2+ live as separate files so
+# rolling out new V3 sprints stays additive and reviewable.
+_MIGRATIONS: dict[int, str] = {
+    2: "migrations/002_v3_snapshots.sql",
+}
 
 
 def default_db_path() -> Path:
@@ -55,9 +65,22 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current >= SCHEMA_VERSION:
         return
-    sql = _init_sql_path().read_text(encoding="utf-8")
-    conn.executescript(sql)
-    conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+
+    # Fresh database — apply v1 init.sql first.
+    if current < 1:
+        conn.executescript(_init_sql_path().read_text(encoding="utf-8"))
+        conn.execute("PRAGMA user_version = 1")
+        current = 1
+
+    # Then walk forward through every migration file.
+    sql_dir = _init_sql_path().parent
+    for version in range(current + 1, SCHEMA_VERSION + 1):
+        rel = _MIGRATIONS.get(version)
+        if rel is None:
+            raise RuntimeError(f"missing migration for schema version {version}")
+        conn.executescript((sql_dir / rel).read_text(encoding="utf-8"))
+        conn.execute(f"PRAGMA user_version = {version}")
+
     conn.commit()
 
 
@@ -190,3 +213,110 @@ def pending_rule_updates(conn: sqlite3.Connection) -> Iterable[sqlite3.Row]:
         "SELECT id, match_id, suggestion, created_at FROM rule_updates WHERE applied = 0 "
         "ORDER BY created_at DESC"
     ).fetchall()
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# V3.0 Sprint 1 — odds_snapshots CRUD (append-only).
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def save_snapshot(conn: sqlite3.Connection, snap: OddsSnapshot) -> None:
+    """Insert one snapshot. Append-only — re-inserting the same ``snapshot_id``
+    raises ``sqlite3.IntegrityError``.
+    """
+    conn.execute(
+        "INSERT INTO odds_snapshots ("
+        "  snapshot_id, match_id, bookmaker, market_type, selection, line, price, "
+        "  odds_format, source, collected_at, source_confidence, is_verified, notes"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            snap.snapshot_id,
+            snap.match_id,
+            snap.bookmaker,
+            snap.market_type,
+            snap.selection,
+            None if snap.line is None else str(snap.line),
+            str(snap.price),
+            snap.odds_format,
+            snap.metadata.source,
+            snap.metadata.collected_at.isoformat(),
+            snap.metadata.source_confidence,
+            int(snap.metadata.is_verified),
+            snap.metadata.notes,
+        ),
+    )
+    conn.commit()
+
+
+def _row_to_snapshot(row: sqlite3.Row) -> OddsSnapshot:
+    return OddsSnapshot.model_validate(
+        {
+            "snapshot_id": row["snapshot_id"],
+            "match_id": row["match_id"],
+            "bookmaker": row["bookmaker"],
+            "market_type": row["market_type"],
+            "selection": row["selection"],
+            "line": row["line"],
+            "price": row["price"],
+            "odds_format": row["odds_format"],
+            "metadata": {
+                "source": row["source"],
+                "collected_at": row["collected_at"],
+                "source_confidence": row["source_confidence"],
+                "is_verified": bool(row["is_verified"]),
+                "notes": row["notes"],
+            },
+        }
+    )
+
+
+def list_snapshots(
+    conn: sqlite3.Connection,
+    match_id: str,
+    *,
+    market_type: str | None = None,
+    bookmaker: str | None = None,
+) -> list[OddsSnapshot]:
+    """All snapshots for a match, ordered by collected_at ascending.
+
+    Filters compose: pass ``market_type`` and/or ``bookmaker`` to narrow.
+    """
+    where = ["match_id = ?"]
+    params: list = [match_id]
+    if market_type is not None:
+        where.append("market_type = ?")
+        params.append(market_type)
+    if bookmaker is not None:
+        where.append("bookmaker = ?")
+        params.append(bookmaker)
+    rows = conn.execute(
+        f"SELECT * FROM odds_snapshots WHERE {' AND '.join(where)} "
+        "ORDER BY collected_at ASC",
+        params,
+    ).fetchall()
+    return [_row_to_snapshot(r) for r in rows]
+
+
+def latest_snapshot(
+    conn: sqlite3.Connection,
+    match_id: str,
+    *,
+    market_type: str,
+    bookmaker: str | None = None,
+) -> OddsSnapshot | None:
+    """Most recent snapshot for a (match, market) pair (and optional bookmaker)."""
+    where = ["match_id = ?", "market_type = ?"]
+    params: list = [match_id, market_type]
+    if bookmaker is not None:
+        where.append("bookmaker = ?")
+        params.append(bookmaker)
+    row = conn.execute(
+        f"SELECT * FROM odds_snapshots WHERE {' AND '.join(where)} "
+        "ORDER BY collected_at DESC LIMIT 1",
+        params,
+    ).fetchone()
+    return _row_to_snapshot(row) if row else None
+
+
+# Re-export SourceMetadata for downstream typing without re-importing models.
+_ = SourceMetadata
