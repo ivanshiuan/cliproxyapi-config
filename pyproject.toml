@@ -121,6 +121,23 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 ignore = ["E501"]  # line length handled by formatter
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's idiomatic pattern is `Depends(...)` / `Header(...)` / `Query(...)`
+# as default arguments — B008 would flag every router endpoint otherwise.
+# These calls return marker objects, not mutable state; safe to evaluate
+# at import time.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Header",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+    "fastapi.Security",
+]
+
 [tool.ruff.lint.per-file-ignores]
 # Demo + seed scripts deliberately use 中文標點 in user-facing prints.
 "scripts/demo_flow.py" = ["RUF001"]

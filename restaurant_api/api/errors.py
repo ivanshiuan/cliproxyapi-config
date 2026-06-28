@@ -68,6 +68,31 @@ class ValidationError(DomainError):
     status_code = 422
 
 
+class AuthError(DomainError):
+    """401 — missing / invalid / expired credentials. Triggers WWW-Authenticate."""
+
+    code = "AUTH_REQUIRED"
+    status_code = status.HTTP_401_UNAUTHORIZED
+
+
+class ForbiddenError(DomainError):
+    """403 — authenticated but lacks the required role / permission."""
+
+    code = "FORBIDDEN"
+    status_code = status.HTTP_403_FORBIDDEN
+
+
+class LockedError(DomainError):
+    """423 — account locked due to repeated failed logins.
+
+    Carries the ``Retry-After`` header value in ``details["retry_after"]``
+    so the auth router can surface it.
+    """
+
+    code = "ACCOUNT_LOCKED"
+    status_code = status.HTTP_423_LOCKED
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Exception handlers — attach to the FastAPI app
 # ──────────────────────────────────────────────────────────────────────────
@@ -82,10 +107,13 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
 
 
 __all__ = [
+    "AuthError",
     "ConflictError",
     "DomainError",
     "ErrorBody",
     "ErrorResponse",
+    "ForbiddenError",
+    "LockedError",
     "NotFoundError",
     "ValidationError",
     "domain_error_handler",
