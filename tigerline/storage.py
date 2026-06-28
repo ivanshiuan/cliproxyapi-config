@@ -24,14 +24,15 @@ from tigerline.models import (
     SourceMetadata,
 )
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Migrations to run when ``PRAGMA user_version`` is below SCHEMA_VERSION.
-# Index is the target version (1 → init.sql, 2 → migrations/002_*.sql, ...).
+# Index is the target version (1 → init.sql, 2+ → migrations/0NN_*.sql, ...).
 # ``init.sql`` covers everything up to v1; v2+ live as separate files so
 # rolling out new V3 sprints stays additive and reviewable.
 _MIGRATIONS: dict[int, str] = {
     2: "migrations/002_v3_snapshots.sql",
+    3: "migrations/003_v3_sprint4.sql",
 }
 
 

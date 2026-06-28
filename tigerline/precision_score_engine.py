@@ -1,6 +1,6 @@
 """V3.0 Sprint 3 — Precision Score Engine.
 
-Produces a 0–100 confidence score by composing eight signal channels per the
+Produces a 0..100 confidence score by composing eight signal channels per the
 spec's §8 weighting:
 
   TIGER clarity        30
@@ -13,7 +13,7 @@ spec's §8 weighting:
   Data completeness     5
   ──────────────────── 100
 
-Each channel returns 0–1; the engine multiplies by weight and adds penalty
+Each channel returns 0..1; the engine multiplies by weight and adds penalty
 deductions from ``config/precision_score_rules.yaml``. The output is a
 ``PrecisionScore`` with the rolled-up score, per-channel breakdown, applied
 penalties, and the recommended stake level (A+/A/B/C/D) per the score bands.
