@@ -45,7 +45,7 @@ class CalibrationReport:
 
 
 # Default bucket bands (inclusive low, exclusive high) — match the A+/A/B/C/D
-# bands in stake.py × precision_score thresholds in precision_score_rules.yaml.
+# bands in stake.py and precision_score thresholds in precision_score_rules.yaml.
 DEFAULT_BUCKETS: list[tuple[int, int]] = [
     (0, 60),
     (60, 70),
