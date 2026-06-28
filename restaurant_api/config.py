@@ -83,6 +83,28 @@ class Settings(BaseSettings):
     # ─── Logging ────────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
+    # ─── Auth / RBAC (Phase 2, see specs/auth_rbac_system.md) ───────────
+    # JWT signing secret. MUST be ≥32 chars in prod; dev default is
+    # intentionally obvious so a misconfigured deploy fails loudly.
+    jwt_secret: str = Field(
+        default="dev-insecure-jwt-secret-change-me-min-32-chars",
+        validation_alias="JWT_SECRET",
+        min_length=32,
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_access_ttl_seconds: int = Field(default=900, ge=60)         # 15 min
+    jwt_refresh_ttl_seconds: int = Field(default=2_592_000, ge=300) # 30 days
+    # Failed-login lockout policy.
+    auth_max_failed_logins: int = Field(default=5, ge=1)
+    auth_lockout_seconds: int = Field(default=900, ge=60)           # 15 min
+    # Transition mode for existing routers — see spec §Global Dependencies.
+    # off:     no auth check (Phase 1 behaviour, still header-tenant)
+    # warn:    parse JWT if present, log a warning if absent, but don't 401
+    # enforce: full Phase 2 behaviour, 401 on missing/invalid token
+    auth_enforcement: str = Field(
+        default="warn", pattern=r"^(off|warn|enforce)$"
+    )
+
     @property
     def database_url(self) -> str:
         """asyncpg DSN."""

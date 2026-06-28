@@ -24,6 +24,7 @@ from .api.errors import DomainError, domain_error_handler
 from .config import get_settings
 from .database import dispose_engine
 from .middleware import RequestContextMiddleware, configure_logging
+from .routers import auth as employee_auth_router
 from .routers import campaigns as campaigns_router
 from .routers import clock as clock_router
 from .routers import customers as customers_router
@@ -107,6 +108,9 @@ if not any(getattr(r, "path", "").startswith("/queue") for r in app.routes):
 app.include_router(health_router.router)
 if not any(getattr(r, "path", "").startswith("/admin") for r in app.routes):
     app.include_router(auth_router.router)
+# Phase 2 per-employee JWT auth — separate from the admin-console passcode
+# router above. See specs/auth_rbac_system.md and routers/auth.py.
+_mount_router(employee_auth_router, "/auth")
 
 # Static wheel-spin demo page (門口 QR Code 指向 /demo/?campaign=<id>). Same-origin
 # with the API so no CORS is needed. Mounted last so it can't shadow API routes.
