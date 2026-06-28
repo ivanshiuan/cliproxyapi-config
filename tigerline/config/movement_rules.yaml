@@ -1,0 +1,17 @@
+# TIGER LINE PRIME V3 Sprint 2 — Line Movement + Consensus thresholds.
+#
+# Velocities are measured in handicap-line units per hour.
+# Bands are absolute line units (e.g. 0.05 = one twentieth of a goal).
+
+fast_velocity_per_hour: "0.25"
+moderate_velocity_per_hour: "0.1"
+steam_min_line_delta: "0.25"
+steam_min_books: 2
+stable_band: "0.05"
+key_handicaps: ["-2.5", "-2", "-1.5", "-1", "-0.5"]
+
+consensus:
+  in_line_band: "0.05"
+  high_agreement_band: "0.05"
+  medium_agreement_band: "0.15"
+  outlier_band: "0.25"
