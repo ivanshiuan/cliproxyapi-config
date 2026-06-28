@@ -74,6 +74,18 @@ def test_pair_count_mismatch(tmp_path):
     assert any("條數不一致" in f["msg"] for f in out)
 
 
+def test_bilingual_stacked_cue_passes(tmp_path):
+    # Regression: a 中/EN stacked cue must judge each line by its own script,
+    # not force the whole cue to one language (the EN line is longer than the CJK limit).
+    bilingual = (
+        "1\n00:00:00,000 --> 00:00:03,000\n"
+        "招牌紅燒牛肉麵\nSignature Braised Beef Noodles\n"
+    )
+    cues = sub.parse_srt(_write(tmp_path, "b.srt", bilingual))
+    crit = [f for f in sub.check(cues, "zh") if f["severity"] == "critical"]
+    assert crit == [], crit
+
+
 def test_script_detection():
     assert sub.script_of("紅燒牛肉麵") == "cjk"
     assert sub.script_of("Beef Noodle Soup") == "latin"

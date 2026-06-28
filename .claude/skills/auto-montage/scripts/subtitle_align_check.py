@@ -110,28 +110,25 @@ def check(cues: list[Cue], lang: str) -> list[dict]:
         return findings
 
     for i, c in enumerate(cues):
-        kind = lang if lang in ("cjk", "latin") else script_of(c.text)
-        lim = LIMITS[kind]
-        # 時長
+        # 時長（整段）
         if c.dur < LIMITS["min_dur"]:
             add("critical", c.idx, f"停留過短 {c.dur:.2f}s < {LIMITS['min_dur']}s")
         if c.dur > LIMITS["max_dur"]:
             add("should", c.idx, f"停留過長 {c.dur:.2f}s > {LIMITS['max_dur']}s")
         if c.end <= c.start:
             add("critical", c.idx, "結束時間 <= 開始時間")
-        # CPS
-        n = visible_len(c.text.replace(" ", "") if kind == "cjk" else c.text, kind)
-        if c.dur > 0:
-            cps = n / c.dur
-            if cps > lim["cps"]:
-                add("critical", c.idx, f"CPS 過快 {cps:.1f} > {lim['cps']} ({kind})")
-        # 行數 / 行長
-        if len(c.lines) > LIMITS["max_lines"]:
-            add("should", c.idx, f"超過 {LIMITS['max_lines']} 行（{len(c.lines)} 行）")
+        # 逐行評估：每行依自身語系判定（雙語單檔的中/英各算各的）
         for ln in c.lines:
+            kind = lang if lang in ("cjk", "latin") and len(c.lines) == 1 else script_of(ln)
+            lim = LIMITS[kind]
             vl = visible_len(ln, kind)
             if vl > lim["line_chars"]:
                 add("critical", c.idx, f"單行過長 {vl} > {lim['line_chars']} ({kind}): {ln[:30]}…")
+            if c.dur > 0 and vl / c.dur > lim["cps"]:
+                add("critical", c.idx, f"CPS 過快 {vl / c.dur:.1f} > {lim['cps']} ({kind}): {ln[:20]}…")
+        # 行數
+        if len(c.lines) > LIMITS["max_lines"]:
+            add("should", c.idx, f"超過 {LIMITS['max_lines']} 行（{len(c.lines)} 行）")
         # 重疊 / 間隙
         if i > 0:
             gap = c.start - cues[i - 1].end

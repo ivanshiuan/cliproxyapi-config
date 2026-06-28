@@ -26,3 +26,12 @@ jobs:
 
       - name: Shell syntax check
         run: bash -n scripts/preflight.sh
+
+      - name: Install ffmpeg + CJK font
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-noto-cjk
+
+      - name: End-to-end demo (render + gate)
+        run: bash examples/demo_bilingual_short.sh
+
+      - name: Assert demo output exists
+        run: test -s examples/out/demo_bilingual_short.mp4

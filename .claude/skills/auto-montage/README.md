@@ -10,6 +10,9 @@ voiceover → edit → **bilingual subtitles** → render, all **headless from t
 [![CI](https://github.com/ivanshiuan/auto-montage/actions/workflows/ci.yml/badge.svg)](https://github.com/ivanshiuan/auto-montage/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE) · zero-API-key baseline · headless · clean-room
 
+<p align="center"><img src="docs/demo.gif" width="270" alt="bilingual-subtitle vertical short rendered by the ffmpeg-only demo"></p>
+<p align="center"><em>↑ produced by <a href="examples/demo_bilingual_short.sh"><code>examples/demo_bilingual_short.sh</code></a> — ffmpeg only, zero API keys, and the burned subtitles pass the gate.</em></p>
+
 ---
 
 ## Why this exists
@@ -67,6 +70,15 @@ pass the subtitle gate → report cost & wait for approval → deliver `final.mp
 
 Details in [`SKILL.md`](./SKILL.md).
 
+## See it work right now (no engine, no API keys)
+
+```bash
+bash examples/demo_bilingual_short.sh        # needs only ffmpeg + a CJK font
+```
+Synthesizes a 9:16 short, burns aligned 中/EN subtitles, renders an mp4, and runs the gate on
+the result — the demo GIF above is its output. This is the honest proof that the subtitle layer works
+end-to-end before you ever wire up OpenMontage.
+
 ## Try the subtitle gate right now (no engine needed)
 
 ```bash
@@ -81,9 +93,12 @@ auto-montage/
 ├── SKILL.md                       # agent instructions (the orchestration brain)
 ├── knowledge/                     # original methodology → per-video QA checklist
 ├── templates/                     # restaurant-vlog flagship example + brief schema
-└── scripts/
-    ├── preflight.sh               # engine/tool detection  (tested)
-    └── subtitle_align_check.py    # bilingual subtitle gate (tested)
+├── examples/
+│   └── demo_bilingual_short.sh    # ffmpeg-only end-to-end demo (renders the GIF above)
+├── scripts/
+│   ├── preflight.sh               # engine/tool detection  (tested)
+│   └── subtitle_align_check.py    # bilingual subtitle gate (tested)
+└── tests/                         # subtitle-gate test suite (run in CI)
 ```
 
 ## Status & honest limitations
