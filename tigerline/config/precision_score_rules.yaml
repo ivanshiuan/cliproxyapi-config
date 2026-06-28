@@ -1,0 +1,28 @@
+# TIGER LINE PRIME V3.0 Sprint 3 — Precision Score weights + penalties.
+# Weights sum to 100. Penalties deduct from the rolled-up channel total.
+
+weights:
+  tiger_clarity: 30
+  ah_totals_coherence: 15
+  movement_support: 15
+  consensus: 10
+  harness_risk: 10
+  corridor_focus: 10
+  price_protection: 5
+  data_completeness: 5
+
+penalties:
+  no_multi_book: 5
+  no_time_series: 8
+  lineup_unconfirmed: 5
+  favorite_already_qualified: 10
+  handicap_totals_conflict: 15
+  market_disagreement: 10
+  no_price_protection: 20
+  juice_too_low: 5
+
+# Stake-level bands by final score.
+a_plus_min: 90
+a_min: 80
+b_min: 70
+c_min: 60
