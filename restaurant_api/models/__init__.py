@@ -62,6 +62,16 @@ from .reservations import (
 from .stores import Store
 from .tenants import Tenant
 from .ugc import UgcKind, UgcStatus, UgcSubmission
+from .marketing import (
+    AiCampaign,
+    AiCampaignStatus,
+    AssetPlatform,
+    AssetStatus,
+    AssetType,
+    ContentAsset,
+    MarketingMemory,
+    MemoryType,
+)
 
 __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readability
     # base / shared
@@ -139,4 +149,13 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     # embeddings (AI data asset seed)
     "Embedding",
     "VECTOR_DIM",
+    # AI marketing system (Hermes-Claude-Codex)
+    "MarketingMemory",
+    "MemoryType",
+    "ContentAsset",
+    "AssetType",
+    "AssetPlatform",
+    "AssetStatus",
+    "AiCampaign",
+    "AiCampaignStatus",
 ]
