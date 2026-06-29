@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>周霸虎老火鍋 — 重慶火鍋 9:16 短影音版型</title>
+  <meta name="hz:slide-selector" content=".slide" />
+  <meta name="hz:canvas-width" content="1080" />
+  <meta name="hz:canvas-height" content="1920" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #111;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .slide {
+      position: relative;
+      width: 1080px;
+      height: 1920px;
+      overflow: hidden;
+      background: #0d0604;
+      font-family: 'Noto Sans SC', 'PingFang TC', 'Noto Sans CJK TC', sans-serif;
+      flex-shrink: 0;
+    }
+
+    /* ── Layered atmospheric background ── */
+    .bg-base {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 130% 75% at 50% 88%,
+        #7a0c00 0%, #450600 30%, #1a0402 60%, #0d0604 85%);
+    }
+    .bg-ember {
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 55% 25% at 50% 95%, #d44000 0%, transparent 60%),
+        radial-gradient(ellipse 70% 18% at 25% 91%, #9b1a00 0%, transparent 55%),
+        radial-gradient(ellipse 70% 18% at 75% 93%, #a82400 0%, transparent 55%);
+    }
+    .bg-texture {
+      position: absolute;
+      inset: 0;
+      background-image:
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 3px,
+          rgba(0,0,0,0.04) 3px,
+          rgba(0,0,0,0.04) 4px
+        );
+    }
+    .bg-vignette {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 110% 110% at 50% 50%,
+        transparent 38%, rgba(0,0,0,0.65) 75%, rgba(0,0,0,0.88) 100%);
+    }
+
+    /* ── Corner frame accents ── */
+    .corner {
+      position: absolute;
+      width: 48px;
+      height: 48px;
+      border-color: rgba(210,80,20,0.55);
+      border-style: solid;
+    }
+    .corner-tl { top: 44px; left: 44px; border-width: 2px 0 0 2px; }
+    .corner-tr { top: 44px; right: 44px; border-width: 2px 2px 0 0; }
+    .corner-bl { bottom: 390px; left: 44px; border-width: 0 0 2px 2px; }
+    .corner-br { bottom: 390px; right: 44px; border-width: 0 2px 2px 0; }
+
+    /* ── Top tagline ── */
+    .badge {
+      position: absolute;
+      top: 82px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Bebas Neue', 'Arial Narrow', sans-serif;
+      font-size: 20px;
+      letter-spacing: 7px;
+      color: rgba(255,155,55,0.8);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* ── Dividers ── */
+    .divider {
+      position: absolute;
+      left: 60px;
+      right: 60px;
+      height: 1px;
+    }
+    .divider-1 {
+      top: 160px;
+      background: linear-gradient(90deg, transparent 0%, rgba(200,75,18,0.7) 50%, transparent 100%);
+    }
+    .divider-2 {
+      top: 168px;
+      left: 180px;
+      right: 180px;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,120,40,0.45) 50%, transparent 100%);
+    }
+
+    /* ── Brand identity block ── */
+    .brand {
+      position: absolute;
+      top: 195px;
+      left: 0;
+      right: 0;
+      text-align: center;
+    }
+    .brand-main {
+      font-family: 'Noto Sans SC', 'PingFang TC', sans-serif;
+      font-weight: 900;
+      font-size: 130px;
+      color: #ffffff;
+      letter-spacing: 4px;
+      line-height: 1;
+      text-shadow:
+        0 0 80px rgba(210,55,8,0.95),
+        0 0 30px rgba(230,80,10,0.7),
+        0 5px 25px rgba(0,0,0,0.85);
+    }
+    .brand-sub-zh {
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 700;
+      font-size: 52px;
+      color: rgba(255,210,140,0.95);
+      letter-spacing: 14px;
+      margin-top: 10px;
+      text-shadow: 0 0 25px rgba(200,70,10,0.6), 0 2px 8px rgba(0,0,0,0.7);
+    }
+    .brand-en {
+      font-family: 'Bebas Neue', 'Arial Narrow', sans-serif;
+      font-size: 26px;
+      color: rgba(255,140,50,0.7);
+      letter-spacing: 6px;
+      margin-top: 12px;
+    }
+
+    /* ── Seal / stamp decoration ── */
+    .seal {
+      position: absolute;
+      top: 585px;
+      right: 80px;
+      width: 110px;
+      height: 110px;
+    }
+    .seal svg {
+      width: 110px;
+      height: 110px;
+    }
+
+    /* ── Section label ── */
+    .section-label {
+      position: absolute;
+      top: 620px;
+      left: 80px;
+      right: 210px;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 17px;
+      letter-spacing: 5px;
+      color: rgba(255,120,40,0.72);
+    }
+
+    /* ── Ingredient cards ── */
+    .ingredient-grid {
+      position: absolute;
+      top: 660px;
+      left: 60px;
+      right: 60px;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 18px 14px;
+    }
+    .ing-card {
+      text-align: center;
+      padding: 22px 8px 18px;
+      border: 1px solid rgba(170,55,12,0.38);
+      border-radius: 3px;
+      background: linear-gradient(180deg, rgba(90,14,4,0.38) 0%, rgba(50,6,2,0.48) 100%);
+    }
+    .ing-icon {
+      font-size: 40px;
+      line-height: 1;
+      display: block;
+      margin-bottom: 10px;
+    }
+    .ing-name {
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+      color: #f2d8b8;
+      letter-spacing: 2px;
+      display: block;
+    }
+    .ing-desc {
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 400;
+      font-size: 14px;
+      color: rgba(220,160,90,0.7);
+      letter-spacing: 1px;
+      margin-top: 4px;
+      display: block;
+    }
+
+    /* ── Signature tags row ── */
+    .tags-row {
+      position: absolute;
+      top: 1025px;
+      left: 60px;
+      right: 60px;
+      display: flex;
+      justify-content: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      padding: 10px 24px;
+      border: 1px solid rgba(200,70,20,0.52);
+      border-radius: 100px;
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 700;
+      font-size: 22px;
+      color: rgba(255,200,120,0.95);
+      background: rgba(100,18,4,0.42);
+      letter-spacing: 3px;
+      white-space: nowrap;
+    }
+
+    /* ── Centre separator ── */
+    .separator {
+      position: absolute;
+      top: 1105px;
+      left: 80px;
+      right: 80px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .sep-line {
+      flex: 1;
+      height: 1px;
+    }
+    .sep-line-l { background: linear-gradient(90deg, transparent, rgba(200,70,20,0.65)); }
+    .sep-line-r { background: linear-gradient(270deg, transparent, rgba(200,70,20,0.65)); }
+    .sep-dot {
+      width: 7px;
+      height: 7px;
+      background: rgba(225,100,30,0.85);
+      transform: rotate(45deg);
+      flex-shrink: 0;
+    }
+
+    /* ── Feature statement ── */
+    .feature {
+      position: absolute;
+      top: 1140px;
+      left: 60px;
+      right: 60px;
+      text-align: center;
+    }
+    .feature-headline {
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 900;
+      font-size: 58px;
+      color: #fff;
+      letter-spacing: 4px;
+      text-shadow: 0 0 50px rgba(225,55,8,0.85), 0 3px 15px rgba(0,0,0,0.8);
+      margin-bottom: 18px;
+    }
+    .feature-body {
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 400;
+      font-size: 26px;
+      color: rgba(255,185,100,0.88);
+      line-height: 1.75;
+      letter-spacing: 2px;
+    }
+
+    /* ── Origin badge ── */
+    .origin {
+      position: absolute;
+      top: 1370px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .origin-line {
+      width: 60px;
+      height: 1px;
+      background: rgba(200,80,20,0.5);
+    }
+    .origin-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px;
+      letter-spacing: 5px;
+      color: rgba(255,150,60,0.7);
+      white-space: nowrap;
+    }
+
+    /* ── Bilingual subtitle burn zone ── */
+    .subtitle-zone {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 370px;
+      background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(6,2,1,0.82) 35%,
+        rgba(6,2,1,0.96) 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 0 60px 78px;
+    }
+    .subtitle-zh {
+      font-family: 'Noto Sans SC', sans-serif;
+      font-weight: 700;
+      font-size: 50px;
+      color: #ffffff;
+      text-align: center;
+      letter-spacing: 4px;
+      text-shadow: 0 2px 14px rgba(0,0,0,0.95), 0 0 35px rgba(0,0,0,0.7);
+      margin-bottom: 14px;
+    }
+    .subtitle-en {
+      font-family: 'Bebas Neue', 'Arial Narrow', sans-serif;
+      font-size: 27px;
+      color: rgba(255,175,80,0.92);
+      text-align: center;
+      letter-spacing: 5px;
+      text-shadow: 0 2px 10px rgba(0,0,0,0.95);
+    }
+  </style>
+</head>
+<body>
+  <div class="slide" data-canvas-width="1080" data-canvas-height="1920">
+
+    <!-- Atmospheric layers -->
+    <div class="bg-base"></div>
+    <div class="bg-ember"></div>
+    <div class="bg-texture"></div>
+    <div class="bg-vignette"></div>
+
+    <!-- Frame corners -->
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <!-- Top tagline -->
+    <div class="badge">AUTHENTIC CHONGQING HOT POT · 正宗重慶老火鍋</div>
+
+    <!-- Decorative dividers -->
+    <div class="divider divider-1"></div>
+    <div class="divider divider-2"></div>
+
+    <!-- Brand name -->
+    <div class="brand">
+      <div class="brand-main">周霸虎</div>
+      <div class="brand-sub-zh">老 火 鍋</div>
+      <div class="brand-en">ZHOU BAHU OLD HOT POT</div>
+    </div>
+
+    <!-- Decorative stamp seal (SVG inline) -->
+    <div class="seal">
+      <svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="55" cy="55" r="50" fill="none" stroke="rgba(200,70,20,0.45)" stroke-width="1.5"/>
+        <circle cx="55" cy="55" r="43" fill="none" stroke="rgba(200,70,20,0.3)" stroke-width="0.8"/>
+        <text x="55" y="48" text-anchor="middle" font-size="13" fill="rgba(220,110,40,0.7)"
+              font-family="'Noto Sans SC',sans-serif" font-weight="700" letter-spacing="1">重慶</text>
+        <text x="55" y="65" text-anchor="middle" font-size="13" fill="rgba(220,110,40,0.7)"
+              font-family="'Noto Sans SC',sans-serif" font-weight="700" letter-spacing="1">正宗</text>
+        <text x="55" y="82" text-anchor="middle" font-size="11" fill="rgba(200,80,20,0.55)"
+              font-family="'Bebas Neue',sans-serif" letter-spacing="2">SINCE 2010</text>
+      </svg>
+    </div>
+
+    <!-- Section label -->
+    <div class="section-label">— SIGNATURE INGREDIENTS 招牌食材 —</div>
+
+    <!-- Ingredient grid (6 items) -->
+    <div class="ingredient-grid">
+      <div class="ing-card">
+        <span class="ing-icon">🫀</span>
+        <span class="ing-name">鮮毛肚</span>
+        <span class="ing-desc">現切現涮</span>
+      </div>
+      <div class="ing-card">
+        <span class="ing-icon">🐍</span>
+        <span class="ing-name">鵝 腸</span>
+        <span class="ing-desc">爽脆彈牙</span>
+      </div>
+      <div class="ing-card">
+        <span class="ing-icon">🥩</span>
+        <span class="ing-name">鮮牛肉</span>
+        <span class="ing-desc">現切薄片</span>
+      </div>
+      <div class="ing-card">
+        <span class="ing-icon">🍖</span>
+        <span class="ing-name">小酥肉</span>
+        <span class="ing-desc">炸香酥脆</span>
+      </div>
+      <div class="ing-card">
+        <span class="ing-icon">🧠</span>
+        <span class="ing-name">豬腦花</span>
+        <span class="ing-desc">入口即化</span>
+      </div>
+      <div class="ing-card">
+        <span class="ing-icon">🐄</span>
+        <span class="ing-name">掉 龍</span>
+        <span class="ing-desc">重慶限定</span>
+      </div>
+    </div>
+
+    <!-- Signature items tags -->
+    <div class="tags-row">
+      <div class="tag">紅湯底</div>
+      <div class="tag">羊汁甘露</div>
+      <div class="tag">紫 拔</div>
+    </div>
+
+    <!-- Separator -->
+    <div class="separator">
+      <div class="sep-line sep-line-l"></div>
+      <div class="sep-dot"></div>
+      <div class="sep-line sep-line-r"></div>
+    </div>
+
+    <!-- Feature statement -->
+    <div class="feature">
+      <div class="feature-headline">🔥 老紅湯 · 巴蜀秘方</div>
+      <div class="feature-body">
+        牛油底料，香辣醇厚<br/>
+        正宗重慶，老饕首選<br/>
+        <span style="font-size:22px;color:rgba(255,160,70,0.7);">百年傳承 · 一鍋入魂</span>
+      </div>
+    </div>
+
+    <!-- Origin mark -->
+    <div class="origin">
+      <div class="origin-line"></div>
+      <div class="origin-text">CHONGQING ORIGIN · 重慶發源</div>
+      <div class="origin-line"></div>
+    </div>
+
+    <!-- Bilingual subtitle zone -->
+    <div class="subtitle-zone">
+      <div class="subtitle-zh">今晚來一鍋，回味無窮</div>
+      <div class="subtitle-en">ONE HOT POT TONIGHT — UNFORGETTABLE</div>
+    </div>
+
+  </div>
+</body>
+</html>

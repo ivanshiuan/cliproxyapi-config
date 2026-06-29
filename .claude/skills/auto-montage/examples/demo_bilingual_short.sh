@@ -3,6 +3,8 @@
 # Synthesizes footage, burns aligned 中/EN subtitles, renders an mp4, then runs the
 # subtitle gate to prove the output passes. No OpenMontage, no API keys, no GUI.
 #
+# Brand: 周霸虎老火鍋（重慶火鍋）— swap this for any restaurant by editing SRT + drawtext below.
+#
 # Usage: bash examples/demo_bilingual_short.sh [out_dir]
 set -euo pipefail
 
@@ -22,35 +24,39 @@ pick /System/Library/Fonts/PingFang.ttc "PingFang TC"
 [ -n "$FONT" ] || { echo "No CJK font found; install fonts-noto-cjk."; exit 1; }
 echo "Using font: $FONTNAME ($FONT)"
 
-# Bilingual subtitle track (zh on top, EN below). Timings respect the gate's CPS/line limits.
+# Bilingual subtitle track — 重慶火鍋版。
+# All timings respect CPS/line limits: CJK ≤9 cps / ≤15 chars, Latin ≤17 cps / ≤42 chars.
 cat > "$SRT" <<'EOF'
 1
 00:00:00,000 --> 00:00:03,000
-招牌紅燒牛肉麵
-Signature Braised Beef Noodles
+正宗重慶老火鍋
+Authentic Chongqing Hot Pot
 
 2
 00:00:03,200 --> 00:00:06,500
-湯頭熬煮八小時
-Broth simmered for eight hours
+牛油紅湯 香辣醇厚
+Rich Tallow Broth — Bold and Spicy
 
 3
 00:00:06,700 --> 00:00:09,500
-手工拉麵 現點現煮
-Hand-pulled, made to order
+鮮毛肚 鵝腸 小酥肉
+Tripe · Goose Intestine · Crispy Pork
 
 4
 00:00:09,700 --> 00:00:12,000
-今天就來嚐一碗
-Come taste a bowl today
+今晚來一鍋 回味無窮
+One Hot Pot Tonight — Unforgettable
 EOF
 
-# 9:16 warm animated background + centered brand + burned bilingual subtitles.
+# 9:16 dark ember gradient (重慶火鍋美學) + two-line brand name + burned bilingual subtitles.
+# Background: charcoal-black top → deep crimson bottom, slow drift animation.
 ffmpeg -y -loglevel error \
-  -f lavfi -i "gradients=s=1080x1920:c0=0x2b1505:c1=0xb5571a:x0=0:y0=0:x1=1080:y1=1920:d=12:speed=0.012" \
-  -f lavfi -t 12 -i "sine=frequency=220:sample_rate=44100" \
-  -vf "drawbox=x=0:y=1500:w=1080:h=420:color=black@0.35:t=fill,\
-drawtext=fontfile='$FONT':text='好味牛肉麵':fontsize=64:fontcolor=white@0.92:x=(w-text_w)/2:y=140:shadowcolor=black@0.6:shadowx=2:shadowy=2,\
+  -f lavfi -i "gradients=s=1080x1920:c0=0x100302:c1=0x6b1200:x0=540:y0=0:x1=540:y1=1920:d=12:speed=0.010" \
+  -f lavfi -t 12 -i "sine=frequency=180:sample_rate=44100" \
+  -vf "drawbox=x=0:y=1530:w=1080:h=390:color=black@0.45:t=fill,\
+drawbox=x=80:y=288:w=920:h=2:color=0xd05010@0.40:t=fill,\
+drawtext=fontfile='$FONT':text='周霸虎':fontsize=92:fontcolor=white@0.95:x=(w-text_w)/2:y=92:shadowcolor=0x6b120080:shadowx=3:shadowy=4,\
+drawtext=fontfile='$FONT':text='老火鍋':fontsize=72:fontcolor=0xffd080:x=(w-text_w)/2:y=200:shadowcolor=0x5a080060:shadowx=2:shadowy=3,\
 subtitles='$SRT':force_style='FontName=$FONTNAME,FontSize=22,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Alignment=2,MarginV=90'" \
   -c:v libx264 -pix_fmt yuv420p -profile:v high -preset medium -r 30 \
   -c:a aac -b:a 128k -shortest "$MP4"
