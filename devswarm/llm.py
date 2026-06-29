@@ -24,6 +24,7 @@ Retry policy:
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -152,6 +153,22 @@ def make_client(cfg: Config) -> anthropic.Anthropic:
 # ─────────────────────────────────────────────────────────────────────────
 
 
+_TEMP_MAJOR_RE = re.compile(r"claude-(?:opus|sonnet|haiku)-(\d+)")
+
+
+def _model_rejects_temperature(model: str) -> bool:
+    """True for model families that reject the deprecated ``temperature`` param.
+
+    Claude 4.x (and newer) and the Fable family dropped ``temperature`` and
+    return a 400 if it is sent; Claude 3.x and older still accept it.
+    """
+    m = model.lower()
+    if "fable" in m:
+        return True
+    match = _TEMP_MAJOR_RE.search(m)
+    return bool(match) and int(match.group(1)) >= 4
+
+
 def call(
     client: anthropic.Anthropic,
     cfg: Config,
@@ -161,7 +178,7 @@ def call(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
     max_tokens: int = 4096,
-    temperature: float = 0.2,
+    temperature: float | None = 0.2,
     cache_system: bool = True,
 ) -> LLMResponse:
     """Single Messages API call with prompt caching and bounded retries."""
@@ -171,10 +188,14 @@ def call(
             kwargs: dict[str, Any] = {
                 "model": model,
                 "max_tokens": max_tokens,
-                "temperature": temperature,
                 "system": _build_system_blocks(system, cache_system),
                 "messages": messages,
             }
+            # Newer Claude models (4.x family) deprecated the `temperature`
+            # parameter and reject it with a 400. Only forward it for older
+            # models that still accept it; otherwise omit and use the default.
+            if temperature is not None and not _model_rejects_temperature(model):
+                kwargs["temperature"] = temperature
             if tools:
                 kwargs["tools"] = tools
             response = client.messages.create(**kwargs)
@@ -228,7 +249,7 @@ def tool_loop(
     tools: list[dict[str, Any]],
     executor: ToolExecutor,
     max_tokens: int = 8192,
-    temperature: float = 0.2,
+    temperature: float | None = 0.2,
     max_steps: int = 10,
 ) -> ToolLoopResult:
     """Drive a tool-use loop until the model stops calling tools or max_steps reached.
