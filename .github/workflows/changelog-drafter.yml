@@ -2,7 +2,7 @@ name: Changelog Drafter
 
 on:
   push:
-    branches: [main]
+    branches: [claude/autonomous-resttech-enterprise-oW9jp]
 
 permissions:
   contents: write
@@ -31,5 +31,5 @@ jobs:
           git add RELEASE_NOTES_DRAFT.md
           git diff --staged --quiet || (
             git commit -m "chore(loop): update changelog draft [skip ci]" &&
-            git push origin main
+            git push origin claude/autonomous-resttech-enterprise-oW9jp
           )
