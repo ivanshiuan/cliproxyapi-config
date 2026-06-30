@@ -72,11 +72,10 @@ def _classify(state: dict[str, Any]) -> str:
     if state.get("tests_passed", False):
         return "succeeded"
 
-    limit = state.get("cost_limit_usd", 0.0)
-    cost = state.get("cost_estimate_usd", 0.0)
-    if limit > 0 and cost >= limit:
-        return "budget_halted"
-
+    # Precedence must mirror the graph's terminal routing (route_after_review /
+    # route_after_qa), which check loop exhaustion BEFORE the budget guard. So a
+    # run that stopped by spending its last review/heal attempt is labelled as
+    # exhausted, not budget-halted, even if it also happens to be over budget.
     review_iter = state.get("review_iter", 0)
     max_review = state.get("max_review_iters", 3)
     if not state.get("review_passed", False) and review_iter >= max_review:
@@ -84,6 +83,11 @@ def _classify(state: dict[str, Any]) -> str:
 
     if state.get("heal_iter", 0) >= state.get("max_heal_iters", 5):
         return "heal_exhausted"
+
+    limit = state.get("cost_limit_usd", 0.0)
+    cost = state.get("cost_estimate_usd", 0.0)
+    if limit > 0 and cost >= limit:
+        return "budget_halted"
 
     return "failed"
 
@@ -183,11 +187,18 @@ class ConsoleNotifier:
         self._console = console
 
     def notify(self, event: SwarmEvent) -> None:
+        from rich.markup import escape
+
         color, _icon = _KIND_STYLE.get(event.kind, ("cyan", "•"))
+        # Escape dynamic fields: a finding/path containing '[' would otherwise be
+        # parsed as Rich markup and corrupt the render or raise.
+        summary = escape(event.summary)
+        detail = escape(event.detail)
+        workspace = escape(event.workspace)
         self._console.print(
-            f"[bold {color}]\\[hermes][/bold {color}] {event.summary}\n"
-            f"  [dim]{event.detail}[/dim]\n"
-            f"  [dim]workspace: {event.workspace}[/dim]"
+            f"[bold {color}]\\[hermes][/bold {color}] {summary}\n"
+            f"  [dim]{detail}[/dim]\n"
+            f"  [dim]workspace: {workspace}[/dim]"
         )
 
 

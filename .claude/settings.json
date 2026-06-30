@@ -64,11 +64,11 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.env) echo 'BLOCKED: .env 受保護(帝國規則:.env 永不進 git / 不可手改)。要改設定請編輯 .env.example。' >&2; exit 2;; esac; exit 0"
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.env.example) exit 0;; *.env|*.env.*) echo 'BLOCKED: .env 受保護(帝國規則:.env 永不進 git / 不可手改)。要改設定請編輯 .env.example。' >&2; exit 2;; esac; exit 0"
           }
         ]
       },
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "c=$(jq -r '.tool_input.command // empty'); if echo \"$c\" | grep -Eq '(^|[;&|])[[:space:]]*git[[:space:]]+push'; then echo \"$c\" | grep -Eq '(--force|[[:space:]]-f([[:space:]]|$)|(origin[[:space:]]+)?(main|master)([[:space:]:]|$))' && { echo 'BLOCKED: 禁止 push main/master 或 force push(帝國規則)。' >&2; exit 2; }; fi; exit 0"
+            "command": "c=$(jq -r '.tool_input.command // empty'); if echo \"$c\" | grep -Eq '(^|[;&|])[[:space:]]*git[[:space:]]+push'; then echo \"$c\" | grep -Eq '(--force|[[:space:]]-f([[:space:]]|$)|(^|[[:space:]:/])(main|master)([[:space:]:]|$))' && { echo 'BLOCKED: 禁止 push main/master 或 force push(帝國規則)。' >&2; exit 2; }; fi; exit 0"
           }
         ]
       }

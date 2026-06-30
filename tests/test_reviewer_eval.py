@@ -129,8 +129,8 @@ def test_harness_detects_wrong_basis(tmp_path: Path):
 # Run with: DEVSWARM_RUN_LIVE_EVALS=1 pytest tests/test_reviewer_eval.py  (or
 # `python -m devswarm.evals`). Requires ANTHROPIC_API_KEY too.
 @pytest.mark.skipif(
-    not os.getenv("DEVSWARM_RUN_LIVE_EVALS"),
-    reason="live Reviewer eval is opt-in: set DEVSWARM_RUN_LIVE_EVALS=1",
+    not (os.getenv("DEVSWARM_RUN_LIVE_EVALS") and os.getenv("ANTHROPIC_API_KEY")),
+    reason="live Reviewer eval is opt-in: needs DEVSWARM_RUN_LIVE_EVALS=1 AND ANTHROPIC_API_KEY",
 )
 def test_live_reviewer_holds_golden_set(tmp_path: Path):
     from devswarm.llm import make_client

@@ -57,7 +57,13 @@ def run_case(
     findings = out.get("review_findings") or ""
     verdict_ok = actual == case.expect_verdict
     if case.expect_verdict == "BLOCK":
-        basis_ok = all(b in findings for b in case.expect_basis)
+        # Match the expected invariant id only on `basis:` lines, not anywhere in
+        # the findings text — otherwise an id mentioned incidentally in an issue
+        # description would falsely satisfy the check.
+        basis_blob = "\n".join(
+            ln for ln in findings.splitlines() if "basis:" in ln.lower()
+        )
+        basis_ok = all(b in basis_blob for b in case.expect_basis)
     else:
         basis_ok = True
 

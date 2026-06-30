@@ -101,11 +101,41 @@ def test_build_event_classifies_success():
     assert "2 artifact" in ev.detail
 
 
-def test_build_event_classifies_budget_halt_before_exhaustion():
+def test_build_event_classifies_budget_halt():
     ev = build_event(_budget_halted(), "t", "/ws/t")
     assert ev.kind == "budget_halted"
     assert ev.needs_attention is True
     assert "0.05" in ev.detail
+
+
+def test_exhaustion_wins_over_budget_when_both_true():
+    """Precedence must match the graph: a run that exhausted its review/heal
+    budget is labelled exhausted even if it is also over the cost limit."""
+    review_and_budget = {
+        "tests_passed": False,
+        "review_passed": False,
+        "review_iter": 3,
+        "max_review_iters": 3,
+        "review_findings": "1. [CRITICAL] m.py:f — x",
+        "heal_iter": 3,
+        "max_heal_iters": 5,
+        "cost_limit_usd": 0.05,
+        "cost_estimate_usd": 0.9,  # also over budget
+    }
+    assert build_event(review_and_budget, "t", "/ws/t").kind == "review_exhausted"
+
+    heal_and_budget = {
+        "tests_passed": False,
+        "review_passed": True,
+        "review_iter": 1,
+        "max_review_iters": 3,
+        "heal_iter": 5,
+        "max_heal_iters": 5,
+        "qa_report": {"root_cause": "x"},
+        "cost_limit_usd": 0.05,
+        "cost_estimate_usd": 0.9,
+    }
+    assert build_event(heal_and_budget, "t", "/ws/t").kind == "heal_exhausted"
 
 
 def test_build_event_classifies_review_exhausted():

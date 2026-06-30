@@ -226,34 +226,26 @@ Coder 在 heal 回合會把上一輪的 `qa_report` 注入 system prompt（cache
 
 審查回合是「Reviewer 嫌 → Coder 改 → Reviewer 再嫌」。實務上前 2 回合能收斂掉九成阻擋性發現；第 3 回合還擋不下，多半是 **PRD 本身對需求/合規的描述不夠明確**，該由人介入補 spec，而不是讓 Opus 互相拉鋸燒 token。預設 3，可由 `DEVSWARM_MAX_REVIEW_ITERS` 覆寫。
 
-#### Review report 格式（Coder 消化用）
+#### Review verdict 契約（嚴格 JSON）
 
-Reviewer 必須輸出**結構化** markdown，每條發現綁一個嚴重度與一條依據（AC 編號或專案不變法則）：
+Reviewer **只輸出一個嚴格 JSON 物件**（`nodes/reviewer.py` 解析它,不是 markdown);每條 blocking finding 綁嚴重度、位置、問題、與一條 `basis`(AC 編號或 Codex invariant id):
 
-```markdown
-## Review Report — task <task_id> — iter <n>
-
-### Verdict
-BLOCK   (review_passed = false)
-
-### Blocking findings (2)
-1. [CRITICAL] `profit.py:calculate_net()` — 用 float 累加金額
-   - 違反不變法則「所有金錢用 Decimal」
-   - 後果：四捨五入漂移會進損益表，無法稽核
-2. [HIGH] `stock.py:consume()` — 直接 UPDATE stock_movements
-   - 違反「ledger 表 append-only」；DB RULE 會擋，但 code 不該嘗試
-   - 應改為 append 一筆 reversal
-
-### Non-blocking notes (advisory, 不擋)
-- `discount.py` 的型別註記可更精確（不影響正確性）
-
-### What is NOT in scope to fix
-- 既有檔案的風格；只審本任務 diff
+```json
+{
+  "verdict": "PASS" | "BLOCK",
+  "findings": [
+    {"severity": "CRITICAL", "location": "profit.py:calculate_net",
+     "issue": "用 float 累加金額;測試只斷言 > 0,所以 pytest 過但違反規格",
+     "basis": "MONEY-001"}
+  ],
+  "advisory": ["discount.py 的型別註記可更精確（不影響正確性）"]
+}
 ```
 
-- `BLOCK` → router 走 `route_after_review` 回 Coder（注 `review_findings`）。
-- `PASS`（無 blocking finding）→ `review_passed=True`、`review_findings=None` → 進 QA。
-- Reviewer **只標問題、不改 code**（改 code 是 Coder 的事，維持角色純粹 + 對抗性）。
+- `verdict == "BLOCK"` ⟺ `findings` 非空。node 把 findings **渲染成 markdown** 存進 `review_findings`,router 走 `route_after_review` 回 Coder。
+- `verdict == "PASS"`（`findings == []`）→ `review_passed=True`、`review_findings=None` → 進 QA。
+- JSON 無法解析時 node **fail-open** 進 QA(不困死回圈);非物件 JSON(list/字串/數字)一律當解析失敗。
+- Reviewer **只標問題、不改 code**(改 code 是 Coder 的事,維持角色純粹 + 對抗性)。
 
 ---
 

@@ -52,9 +52,17 @@ class EvalCase:
 
 # ── known-bad: each has exactly one defect mapping to one Codex invariant ──
 
+# Single defect by design: AC2 (negative gross) is handled, so the ONLY thing
+# wrong is float money → the Reviewer's sole valid basis is MONEY-001. (If the
+# code also missed AC2, a correct Reviewer could block on AC2 and the eval would
+# wrongly score a basis miss.)
 _FLOAT_MONEY = (
     '"""net revenue."""\n\n'
+    "class NegativeAmountError(Exception):\n"
+    "    pass\n\n\n"
     "def net_revenue(gross, rate):\n"
+    "    if gross < 0:\n"
+    "        raise NegativeAmountError('gross must be non-negative')\n"
     "    return round(gross * (1 - rate), 2)\n"
 )
 _FLOAT_MONEY_TEST = (
