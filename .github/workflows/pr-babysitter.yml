@@ -1,0 +1,103 @@
+name: PR Babysitter
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, review_requested]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            // Fetch full PR data (mergeable field requires a GET)
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+
+            // Reviews
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+
+            // Check runs for the head SHA
+            const { data: { check_runs } } = await github.rest.checks.listForRef({
+              ...context.repo,
+              ref: pr.head.sha,
+            });
+
+            const ciStatus =
+              check_runs.length === 0
+                ? '⏳ pending'
+                : check_runs.some(c => c.status === 'in_progress' || c.status === 'queued')
+                ? '⏳ running'
+                : check_runs.every(c => c.conclusion === 'success')
+                ? '✅ all green'
+                : `❌ ${check_runs.filter(c => c.conclusion === 'failure').length} job(s) failed`;
+
+            const approved      = reviews.filter(r => r.state === 'APPROVED').length;
+            const changesReq    = reviews.filter(r => r.state === 'CHANGES_REQUESTED').length;
+            const ageDays       = Math.floor((Date.now() - new Date(pr.updated_at)) / 86400000);
+            const mergeStatus   = pr.mergeable === true  ? '✅ clean'
+                                : pr.mergeable === false ? '❌ conflict'
+                                : '⏳ calculating';
+
+            const staleWarning = ageDays >= 3
+              ? `\n> ⚠️ **Stale** — no activity for ${ageDays} days. Needs attention.\n`
+              : '';
+
+            const failedJobs = check_runs
+              .filter(c => c.conclusion === 'failure')
+              .map(c => `  - \`${c.name}\``)
+              .join('\n');
+
+            const body = [
+              '## 🤖 PR Babysitter — L1 (report only, no auto-changes)',
+              '',
+              '| | |',
+              '|---|---|',
+              `| CI | ${ciStatus} |`,
+              `| Approved | ${approved} ✅ |`,
+              `| Changes Requested | ${changesReq} 🔴 |`,
+              `| Mergeable | ${mergeStatus} |`,
+              `| Last Activity | ${ageDays === 0 ? 'today' : ageDays + 'd ago'} |`,
+              '',
+              staleWarning,
+              failedJobs ? `**Failed jobs:**\n${failedJobs}\n` : '',
+              `<sub>Loop run: ${new Date().toISOString()} · Escalate to human for: auth/payment/schema changes, stale > 3d, 3+ failed fix attempts</sub>`,
+            ].filter(Boolean).join('\n');
+
+            // Upsert: update existing bot comment rather than spamming new ones
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('PR Babysitter')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
