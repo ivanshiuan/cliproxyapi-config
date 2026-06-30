@@ -36,7 +36,7 @@ class TelemetryMsg(TypedDict, total=False):
     """One log line per node invocation. Aggregated for CLI display and post-mortem."""
 
     node: str
-    role: str  # "pm" | "architect" | "coder" | "qa"
+    role: str  # "pm" | "architect" | "coder" | "reviewer" | "qa"
     prompt_version: str  # which system-prompt revision produced this turn
     ts: str  # ISO-8601 UTC
     summary: str
@@ -67,6 +67,15 @@ class SwarmState(TypedDict, total=False):
     artifacts: Annotated[list[Artifact], operator.add]
     coder_notes: str  # latest iteration's rationale
 
+    # --- Reviewer output (replaced each review iteration) ---
+    # Adversarial review of the Coder's files, BEFORE pytest runs. The Reviewer
+    # never sees the Coder's `messages` (see docs/02 §2.1 / §4 invariant 6) —
+    # only the produced files + PRD + constraints.
+    review_passed: bool  # True = approved → proceed to QA; False = block → back to Coder
+    review_findings: str | None  # blocking findings (markdown); None when approved
+    review_iter: int  # starts at 0, +1 each Reviewer pass; separate from heal_iter
+    max_review_iters: int  # from config
+
     # --- QA output (replaced each iteration) ---
     qa_report: QAReport
     tests_passed: bool
@@ -90,11 +99,14 @@ def initial_state(
     workspace_path: str,
     max_heal_iters: int,
     cost_limit_usd: float = 0.0,
+    max_review_iters: int = 3,
 ) -> SwarmState:
     """Construct the seed state injected at graph START.
 
     ``cost_limit_usd`` of 0.0 disables the budget guard; positive values
     halt the graph as soon as accumulated cost exceeds the limit.
+    ``max_review_iters`` bounds the adversarial Reviewer→Coder loop
+    independently of the QA self-heal loop.
     """
     return SwarmState(
         task_id=task_id,
@@ -105,6 +117,10 @@ def initial_state(
         security_constraints=[],
         artifacts=[],
         coder_notes="",
+        review_passed=False,
+        review_findings=None,
+        review_iter=0,
+        max_review_iters=max_review_iters,
         tests_passed=False,
         heal_iter=0,
         max_heal_iters=max_heal_iters,

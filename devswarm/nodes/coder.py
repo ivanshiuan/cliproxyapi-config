@@ -4,9 +4,15 @@ The Coder is the only agent in v1 that uses the agentic tool-use loop. It owns
 three tools (write_file, read_file, list_files), each scoped to the task's
 workspace directory via `WorkspaceManager`.
 
-Two invocation modes:
-- Fresh (heal_iter == 0): receives PRD + Architecture Spec + Security Constraints
-- Heal  (heal_iter >  0): receives the QA report + file tree and must fix what broke
+Three invocation modes:
+- Fresh       (heal_iter == 0): receives PRD + Architecture Spec + Security Constraints
+- Review-heal (Reviewer blocked): receives the Reviewer's findings and must fix them
+- QA-heal     (tests failed):    receives the QA report + file tree and must fix what broke
+
+The review-heal vs QA-heal discriminator is the `review_passed` flag: the
+Reviewer only routes back to the Coder while `review_passed` is False, whereas a
+QA failure can only occur after the Reviewer has already approved (review_passed
+True). See docs/02 §3 (route_after_review) and §5.5.
 """
 
 from __future__ import annotations
@@ -17,7 +23,11 @@ from typing import Any
 
 from ..config import Config
 from ..llm import tool_loop
-from ..prompts import CODER_HEAL_USER_TEMPLATE, CODER_SYSTEM
+from ..prompts import (
+    CODER_HEAL_USER_TEMPLATE,
+    CODER_REVIEW_HEAL_USER_TEMPLATE,
+    CODER_SYSTEM,
+)
 from ..state import Artifact, SwarmState
 from ..workspace import WorkspaceError, WorkspaceManager
 from ._common import Timer, build_telemetry, truncate
@@ -143,6 +153,16 @@ def _build_fresh_user_message(state: SwarmState) -> str:
     )
 
 
+def _build_review_heal_user_message(state: SwarmState, ws: WorkspaceManager) -> str:
+    findings = state.get("review_findings") or "(no findings text provided)"
+    return CODER_REVIEW_HEAL_USER_TEMPLATE.format(
+        review_iter=state.get("review_iter", 0),
+        max_review_iters=state.get("max_review_iters", 3),
+        review_findings=findings,
+        file_tree=ws.tree(),
+    )
+
+
 def _build_heal_user_message(state: SwarmState, ws: WorkspaceManager) -> str:
     qa = state.get("qa_report") or {}
     failed = qa.get("failed_tests") or []
@@ -168,8 +188,13 @@ def coder_node(state: SwarmState, *, client: Any, cfg: Config) -> dict[str, Any]
     heal_iter = state.get("heal_iter", 0)
 
     if heal_iter == 0:
+        # First pass: build from the PRD + spec.
         user_msg = _build_fresh_user_message(state)
+    elif not state.get("review_passed", False) and state.get("review_findings"):
+        # Reviewer blocked the current files (tests have not run yet).
+        user_msg = _build_review_heal_user_message(state, ws)
     else:
+        # Reviewer already approved a prior pass and QA found failing tests.
         user_msg = _build_heal_user_message(state, ws)
 
     written: list[Artifact] = []

@@ -27,6 +27,7 @@ from rich.table import Table
 
 from .config import load_config
 from .graph import build_graph
+from .hermes import build_event, make_notifier
 from .llm import make_client
 from .state import initial_state
 from .workspace import WorkspaceManager
@@ -61,6 +62,12 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Override the self-heal loop limit (default: 5 or DEVSWARM_MAX_HEAL_ITERS).",
+    )
+    p.add_argument(
+        "--max-review",
+        type=int,
+        default=None,
+        help="Override the adversarial review loop limit (default: 3 or DEVSWARM_MAX_REVIEW_ITERS).",
     )
     p.add_argument(
         "--budget",
@@ -119,6 +126,7 @@ def _node_label(node: str) -> str:
         "pm": "🧭 PM",
         "architect": "🏛  Architect",
         "coder": "⌨  Coder",
+        "reviewer": "🔍 Reviewer",
         "qa": "🧪 QA",
     }.get(node, node)
 
@@ -214,11 +222,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     cfg = load_config(workspace_root=args.workspace_root)
-    if args.max_heal is not None:
-        # Recreate with the override.
+    if args.max_heal is not None or args.max_review is not None:
+        # Recreate with the override(s).
         from dataclasses import replace
 
-        cfg = replace(cfg, max_heal_iters=max(0, args.max_heal))
+        overrides: dict[str, Any] = {}
+        if args.max_heal is not None:
+            overrides["max_heal_iters"] = max(0, args.max_heal)
+        if args.max_review is not None:
+            overrides["max_review_iters"] = max(0, args.max_review)
+        cfg = replace(cfg, **overrides)
 
     task_id = uuid.uuid4().hex[:8]
     cfg.workspace_root.mkdir(parents=True, exist_ok=True)
@@ -229,8 +242,9 @@ def main(argv: list[str] | None = None) -> int:
         f"[bold]task_id:[/bold] {task_id}\n"
         f"[bold]workspace:[/bold] {ws.root}\n"
         f"[bold]models:[/bold] pm={cfg.model_pm} architect={cfg.model_architect} "
-        f"coder={cfg.model_coder} qa={cfg.model_qa}\n"
+        f"coder={cfg.model_coder} reviewer={cfg.model_reviewer} qa={cfg.model_qa}\n"
         f"[bold]max heal:[/bold] {cfg.max_heal_iters}    "
+        f"[bold]max review:[/bold] {cfg.max_review_iters}    "
         f"[bold]budget:[/bold] {budget_display}",
         title="DevSwarm starting",
         border_style="cyan",
@@ -245,6 +259,7 @@ def main(argv: list[str] | None = None) -> int:
         workspace_path=str(ws.root),
         max_heal_iters=cfg.max_heal_iters,
         cost_limit_usd=max(0.0, args.budget),
+        max_review_iters=cfg.max_review_iters,
     )
 
     if args.dry_run:
@@ -295,6 +310,14 @@ def main(argv: list[str] | None = None) -> int:
         return 3
 
     _print_final_summary(final_state, task_id, ws.root)
+
+    # Hermes — push a terminal notification. Must never break the run.
+    try:
+        notifier = make_notifier(cfg.notify_channel, console=console)
+        notifier.notify(build_event(final_state, task_id, str(ws.root)))
+    except Exception as e:  # pragma: no cover - defensive; notification is best-effort
+        console.print(f"[yellow]warning:[/yellow] Hermes notification failed: {type(e).__name__}: {e}")
+
     return 0 if final_state.get("tests_passed") else 1
 
 
