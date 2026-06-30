@@ -14,7 +14,7 @@ become the raw material for tuning the YAML.
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from tigerline.classifier import classify
 from tigerline.corridor import build_corridor
@@ -122,7 +122,7 @@ def _parse_ah_selection(selection: str, match: MatchInput) -> tuple[Decimal | No
     team, line_str = parts
     try:
         line = Decimal(line_str)
-    except Exception:
+    except (InvalidOperation, ValueError):
         return None, "home"
     side = "home" if team == match.home else "away"
     return line, side
@@ -146,7 +146,7 @@ def _settle_correct_score(leg: BetLeg, hg: int, ag: int) -> MainResult:
         h_str, a_str = leg.selection.split("-", 1)
         h = int(h_str)
         a = int(a_str)
-    except Exception:
+    except (ValueError, IndexError):
         return "void"
     return "win" if (h, a) == (hg, ag) else "lose"
 

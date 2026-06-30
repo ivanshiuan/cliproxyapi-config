@@ -24,6 +24,7 @@ from tigerline.models import (
     BetLeg,
     BetPlan,
     HarnessVerdict,
+    MarketKind,
     MatchClassification,
     MatchInput,
     ScenarioType,
@@ -114,7 +115,7 @@ def _main_selection(match: MatchInput, scenario: ScenarioType) -> str | None:
     return None
 
 
-def _market_kind_for_scenario(scenario: ScenarioType):
+def _market_kind_for_scenario(scenario: ScenarioType) -> MarketKind:
     if scenario in ("goal_market", "pressure_under"):
         return "totals"
     return "AH"

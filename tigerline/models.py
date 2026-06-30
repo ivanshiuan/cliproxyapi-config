@@ -96,7 +96,7 @@ class AsianHandicap(BaseModel):
     Splits (``-1.5/2`` etc.) are stored as their midpoint (here -1.75).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     line: StrictDecimal
     favorite: Side
@@ -107,7 +107,7 @@ class AsianHandicap(BaseModel):
 class Totals(BaseModel):
     """One Asian totals line (goal market)."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     line: StrictDecimal = Field(gt=Decimal("0"))
     over_price: StrictDecimal = Field(gt=Decimal("1"))
@@ -121,7 +121,7 @@ class TeamNeed(BaseModel):
     single highest-priority signal (short-circuits to ``rotation_trap``).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     home: TeamNeedEnum
     away: TeamNeedEnum
@@ -130,7 +130,7 @@ class TeamNeed(BaseModel):
 class GroupContext(BaseModel):
     """Standings context — drives ``final_round`` and ``same_time_kickoff`` rules."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     standings_summary: str = Field(max_length=500)
     final_round: bool = False
@@ -140,7 +140,7 @@ class GroupContext(BaseModel):
 class MatchInput(BaseModel):
     """Everything ``tiger analyze`` needs to produce a BetPlan."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     match_id: str = Field(min_length=1, pattern=r"^[a-z0-9\-]+$")
     kickoff_utc: datetime
@@ -162,7 +162,7 @@ class MatchInput(BaseModel):
 class MatchClassification(BaseModel):
     """Output of the classifier — one of 7 scenarios + confidence + reasons."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     scenario: ScenarioType
     confidence: StrictDecimal = Field(ge=Decimal("0"), le=Decimal("1"))
@@ -177,7 +177,7 @@ class ScoreCorridor(BaseModel):
     corridor module).
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     scores: list[tuple[int, int]] = Field(min_length=1, max_length=8)
     primary: tuple[int, int]
@@ -186,7 +186,7 @@ class ScoreCorridor(BaseModel):
 class HarnessVerdict(BaseModel):
     """Risk-control decision: upgrade / normal / downgrade / skip."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     adjustment: Adjustment
     notes: list[str] = Field(default_factory=list)
@@ -195,7 +195,7 @@ class HarnessVerdict(BaseModel):
 class BetLeg(BaseModel):
     """A single recommended bet."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     market: MarketKind
     selection: str = Field(min_length=1)
@@ -209,7 +209,7 @@ class BetPlan(BaseModel):
     avoid list, and what to reserve for in-play action.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     match_id: str
     scenario: ScenarioType
@@ -223,7 +223,7 @@ class BetPlan(BaseModel):
 class ReviewResult(BaseModel):
     """Post-match scorecard — 0-100 + suggested rule fixes."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     match_id: str
     actual_score: tuple[int, int]
@@ -248,7 +248,7 @@ class SourceMetadata(BaseModel):
     consensus, precision) refuse to score snapshots that lack this envelope.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     source: SourceKind
     collected_at: datetime
@@ -268,7 +268,7 @@ class OddsSnapshot(BaseModel):
     ``line`` is None.
     """
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     snapshot_id: str = Field(min_length=1, pattern=r"^[a-z0-9\-_]+$")
     match_id: str = Field(min_length=1, pattern=r"^[a-z0-9\-]+$")

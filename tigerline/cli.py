@@ -277,6 +277,11 @@ def snapshot_latest(
     conn = connect()
     snap = latest_snapshot(conn, match_id, market_type=market, bookmaker=bookmaker)
     if snap is None:
+        console.print(
+            f"[red]No snapshot for {match_id}/{market}"
+            + (f" @ {bookmaker}" if bookmaker else "")
+            + ".[/red]"
+        )
         raise typer.Exit(code=1)
     if as_json:
         typer.echo(snap.model_dump_json(indent=2))
@@ -415,7 +420,9 @@ def movement_analyze(
         raise typer.Exit(code=1)
     report = analyze_movement(snaps)
     if report is None:
-        console.print("[red]Movement analysis returned None unexpectedly.[/red]")
+        console.print(
+            "[red]Movement analysis returned None — likely fewer than 2 snapshots after filtering.[/red]"
+        )
         raise typer.Exit(code=1)
     if as_json:
         from dataclasses import asdict

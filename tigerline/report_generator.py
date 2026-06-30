@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import Literal
 
 from tigerline.calibration_engine import CalibrationReport
@@ -226,10 +225,6 @@ def _now_utc() -> datetime:
     from datetime import datetime as _dt
 
     return _dt.now(UTC)
-
-
-# Silence unused-import warning on Decimal — kept for type-stable callers.
-_ = Decimal
 
 
 __all__ = [
