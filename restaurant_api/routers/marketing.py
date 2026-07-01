@@ -4,13 +4,13 @@ Endpoint map
 ------------
 Hermes (memory):
   POST   /marketing/memories              create a brand memory
-  GET    /marketing/memories              list memories (filterable)
+  GET    /marketing/memories              list memories (filterable, paginated)
   GET    /marketing/memories/{id}         get one
   PATCH  /marketing/memories/{id}         update / score
 
 Claude (creative):
   POST   /marketing/content/generate      generate content via Claude
-  GET    /marketing/content               list assets
+  GET    /marketing/content               list assets (filterable, paginated)
   GET    /marketing/content/{id}          get one
   PATCH  /marketing/content/{id}          approve / archive / edit
 
@@ -18,9 +18,9 @@ Claude (creative):
 
 Codex (execution):
   POST   /marketing/ai-campaigns          create campaign
-  GET    /marketing/ai-campaigns          list campaigns
+  GET    /marketing/ai-campaigns          list campaigns (paginated)
   GET    /marketing/ai-campaigns/{id}     get one
-  POST   /marketing/ai-campaigns/{id}/execute  execute (push to segment)
+  POST   /marketing/ai-campaigns/{id}/execute  execute or retry (pending/failed)
 """
 
 from __future__ import annotations
@@ -49,6 +49,7 @@ from ..services import marketing_service
 _ADMIN = [Depends(require_admin)]
 
 _Q_LIMIT = Query(default=50, ge=1, le=200)
+_Q_OFFSET = Query(default=0, ge=0, description="Pagination offset (0-indexed)")
 _Q_MEMORY_TYPE: MemoryType | None = Query(default=None)
 _Q_TAGS: list[str] | None = Query(default=None)
 _Q_ASSET_STATUS: AssetStatus | None = Query(default=None)
@@ -80,7 +81,7 @@ async def create_memory(
 @router.get(
     "/memories",
     response_model=list[MemoryResponse],
-    summary="列出品牌記憶 (依 use_count 降冪)",
+    summary="列出品牌記憶 (依 use_count 降冪，支援 offset 分頁)",
     dependencies=_ADMIN,
 )
 async def list_memories(
@@ -89,9 +90,10 @@ async def list_memories(
     memory_type: MemoryType | None = _Q_MEMORY_TYPE,
     tags: list[str] | None = _Q_TAGS,
     limit: int = _Q_LIMIT,
+    offset: int = _Q_OFFSET,
 ) -> list[MemoryResponse]:
     return await marketing_service.list_memories(  # type: ignore[return-value]
-        session, tenant_id, memory_type=memory_type, tags=tags, limit=limit
+        session, tenant_id, memory_type=memory_type, tags=tags, limit=limit, offset=offset
     )
 
 
@@ -112,7 +114,7 @@ async def get_memory(
 @router.patch(
     "/memories/{memory_id}",
     response_model=MemoryResponse,
-    summary="更新品牌記憶 (可設 effectiveness_score)",
+    summary="更新品牌記憶 (可設 effectiveness_score；空 tags 陣列清除標籤)",
     dependencies=_ADMIN,
 )
 async def update_memory(
@@ -145,7 +147,7 @@ async def generate_content(
 @router.get(
     "/content",
     response_model=list[ContentAssetResponse],
-    summary="列出行銷素材",
+    summary="列出行銷素材 (支援 offset 分頁)",
     dependencies=_ADMIN,
 )
 async def list_assets(
@@ -155,6 +157,7 @@ async def list_assets(
     asset_type: str | None = _Q_ASSET_TYPE,
     platform: AssetPlatform | None = _Q_PLATFORM,
     limit: int = _Q_LIMIT,
+    offset: int = _Q_OFFSET,
 ) -> list[ContentAssetResponse]:
     return await marketing_service.list_assets(  # type: ignore[return-value]
         session,
@@ -163,6 +166,7 @@ async def list_assets(
         asset_type=asset_type,
         platform=platform,
         limit=limit,
+        offset=offset,
     )
 
 
@@ -183,7 +187,7 @@ async def get_asset(
 @router.patch(
     "/content/{asset_id}",
     response_model=ContentAssetResponse,
-    summary="更新素材狀態 (draft→approved→published→archived) 或修改內容",
+    summary="更新素材狀態 (有狀態機護欄: draft→approved→published→archived) 或修改內容",
     dependencies=_ADMIN,
 )
 async def update_asset(
@@ -209,7 +213,7 @@ async def update_asset(
     "/strategy",
     response_model=ContentAssetResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="產生行銷策略簡報 (Claude 策略層)",
+    summary="產生行銷策略簡報 (Claude 策略層；memory_types 支援多類型 OR 篩選)",
     dependencies=_ADMIN,
 )
 async def generate_strategy(
@@ -241,7 +245,7 @@ async def create_ai_campaign(
 @router.get(
     "/ai-campaigns",
     response_model=list[AiCampaignResponse],
-    summary="列出 AI 行銷活動",
+    summary="列出 AI 行銷活動 (支援 offset 分頁)",
     dependencies=_ADMIN,
 )
 async def list_ai_campaigns(
@@ -249,9 +253,10 @@ async def list_ai_campaigns(
     tenant_id: TenantId,
     campaign_status: AiCampaignStatus | None = _Q_CAMPAIGN_STATUS,
     limit: int = _Q_LIMIT,
+    offset: int = _Q_OFFSET,
 ) -> list[AiCampaignResponse]:
     return await marketing_service.list_campaigns(  # type: ignore[return-value]
-        session, tenant_id, status=campaign_status, limit=limit
+        session, tenant_id, status=campaign_status, limit=limit, offset=offset
     )
 
 
@@ -275,7 +280,7 @@ async def get_ai_campaign(
 @router.post(
     "/ai-campaigns/{campaign_id}/execute",
     response_model=AiCampaignResponse,
-    summary="執行 AI 行銷活動 (推播至目標分眾)",
+    summary="執行（或重試）AI 行銷活動 (接受 pending/failed 狀態；LINE only Phase 1)",
     dependencies=_ADMIN,
 )
 async def execute_ai_campaign(

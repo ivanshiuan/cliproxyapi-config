@@ -38,6 +38,16 @@ from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
+from .marketing import (
+    AiCampaign,
+    AiCampaignStatus,
+    AssetPlatform,
+    AssetStatus,
+    AssetType,
+    ContentAsset,
+    MarketingMemory,
+    MemoryType,
+)
 from .menu import MenuCategory, MenuItem
 from .orders import (
     DiscountKind,
@@ -62,16 +72,6 @@ from .reservations import (
 from .stores import Store
 from .tenants import Tenant
 from .ugc import UgcKind, UgcStatus, UgcSubmission
-from .marketing import (
-    AiCampaign,
-    AiCampaignStatus,
-    AssetPlatform,
-    AssetStatus,
-    AssetType,
-    ContentAsset,
-    MarketingMemory,
-    MemoryType,
-)
 
 __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readability
     # base / shared

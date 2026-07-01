@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..models.marketing import (
     AiCampaignStatus,
@@ -15,7 +15,7 @@ from ..models.marketing import (
     AssetType,
     MemoryType,
 )
-
+from ..schemas.rfm import RfmSegment
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Hermes Memory Layer
@@ -37,6 +37,7 @@ class MemoryUpdate(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=200)
     content: str | None = Field(default=None, min_length=1)
+    # None = "don't touch", [] = "clear all tags"
     tags: list[str] | None = None
     meta: dict[str, Any] | None = None
     effectiveness_score: float | None = Field(default=None, ge=0, le=100)
@@ -119,6 +120,9 @@ class ContentAssetUpdate(BaseModel):
 # Codex Execution Layer
 # ──────────────────────────────────────────────────────────────────────────────
 
+# Valid segment values: "ALL" plus every RfmSegment lowercase value.
+_VALID_SEGMENTS: frozenset[str] = frozenset({"ALL"} | {s.value for s in RfmSegment})
+
 
 class AiCampaignCreate(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -128,13 +132,25 @@ class AiCampaignCreate(BaseModel):
     target_segment: str = Field(
         default="ALL",
         max_length=50,
-        description="RFM segment name (CHAMPION/AT_RISK/ALL etc.)",
+        description=(
+            f"RFM segment name or 'ALL'. Valid values: {sorted(_VALID_SEGMENTS)}"
+        ),
     )
     asset_ids: list[UUID] = Field(
         min_length=1,
         description="ContentAsset IDs to distribute",
     )
     strategy_brief: str | None = Field(default=None, max_length=5000)
+
+    @field_validator("target_segment")
+    @classmethod
+    def _validate_segment(cls, v: str) -> str:
+        if v not in _VALID_SEGMENTS:
+            raise ValueError(
+                f"target_segment '{v}' is not valid. "
+                f"Must be one of: {sorted(_VALID_SEGMENTS)}"
+            )
+        return v
 
 
 class AiCampaignResponse(BaseModel):
@@ -176,18 +192,8 @@ class StrategyRequest(BaseModel):
     )
     memory_types: list[MemoryType] | None = Field(
         default=None,
-        description="Which memory types to pull for context",
+        description="Which memory types to pull for context (OR filter)",
     )
-
-
-class StrategyResponse(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    asset_id: UUID
-    strategy: str
-    recommended_assets: list[str]
-    input_tokens: int | None
-    output_tokens: int | None
 
 
 __all__ = [
@@ -200,5 +206,4 @@ __all__ = [
     "MemoryResponse",
     "MemoryUpdate",
     "StrategyRequest",
-    "StrategyResponse",
 ]

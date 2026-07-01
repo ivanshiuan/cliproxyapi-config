@@ -124,6 +124,11 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/seed_wheel_campaign.py" = ["RUF001"]
 "scripts/seed_growth_demo.py" = ["RUF001"]
 "scripts/line_check.py" = ["RUF001"]
+# Marketing router/service/tests use Chinese UI strings and f-strings with 中文標點.
+"restaurant_api/routers/marketing.py" = ["RUF001"]
+"restaurant_api/services/marketing_service.py" = ["RUF001"]
+"restaurant_api/services/ai_content_service.py" = ["RUF001"]
+"tests/routers/test_marketing.py" = ["RUF001"]
 
 [tool.ruff.format]
 quote-style = "double"
