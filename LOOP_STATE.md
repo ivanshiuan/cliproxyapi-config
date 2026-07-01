@@ -3,7 +3,7 @@
 > Auto-updated by `daily-brief` workflow. Do not edit manually.
 > Manual trigger: GitHub Actions → Daily Brief → Run workflow.
 
-last_run: 2026-06-30 00:18 UTC
+last_run: 2026-07-01 02:03 UTC
 pending_specs: 10
 open_decisions: 0
 
@@ -17,17 +17,17 @@ _(none found in COMMANDER_HANDOFF.md)_
 
 ## Recent Brief
 
-**Branch:** `claude/loop-engineering-repo-3m1sgp` | **Tree:** ⚠️ dirty
+**Branch:** `claude/autonomous-resttech-enterprise-oW9jp` | **Tree:** ✅ clean
 
 ### Last 7 Commits
 ```
-1c8c5a5 Merge pull request #3 from ivanshiuan/claude/markitdown-evaluation-uw8kc7
-5e45409 Merge pull request #7 from ivanshiuan/claude/line-reservation-notify
-1c8be7d Merge pull request #6 from ivanshiuan/claude/line-inbound-webhook
-75856c8 Merge remote-tracking branch 'origin/claude/autonomous-resttech-enterprise-oW9jp' into claude/markitdown-evaluation-uw8kc7
-8f66cf5 refactor(line-webhook): 回應 CodeRabbit review
-b38f7f2 Merge remote-tracking branch 'origin/claude/autonomous-resttech-enterprise-oW9jp' into claude/line-reservation-notify
-e3a8628 fix: 合併主幹後移除 LINE config 重複欄位（保留 #4 既有定義）
+d4d8d5d fix(loop): 把 workflow branch 從 main 改成實際主幹 [skip ci]
+2eb0e7d feat(loop): three-loop automation — Daily Brief, PR Babysitter, Changelog Drafter
+6e32e9b Merge pull request #13 from ivanshiuan/claude/4x-framework-eval-c69s87
+80d2f76 Merge pull request #15 from ivanshiuan/claude/fix-temperature-deprecation
+292e87f fix: 處理 PR #13 review 回饋(對抗式審查 + 守衛強化)
+91bdddc feat: Reviewer 回歸 eval 骨架 — 把 prompt 版本接成真正的回歸網
+9e5a455 fix: Claude 4.x/Fable models reject deprecated temperature param
 ```
 
 ### Specs (10 total)
@@ -42,4 +42,4 @@ e3a8628 fix: 合併主幹後移除 LINE config 重複欄位（保留 #4 既有�
 - `stock_intake_router`
 - `uniform_invoice_validator`
 
-*2026-06-30 00:18 UTC / 08:18 Taipei*
+*2026-07-01 02:03 UTC / 10:03 Taipei*
