@@ -78,6 +78,10 @@
           {
             "type": "command",
             "command": "c=$(jq -r '.tool_input.command // empty'); if echo \"$c\" | grep -Eq '(^|[;&|])[[:space:]]*git[[:space:]]+push'; then echo \"$c\" | grep -Eq '(--force|[[:space:]]-f([[:space:]]|$)|(^|[[:space:]:/])(main|master)([[:space:]:]|$))' && { echo 'BLOCKED: 禁止 push main/master 或 force push(帝國規則)。' >&2; exit 2; }; fi; exit 0"
+          },
+          {
+            "type": "command",
+            "command": "c=$(jq -r '.tool_input.command // empty'); echo \"$c\" | grep -Eq '(>>?|tee([[:space:]]+-a)?)[[:space:]]*([^[:space:];|&]*/)?[.]env([.](local|production|prod|development|dev|staging|stage|test|secret|secrets))?([^.a-zA-Z0-9]|$)' && { echo 'BLOCKED: 禁止用 Bash 寫入 .env(帝國規則:.env 永不進 git)。改設定請編輯 .env.example。' >&2; exit 2; }; exit 0"
           }
         ]
       }

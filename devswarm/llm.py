@@ -164,17 +164,26 @@ def call(
     temperature: float = 0.2,
     cache_system: bool = True,
 ) -> LLMResponse:
-    """Single Messages API call with prompt caching and bounded retries."""
+    """Single Messages API call with prompt caching and bounded retries.
+
+    Newer Anthropic models reject the ``temperature`` parameter ("deprecated for
+    this model"). On that specific 400 we transparently retry once WITHOUT
+    ``temperature`` — not counting it against the retry budget — so the whole
+    swarm keeps working across model generations instead of hard-failing.
+    """
     last_err: Exception | None = None
-    for attempt in range(cfg.max_retries + 1):
+    drop_temperature = False
+    attempt = 0
+    while attempt <= cfg.max_retries:
         try:
             kwargs: dict[str, Any] = {
                 "model": model,
                 "max_tokens": max_tokens,
-                "temperature": temperature,
                 "system": _build_system_blocks(system, cache_system),
                 "messages": messages,
             }
+            if not drop_temperature:
+                kwargs["temperature"] = temperature
             if tools:
                 kwargs["tools"] = tools
             response = client.messages.create(**kwargs)
@@ -182,7 +191,12 @@ def call(
         except (APITimeoutError, RateLimitError) as e:
             last_err = e
         except APIStatusError as e:
-            # Retry 5xx; raise on 4xx other than 429 (caught above).
+            msg = str(getattr(e, "message", "") or e).lower()
+            if e.status_code == 400 and "temperature" in msg and not drop_temperature:
+                # Retry immediately without temperature; do not burn an attempt.
+                drop_temperature = True
+                continue
+            # Retry 5xx; raise on other 4xx (429 is caught above).
             if 500 <= e.status_code < 600:
                 last_err = e
             else:
@@ -190,8 +204,9 @@ def call(
         except APIError as e:
             last_err = e
 
-        if attempt < cfg.max_retries:
-            backoff = 2 ** (attempt + 1)  # 2, 4, 8 ...
+        attempt += 1
+        if attempt <= cfg.max_retries:
+            backoff = 2**attempt  # 2, 4, 8 ...
             time.sleep(min(backoff, 16))
 
     assert last_err is not None
