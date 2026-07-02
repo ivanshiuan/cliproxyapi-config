@@ -237,6 +237,8 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 8. **長 session 超過 50K token 用 `/compact`**，保留重要決策與 spec contract
 9. **規劃新功能用 Plan Mode**（Shift+Tab×2），讓我先審計畫再動工
 10. **遇到不確定時用 AskUserQuestion**，給我 2-4 個具體選項，不要長段問題
+11. **開 Opus 4.8 session 一律啟用 `/output-style opus-harness`**（`.claude/output-styles/opus-harness.md`）— 補齊 9 條行為紀律 + orchestrator 契約，補上 Fable 5 診斷的最大缺口
+12. **大任務進 orchestrator 模式** — 讀 `.claude/skills/orchestrator-mode/SKILL.md`，你當 orchestrator、把 code 派給 executor（Codex / Sonnet / subagent）、把找毛病派給 reviewer（Gemini / code-reviewer agent）、你只做診斷、切工單、仲裁、收斂。**小改動直接跑，別 over-engineer**
 
 ---
 
