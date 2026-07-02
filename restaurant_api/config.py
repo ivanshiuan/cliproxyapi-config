@@ -80,6 +80,17 @@ class Settings(BaseSettings):
     # Set 0 to mint points that never expire (legacy mode).
     points_expiry_days: int = Field(default=365, ge=0)
 
+    # ─── AI Marketing (Hermes-Claude-Codex) ─────────────────────────────
+    # When set, the AI content service uses the Anthropic API to generate
+    # marketing copy. Without it, the service returns stub content.
+    anthropic_api_key: str = Field(
+        default="", validation_alias="ANTHROPIC_API_KEY"
+    )
+    ai_content_model: str = Field(
+        default="claude-sonnet-4-6", validation_alias="RESTO_AI_CONTENT_MODEL"
+    )
+    ai_content_max_tokens: int = Field(default=1024, ge=256, le=4096)
+
     # ─── Logging ────────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 

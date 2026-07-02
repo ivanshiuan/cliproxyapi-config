@@ -38,6 +38,16 @@ from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
+from .marketing import (
+    AiCampaign,
+    AiCampaignStatus,
+    AssetPlatform,
+    AssetStatus,
+    AssetType,
+    ContentAsset,
+    MarketingMemory,
+    MemoryType,
+)
 from .menu import MenuCategory, MenuItem
 from .orders import (
     DiscountKind,
@@ -139,4 +149,13 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     # embeddings (AI data asset seed)
     "Embedding",
     "VECTOR_DIM",
+    # AI marketing system (Hermes-Claude-Codex)
+    "MarketingMemory",
+    "MemoryType",
+    "ContentAsset",
+    "AssetType",
+    "AssetPlatform",
+    "AssetStatus",
+    "AiCampaign",
+    "AiCampaignStatus",
 ]

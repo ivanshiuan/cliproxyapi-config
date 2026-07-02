@@ -159,6 +159,8 @@ async def broadcast_to_segment(
         for c, seg in scored
         if seg == segment and c.line_user_id
     )
+    if not recipients:
+        return BroadcastResult(segment=segment, audience_size=0, delivered=0)
     out = messenger or get_messenger()
     delivered = await out.broadcast(
         BroadcastAudience(explicit_user_ids=recipients),

@@ -30,6 +30,7 @@ from .routers import customers as customers_router
 from .routers import events as events_router
 from .routers import kitchen as kitchen_router
 from .routers import line_webhook as line_webhook_router
+from .routers import marketing as marketing_router
 from .routers import membership as membership_router
 from .routers import orders as orders_router
 from .routers import reservations as reservations_router
@@ -98,6 +99,7 @@ _mount_router(campaigns_router, "/campaigns")
 _mount_router(ugc_router, "/ugc")
 _mount_router(membership_router, "/membership")
 _mount_router(line_webhook_router, "/line")
+_mount_router(marketing_router, "/marketing")
 # Reservations module exports two routers (one per prefix); mount each with
 # the path-based idempotency guard.
 if not any(getattr(r, "path", "").startswith("/reservations") for r in app.routes):
