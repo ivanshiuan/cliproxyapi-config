@@ -227,6 +227,10 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 
 ## 我希望 Claude Code 怎麼做事
 
+> **📖 完整策略見 `docs/19_operating_playbook.md`** — 這是把 Fable 5 orchestrator 實驗、
+> Fable 5 harness 體檢、Addy 工程 skill、RTK token killer 整合成的日常實踐版作業手冊。
+> 新 session 只讀「快速入場」那段就上手；小改動別 over-engineer。
+
 1. **動手前先看 `docs/06_execution_plan.md`** 確認還沒做什麼、Phase 排在哪
 2. **改 schema 前先讀 `docs/04_data_schema.md`** 看設計理由
 3. **動 router 前先讀 `restaurant_api/api/deps.py` 和 `errors.py`** 用既有 DI/例外
