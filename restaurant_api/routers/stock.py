@@ -20,9 +20,9 @@ import uuid
 from datetime import date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 
-from ..api.deps import DbSession, TenantId
+from ..api.deps import DbSession, TenantId, require_permission
 from ..models import MovementType
 from ..schemas.stock import (
     AdjustmentCreateRequest,
@@ -32,6 +32,12 @@ from ..schemas.stock import (
     StockMovementResponse,
 )
 from ..services import stock_service
+
+# Permission gates hoisted to module level to keep decorators terse and
+# avoid B008 on route-level dependency lists.
+_PERM_INTAKE = require_permission("stock:intake")
+_PERM_ADJUST = require_permission("stock:adjust")
+_PERM_READ = require_permission("stock:read")
 
 router = APIRouter(prefix="/stock", tags=["stock"])
 
@@ -62,6 +68,7 @@ OffsetQ = Annotated[int, Query(ge=0)]
     response_model=PurchaseResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Record a supplier purchase invoice (N stock_movements of type purchase).",
+    dependencies=[Depends(_PERM_INTAKE)],
 )
 async def create_purchase(
     payload: PurchaseCreateRequest,
@@ -81,6 +88,7 @@ async def create_purchase(
     "/purchases",
     response_model=list[PurchaseResponse],
     summary="List purchases reverse-derived from stock_movements.",
+    dependencies=[Depends(_PERM_READ)],
 )
 async def list_purchases(
     session: DbSession,
@@ -115,6 +123,7 @@ async def list_purchases(
     response_model=AdjustmentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Record a 盤點 stock adjustment (one signed stock_movements row).",
+    dependencies=[Depends(_PERM_ADJUST)],
 )
 async def create_adjustment(
     payload: AdjustmentCreateRequest,
@@ -138,6 +147,7 @@ async def create_adjustment(
     "/movements",
     response_model=list[StockMovementResponse],
     summary="List ledger rows. Supports filters and limit/offset pagination.",
+    dependencies=[Depends(_PERM_READ)],
 )
 async def list_movements(
     session: DbSession,

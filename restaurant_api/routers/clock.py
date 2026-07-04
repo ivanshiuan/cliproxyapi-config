@@ -24,7 +24,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
-from ..api.deps import DbSession
+from ..api.deps import DbSession, get_current_user, require_permission
 from ..schemas.clock import (
     ClockInRequest,
     ClockInResponse,
@@ -37,6 +37,13 @@ from ..schemas.clock import (
 from ..services import clock_service
 from ..services.clock_service import IsHolidayFn
 from ..services.holiday_calendar import get_calendar
+
+# /in and /out only need "you're an authenticated employee" — the actor
+# comes from the JWT sub claim; the payload does NOT accept an
+# employee_id override (that would let any staff clock others in/out).
+# /today shows store-wide, so requires the elevated permission; a future
+# ``/today/self`` variant would use ``clock:read_self``.
+_PERM_READ_STORE = require_permission("clock:read_store")
 
 router = APIRouter(prefix="/clock", tags=["clock"])
 
@@ -59,6 +66,7 @@ IsHolidayDep = Annotated[IsHolidayFn, Depends(get_is_holiday)]
     response_model=ClockInResponse,
     status_code=status.HTTP_201_CREATED,
     summary="員工打卡上班",
+    dependencies=[Depends(get_current_user)],
 )
 async def post_clock_in(
     payload: ClockInRequest,
@@ -72,6 +80,7 @@ async def post_clock_in(
     response_model=ClockOutResponse,
     status_code=status.HTTP_200_OK,
     summary="員工打卡下班 (calculates LSA hour buckets)",
+    dependencies=[Depends(get_current_user)],
 )
 async def post_clock_out(
     payload: ClockOutRequest,
@@ -86,6 +95,7 @@ async def post_clock_out(
     response_model=LeaveRequestResponse,
     status_code=status.HTTP_201_CREATED,
     summary="員工提出請假申請 (status=pending)",
+    dependencies=[Depends(get_current_user)],
 )
 async def post_leave_request(
     payload: LeaveRequestCreate,
@@ -98,6 +108,10 @@ async def post_leave_request(
     "/today",
     response_model=list[OpenClockResponse],
     summary="今日仍在班上 (clock_out IS NULL) — by Asia/Taipei date",
+    # store-wide read requires the elevated permission; individual staff
+    # querying only themselves is enforced service-side against
+    # current_user.employee_id (added in PR-D fixture migration).
+    dependencies=[Depends(_PERM_READ_STORE)],
 )
 async def get_today_open(
     session: DbSession,

@@ -101,8 +101,11 @@ class Settings(BaseSettings):
     # off:     no auth check (Phase 1 behaviour, still header-tenant)
     # warn:    parse JWT if present, log a warning if absent, but don't 401
     # enforce: full Phase 2 behaviour, 401 on missing/invalid token
+    # Default flipped from "warn" → "enforce" in PR-C — existing router
+    # tests deliberately fail here; fixture migration in PR-D re-greens
+    # them. This is the intended breaking-change slice per spec §PR-C.
     auth_enforcement: str = Field(
-        default="warn", pattern=r"^(off|warn|enforce)$"
+        default="enforce", pattern=r"^(off|warn|enforce)$"
     )
 
     @property
