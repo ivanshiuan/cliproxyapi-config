@@ -131,6 +131,21 @@ db-check: install ## Verify models match DB schema (no drift)
 db-smoke: install ## End-to-end insert/select smoke against real DB
 	$(PY) scripts/smoke_db.py
 
+.PHONY: bootstrap-owner
+bootstrap-owner: install ## Create first owner login. TENANT= EMPLOYEE= EMAIL= (prompts for password)
+	@test -n "$(TENANT)" && test -n "$(EMPLOYEE)" && test -n "$(EMAIL)" || \
+	  (echo 'usage: make bootstrap-owner TENANT=<uuid> EMPLOYEE=<uuid> EMAIL=<addr>' && \
+	   echo 'the password is read from stdin (piped) or prompted on the tty' && exit 1)
+	@if [ -t 0 ]; then \
+	  $(PY) -m scripts.bootstrap_owner --tenant-id $(TENANT) --employee-id $(EMPLOYEE) --email $(EMAIL) ; \
+	else \
+	  $(PY) -m scripts.bootstrap_owner --tenant-id $(TENANT) --employee-id $(EMPLOYEE) --email $(EMAIL) --password-stdin ; \
+	fi
+
+.PHONY: bootstrap-owner-help
+bootstrap-owner-help: ## Show bootstrap_owner CLI help
+	$(PY) -m scripts.bootstrap_owner --help
+
 .PHONY: db-truncate
 db-truncate: ## Wipe all rows (DB owner only; bypasses ledger append-only rules)
 	PGPASSWORD=$$RESTO_DB_PASSWORD psql -h $$RESTO_DB_HOST -U $$RESTO_DB_USER -d $$RESTO_DB_NAME -c \
