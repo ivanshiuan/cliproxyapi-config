@@ -1,9 +1,14 @@
 # Release Notes Draft
 
-> Auto-generated 2026-06-30 00:18 UTC — 104 commit(s) since first commit
+> Auto-generated 2026-07-04 19:49 UTC — 118 commit(s) since first commit
 > **Human review required before publishing.**
 
 ## ✨ Features
+- three-loop automation — Daily Brief, PR Babysitter, Changelog Drafter (`2eb0e7d`)
+- Reviewer 回歸 eval 骨架 — 把 prompt 版本接成真正的回歸網 (`91bdddc`)
+- Codex — 不變法則的單一真相源,Architect 與 Reviewer 共用 (`2efbfc5`)
+- Hermes 對外通知層 — 蜂群終態主動推送 (`359b919`)
+- 對抗式 Reviewer node — DevSwarm 升為 5-agent 蜂群 (`070f8f0`)
 - LINE push on booking-confirmed and queue-called (`61d1142`)
 - inbound webhook endpoint with signature verification (`94218e8`)
 - SID 一鍵部署自動化 — deploy.sh 預檢 token/egress + make deploy + /deploy-sid skill (`d78e29d`)
@@ -57,6 +62,9 @@
 - LangGraph agent swarm — PM/Architect/Coder/QA + self-heal (`7fb1040`)
 
 ## 🐛 Bug Fixes
+- 把 workflow branch 從 main 改成實際主幹 [skip ci] (`d4d8d5d`)
+- 處理 PR #13 review 回饋(對抗式審查 + 守衛強化) (`292e87f`)
+- Claude 4.x/Fable models reject deprecated temperature param (`9e5a455`)
 - 合併主幹後移除 LINE config 重複欄位（保留 #4 既有定義） (`e3a8628`)
 - declare apscheduler dep + harden to_md.py CLI (`096127a`)
 - esc() 一致性補齊 — 戰術/歷史區塊與設定頁輸入全轉義(深度復盤) (`b1cf377`)
@@ -88,6 +96,7 @@
 - pytest suite for state, workspace, sandbox, imports (`10cb4ef`)
 
 ## 📝 Docs
+- 把 4x 對抗式 Reviewer 編入 DevSwarm 架構（docs/02） (`46baa0c`)
 - 新增 MASTER_DESIGN 完整主設計文件（可交付給其他 PM 審查/優化） (`9643699`)
 - HANDOFF 第12行移除無法查證的精確條數，改述三輪審查全數 resolve（回應 CodeRabbit） (`117c64d`)
 - add main() docstring in to_md.py (clears coverage warning) (`3bf756c`)
@@ -113,11 +122,16 @@
 - full project planning artifacts (`c50de45`)
 
 ## 🔧 Chores
+- daily brief 2026-07-03 [skip ci] (`94ba11a`)
+- daily brief 2026-07-02 [skip ci] (`419b673`)
+- daily brief 2026-07-01 [skip ci] (`3782471`)
+- PreToolUse 阻擋 hook — 把帝國規則從祈禱變成牆 (`68ffbfe`)
 - 前端打包腳本 + Cloudflare Pages 獨立部署套件 (`fe9fcbc`)
 - add pytest-cov + make coverage / coverage-quick targets (`27dae0e`)
 - CI workflow, ruff cleanup, morning brief, second demo spec (`22c574c`)
 
 ## 📦 Other
+- TIGER LINE PRIME V3.0 — full CLI + Cloudflare & GitHub Pages web deploy (`298173f`)
 - ci: GitHub Pages 自動部署 SID（configure-pages 自動啟用 + build + deploy） (`e5b0c8a`)
 - test+fix: HTTP 整合測試 + 修兩個更深的 BUG (副盤檢查 round 10-11) (`a8dd147`)
 - docs+fix: update execution plan + tiebreaker on points ledger sort (`96a89b1`)
