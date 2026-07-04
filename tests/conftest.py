@@ -98,30 +98,140 @@ async def db_session(_engine) -> AsyncIterator[AsyncSession]:
             await connection.close()
 
 
+_ALL_SYSTEM_PERMISSIONS = frozenset({
+    "orders:create", "orders:read", "orders:close", "orders:void", "orders:refund",
+    "stock:intake", "stock:read", "stock:adjust",
+    "clock:read_self", "clock:read_store", "clock:admin",
+    "cost:create", "cost:read",
+    "visual_assets:read", "visual_assets:write",
+    "visual_assets:read_brand_ref", "visual_assets:manage_visibility", "visual_assets:read_all",
+    "events:emit",
+    "auth:manage_users", "auth:manage_roles", "auth:reset_password",
+    "admin:tenant_settings", "admin:audit_read", "admin:export_data",
+})
+
+
+def _mock_owner_user(tenant_id: uuid.UUID, employee_id: uuid.UUID | None = None) -> Any:
+    """Build a mock CurrentUser with owner-level permissions for tests
+    that predate RBAC. Import is deferred so this module stays importable
+    when auth code isn't on the path.
+    """
+    from restaurant_api.services.rbac_service import CurrentUser
+
+    return CurrentUser(
+        employee_id=employee_id or uuid.uuid4(),
+        tenant_id=tenant_id,
+        employee_role="owner",
+        functional_roles=frozenset({"owner"}),
+        permissions=_ALL_SYSTEM_PERMISSIONS,
+        jti="test-jti-owner",
+    )
+
+
+def _mock_role_user(
+    tenant_id: uuid.UUID,
+    *,
+    role_name: str,
+    permissions: frozenset[str],
+    employee_id: uuid.UUID | None = None,
+) -> Any:
+    """Build a mock CurrentUser scoped to a specific functional role."""
+    from restaurant_api.services.rbac_service import CurrentUser
+
+    return CurrentUser(
+        employee_id=employee_id or uuid.uuid4(),
+        tenant_id=tenant_id,
+        employee_role="staff",  # default; overrideable via employee_role kwarg later
+        functional_roles=frozenset({role_name}),
+        permissions=permissions,
+        jti=f"test-jti-{role_name}",
+    )
+
+
 @pytest_asyncio.fixture
-async def client(db_session: AsyncSession) -> AsyncIterator[Any]:
+async def client(
+    db_session: AsyncSession, seed_tenant: Tenant
+) -> AsyncIterator[Any]:
     """``httpx.AsyncClient`` over ``ASGITransport`` so HTTP requests and the
     DB session share one event loop. The sync ``TestClient`` runs the app
     on anyio's blocking portal (different loop), which causes asyncpg
     futures to be attached to the wrong loop — symptom: "got Future
     attached to a different loop".
+
+    Existing router tests predate RBAC (Phase 2). To keep them green
+    without editing every file, this fixture overrides ``get_current_user``
+    to return an owner-level mock user scoped to ``seed_tenant`` — the
+    same tenant the seed fixtures use, so ``assert_tenant_match``
+    passes automatically.
     """
     import httpx
 
     from restaurant_api.api.auth import AdminPrincipal, require_admin
-    from restaurant_api.api.deps import get_db
+    from restaurant_api.api.deps import get_current_user, get_db
 
-    async def _override() -> AsyncIterator[AsyncSession]:
+    async def _override_db() -> AsyncIterator[AsyncSession]:
         yield db_session
 
-    app.dependency_overrides[get_db] = _override
-    # Existing router tests predate admin auth; run them authenticated by
-    # default so the new gate doesn't 401 hundreds of green tests. The
-    # auth-specific tests use ``anon_client`` (no override) to exercise the gate.
+    owner_user = _mock_owner_user(seed_tenant.id)
+
+    async def _override_current_user() -> Any:
+        return owner_user
+
+    app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[require_admin] = lambda: AdminPrincipal()
+    app.dependency_overrides[get_current_user] = _override_current_user
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def role_client_factory(
+    db_session: AsyncSession, seed_tenant: Tenant
+) -> AsyncIterator[Any]:
+    """Factory fixture: hand it a role name + permission set, get back
+    an authenticated ``httpx.AsyncClient`` that impersonates that role.
+
+    Used by the new "no permission → 403" and "cross-tenant → 404"
+    rejection tests. Yields an async factory; the client is torn down
+    when the outer fixture exits.
+    """
+    import httpx
+
+    from restaurant_api.api.deps import get_current_user, get_db
+
+    clients: list[Any] = []
+
+    async def _override_db() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    def _factory(
+        role_name: str,
+        permissions: frozenset[str] | set[str],
+        *,
+        tenant_id: uuid.UUID | None = None,
+    ) -> Any:
+        user = _mock_role_user(
+            tenant_id or seed_tenant.id,
+            role_name=role_name,
+            permissions=frozenset(permissions),
+        )
+
+        async def _override_user() -> Any:
+            return user
+
+        app.dependency_overrides[get_db] = _override_db
+        app.dependency_overrides[get_current_user] = _override_user
+        transport = httpx.ASGITransport(app=app)
+        c = httpx.AsyncClient(transport=transport, base_url="http://test")
+        clients.append(c)
+        return c
+
+    yield _factory
+
+    for c in clients:
+        await c.aclose()
     app.dependency_overrides.clear()
 
 
