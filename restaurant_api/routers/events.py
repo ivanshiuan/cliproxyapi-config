@@ -17,10 +17,10 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 
-from ..api.deps import DbSession
+from ..api.deps import DbSession, require_permission
 from ..schemas.events import (
     EventListItem,
     StaffMealEventCreate,
@@ -40,6 +40,12 @@ _Q_FROM_DATE = Query(default=None)
 _Q_TO_DATE = Query(default=None)
 _Q_LIMIT = Query(default=200, ge=1, le=500)
 
+# The "events" prefix is a naming legacy — the content (waste / staff_meal /
+# tasting) is semantically cost tracking, so we gate by cost:create / cost:read
+# per specs/auth_rbac_system.md §Existing router migration plan.
+_PERM_COST_CREATE = require_permission("cost:create")
+_PERM_COST_READ = require_permission("cost:read")
+
 router = APIRouter(prefix="/events", tags=["events"])
 
 
@@ -48,6 +54,7 @@ router = APIRouter(prefix="/events", tags=["events"])
     response_model=WasteEventResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Record a 報廢 (waste) event",
+    dependencies=[Depends(_PERM_COST_CREATE)],
 )
 async def create_waste(
     payload: WasteEventCreate,
@@ -66,6 +73,7 @@ async def create_waste(
     response_model=StaffMealEventResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Record an 員工餐 (staff meal) event",
+    dependencies=[Depends(_PERM_COST_CREATE)],
 )
 async def create_staff_meal(
     payload: StaffMealEventCreate,
@@ -84,6 +92,7 @@ async def create_staff_meal(
     response_model=TastingEventResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Record a 試吃 / 試菜 (tasting) event",
+    dependencies=[Depends(_PERM_COST_CREATE)],
 )
 async def create_tasting(
     payload: TastingEventCreate,
@@ -101,6 +110,7 @@ async def create_tasting(
     "",
     response_model=list[EventListItem],
     summary="List cost events with filters",
+    dependencies=[Depends(_PERM_COST_READ)],
 )
 async def list_events_endpoint(
     session: DbSession,

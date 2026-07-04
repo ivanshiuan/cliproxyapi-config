@@ -14,19 +14,40 @@ pod just because the DB is briefly down.
 
 from __future__ import annotations
 
+import hmac
 import logging
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Header, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .. import __version__
+from ..config import get_settings
 from ..database import ping_db
+from .errors import AuthError
 
 logger = logging.getLogger("restaurant_api.health")
 
 router = APIRouter(prefix="/health", tags=["meta"])
+
+
+def require_internal_probe(
+    x_internal_probe: Annotated[str | None, Header(alias="X-Internal-Probe")] = None,
+) -> None:
+    """Gate for /health/ready — only internal probes may see the DB status.
+
+    Uses ``session_secret`` (already required in prod) as the shared token
+    so no new setting to remember. Compare with constant-time hmac.compare_digest.
+    """
+    settings = get_settings()
+    if settings.env == "dev":
+        # In dev, the probe header is optional so ``curl /health/ready``
+        # from a laptop still works during troubleshooting.
+        return
+    expected = settings.session_secret
+    if not x_internal_probe or not hmac.compare_digest(x_internal_probe, expected):
+        raise AuthError("readiness probe requires X-Internal-Probe header")
 
 
 class LivenessResponse(BaseModel):
@@ -75,6 +96,7 @@ async def live() -> Response:
     "/ready",
     response_model=ReadinessResponse,
     responses={503: {"description": "One or more dependencies unavailable"}},
+    dependencies=[Depends(require_internal_probe)],
 )
 async def ready() -> Response:
     """Readiness — answers `can this process serve traffic right now?`"""

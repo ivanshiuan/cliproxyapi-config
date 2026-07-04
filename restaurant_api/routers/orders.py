@@ -16,10 +16,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 
-from ..api.deps import DbSession, Messenger, TenantId
+from ..api.deps import DbSession, Messenger, TenantId, require_permission
 from ..api.errors import DomainError, ErrorBody, domain_error_handler
 from ..schemas.orders import (
     OrderCloseRequest,
@@ -29,6 +29,13 @@ from ..schemas.orders import (
 )
 from ..services import orders_service
 
+# Permission gates hoisted so route decorators reuse the same dep instance
+# — avoids B008 (function call in argument default) at the call site.
+_PERM_CREATE = require_permission("orders:create")
+_PERM_READ = require_permission("orders:read")
+_PERM_CLOSE = require_permission("orders:close")
+_PERM_VOID = require_permission("orders:void")
+
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
@@ -37,6 +44,7 @@ router = APIRouter(prefix="/orders", tags=["orders"])
     response_model=None,  # we hand-build the response to control the status code
     status_code=status.HTTP_201_CREATED,
     summary="Create a new order (or replay idempotently by external_pos_id).",
+    dependencies=[Depends(_PERM_CREATE)],
 )
 async def create_order_endpoint(
     payload: OrderCreateRequest,
@@ -64,6 +72,7 @@ async def create_order_endpoint(
     "/{order_id}",
     response_model=OrderResponse,
     summary="Fetch one order with its lines, discounts, and payments.",
+    dependencies=[Depends(_PERM_READ)],
 )
 async def get_order_endpoint(
     order_id: uuid.UUID,
@@ -79,6 +88,7 @@ async def get_order_endpoint(
     "/{order_id}/close",
     response_model=OrderResponse,
     summary="Close an open order — sets status=closed and stamps closed_at.",
+    dependencies=[Depends(_PERM_CLOSE)],
 )
 async def close_order_endpoint(
     order_id: uuid.UUID,
@@ -100,6 +110,7 @@ async def close_order_endpoint(
     "/{order_id}/void",
     response_model=OrderResponse,
     summary="Void an order — writes reversing stock_movements; never edits the ledger.",
+    dependencies=[Depends(_PERM_VOID)],
 )
 async def void_order_endpoint(
     order_id: uuid.UUID,
