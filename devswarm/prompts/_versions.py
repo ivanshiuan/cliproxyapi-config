@@ -29,10 +29,10 @@ the top of the corresponding prompt file.
 
 from __future__ import annotations
 
-PM_PROMPT_VERSION = "1.0.0"
-ARCHITECT_PROMPT_VERSION = "1.0.0"
-CODER_PROMPT_VERSION = "1.0.0"
-QA_PROMPT_VERSION = "1.0.0"
+PM_PROMPT_VERSION = "1.1.0"
+ARCHITECT_PROMPT_VERSION = "1.1.0"
+CODER_PROMPT_VERSION = "1.1.0"
+QA_PROMPT_VERSION = "1.1.0"
 
 
 PROMPT_VERSIONS: dict[str, str] = {

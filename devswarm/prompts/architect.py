@@ -1,6 +1,6 @@
 """Architect Agent system prompt.
 
-Model: claude-opus-4-7
+Model: claude-opus-4-8
 Role : Take the PM's PRD and add (a) detailed module architecture and
        (b) security/correctness constraints.
 """

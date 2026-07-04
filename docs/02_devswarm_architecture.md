@@ -16,7 +16,7 @@
 | # | 理由 | 說明 |
 |---|---|---|
 | 1 | **角色專業化** | PM 寫 PRD 的 prompt、Architect 注入資安、Coder 寫 code、QA 跑測試——四種 system prompt 互不污染。單一 agent 必須在 prompt 中切換人格，正確率下降 |
-| 2 | **模型成本配對** | Opus 4.7 適合長思考（PM、Architect），Sonnet 4.6 是程式碼最佳性價比，Haiku 4.5 跑機械式測試報告。每環節用對模型，token 成本可降 40-60% |
+| 2 | **模型成本配對** | Opus 4.8 適合長思考（PM、Architect），Sonnet 5 是程式碼最佳性價比，Haiku 4.5 跑機械式測試報告。每環節用對模型，token 成本可降 40-60% |
 | 3 | **可組合性** | LangGraph 把每個節點當 pure function（state in → state out）；要加 DevOps Agent / Security Agent，只是加一個 node + 一條 edge，不必重寫主邏輯 |
 | 4 | **可觀測 / 可中斷** | 每個 agent 都把訊息追加到 `messages` 陣列；中途任何環節都可 inspect、replay、人工接管 |
 
@@ -31,10 +31,10 @@
 
 | Role | Model | Reads from state | Writes to state | Rationale |
 |---|---|---|---|---|
-| **PM Agent** | `claude-opus-4-7` | `task_brief` | `prd`, `messages[+]` | 把指揮官的非結構化需求 → 結構化 PRD（problem / scope / acceptance criteria / non-goals）。需要長思考、抽象建模能力 → Opus |
-| **Architect Agent** | `claude-opus-4-7` | `task_brief`, `prd` | `constraints`, `messages[+]` | 在 PRD 上疊資安、效能、合規約束（個資法、SQL injection 防禦、輸入驗證、log 不洩個資）。需要深度技術判斷 → Opus |
-| **Coder Agent** | `claude-sonnet-4-6` | `task_brief`, `prd`, `constraints`, `qa_report`(若有) | `files_written`, `messages[+]`, `heal_iter+=1`（heal 時） | 寫程式 + 寫測試。Sonnet 4.6 是程式碼 first-try 通過率與成本的甜蜜點 |
-| **QA Agent** | `claude-haiku-4-5-20251001` | `files_written`, pytest output | `tests_passed`, `qa_report`, `messages[+]` | 跑 pytest，解析失敗、產出機械式報告。不需要創意，要的是穩定 + 便宜 → Haiku |
+| **PM Agent** | `claude-opus-4-8` | `task_brief` | `prd`, `messages[+]` | 把指揮官的非結構化需求 → 結構化 PRD（problem / scope / acceptance criteria / non-goals）。需要長思考、抽象建模能力 → Opus |
+| **Architect Agent** | `claude-opus-4-8` | `task_brief`, `prd` | `constraints`, `messages[+]` | 在 PRD 上疊資安、效能、合規約束（個資法、SQL injection 防禦、輸入驗證、log 不洩個資）。需要深度技術判斷 → Opus |
+| **Coder Agent** | `claude-sonnet-5` | `task_brief`, `prd`, `constraints`, `qa_report`(若有) | `files_written`, `messages[+]`, `heal_iter+=1`（heal 時） | 寫程式 + 寫測試。Sonnet 5 是程式碼 first-try 通過率與成本的甜蜜點 |
+| **QA Agent** | `claude-haiku-4-5` | `files_written`, pytest output | `tests_passed`, `qa_report`, `messages[+]` | 跑 pytest，解析失敗、產出機械式報告。不需要創意，要的是穩定 + 便宜 → Haiku |
 
 > 模型 ID 與 [`../.env.example`](../.env.example) 中 `DEVSWARM_MODEL_*` 對應；可由環境變數覆寫。
 

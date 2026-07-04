@@ -54,10 +54,10 @@ def load_config(workspace_root: Path | None = None) -> Config:
         os.getenv("DEVSWARM_WORKSPACE_ROOT") or "./workspace"
     )
     return Config(
-        model_pm=os.getenv("DEVSWARM_MODEL_PM", "claude-opus-4-7"),
-        model_architect=os.getenv("DEVSWARM_MODEL_ARCHITECT", "claude-opus-4-7"),
-        model_coder=os.getenv("DEVSWARM_MODEL_CODER", "claude-sonnet-4-6"),
-        model_qa=os.getenv("DEVSWARM_MODEL_QA", "claude-haiku-4-5-20251001"),
+        model_pm=os.getenv("DEVSWARM_MODEL_PM", "claude-opus-4-8"),
+        model_architect=os.getenv("DEVSWARM_MODEL_ARCHITECT", "claude-opus-4-8"),
+        model_coder=os.getenv("DEVSWARM_MODEL_CODER", "claude-sonnet-5"),
+        model_qa=os.getenv("DEVSWARM_MODEL_QA", "claude-haiku-4-5"),
         max_heal_iters=_env_int("DEVSWARM_MAX_HEAL_ITERS", 5),
         workspace_root=ws.expanduser().resolve(),
         sandbox_timeout_sec=_env_int("DEVSWARM_SANDBOX_TIMEOUT", 60),
@@ -66,22 +66,22 @@ def load_config(workspace_root: Path | None = None) -> Config:
     )
 
 
-# Anthropic per-million-token pricing (USD) as of 2026-Q1.
+# Anthropic per-million-token pricing (USD) as of 2026-Q3.
 # Used only for cost estimation; not authoritative — refresh from console.anthropic.com.
 PRICING_USD_PER_MTOK: dict[str, dict[str, float]] = {
-    "claude-opus-4-7": {
-        "input": 15.0,
-        "output": 75.0,
-        "cache_write": 18.75,
-        "cache_read": 1.50,
+    "claude-opus-4-8": {
+        "input": 5.0,
+        "output": 25.0,
+        "cache_write": 6.25,
+        "cache_read": 0.50,
     },
-    "claude-sonnet-4-6": {
+    "claude-sonnet-5": {
         "input": 3.0,
         "output": 15.0,
         "cache_write": 3.75,
         "cache_read": 0.30,
     },
-    "claude-haiku-4-5-20251001": {
+    "claude-haiku-4-5": {
         "input": 1.0,
         "output": 5.0,
         "cache_write": 1.25,

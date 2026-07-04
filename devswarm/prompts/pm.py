@@ -1,6 +1,6 @@
 """PM Agent system prompt.
 
-Model: claude-opus-4-7
+Model: claude-opus-4-8
 Role : Convert a vague commander request into a precise, testable PRD
        for a SINGLE Python module (v1 scope).
 """

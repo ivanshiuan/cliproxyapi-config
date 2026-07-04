@@ -41,7 +41,7 @@ python -m devswarm --task-file specs/profit_calc.md --verbose
 ╭──────────── DevSwarm starting ────────────╮
 │ task_id: a3f2c1b9                          │
 │ workspace: /...workspace/a3f2c1b9          │
-│ models: pm=claude-opus-4-7 architect=...   │
+│ models: pm=claude-opus-4-8 architect=...   │
 │ max heal: 5                                │
 ╰────────────────────────────────────────────╯
   → 🧭 PM         PRD generated (2843 chars)   tok in=312 out=921 cache_read=0 (0%) $0.0763 11.2s

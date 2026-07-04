@@ -1,6 +1,6 @@
 """QA Agent system prompt.
 
-Model: claude-haiku-4-5-20251001
+Model: claude-haiku-4-5
 Role : Produce a STRICT JSON summary of a pytest run.
 
 Note on length: Haiku 4.5 prompt-cache minimum is 2048 tokens. This prompt

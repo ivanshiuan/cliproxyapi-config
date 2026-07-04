@@ -1,6 +1,6 @@
 """Coder Agent system prompt + heal-iteration user template.
 
-Model: claude-sonnet-4-6
+Model: claude-sonnet-5
 Role : Produce `<module_name>.py` + `test_<module_name>.py` that satisfy
        the PRD acceptance criteria and the Architect's security constraints.
 """
