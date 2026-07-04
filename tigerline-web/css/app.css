@@ -54,3 +54,20 @@ button:disabled { opacity: 0.5; cursor: wait; }
 #review-result { display: none; }
 footer { text-align: center; padding: 32px 16px; font-size: 12px; color: var(--muted); }
 footer a { color: var(--muted); text-decoration: underline; }
+
+/* Onboarding intro card */
+.card.intro { background: linear-gradient(180deg, rgba(245,165,36,0.08), var(--panel)); border-color: rgba(245,165,36,0.35); }
+.steps { margin: 0; padding-left: 20px; }
+.steps li { margin-bottom: 8px; line-height: 1.55; }
+.steps li b { color: var(--accent-2); font-weight: 700; }
+.hint { margin: 12px 0 0; padding: 10px 12px; background: var(--panel-2); border-radius: 8px; font-size: 13px; color: var(--text); }
+
+/* Highlight the main-bet card so eyes land on it first */
+.card.highlight { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(245,165,36,0.25); }
+.card.highlight h2 { color: var(--accent-2); }
+.leg.big { padding: 16px; border-left: 4px solid var(--accent); }
+.leg.big .sel { font-size: 22px; }
+.leg.big .meta { font-size: 14px; margin-top: 8px; }
+
+.skip-note { padding: 14px; background: rgba(224,82,82,0.08); border: 1px dashed var(--red); border-radius: 8px; color: var(--red); font-weight: 600; text-align: center; }
+.none { color: var(--muted); font-size: 13px; }

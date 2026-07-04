@@ -1,6 +1,5 @@
 /* =====================================================================
- * app.js — wires the form to the JS decision engine.
- * Zero backend — everything runs in the browser.
+ * app.js — 表單 ↔ 決策引擎 ↔ 中文化 render。零後端。
  * ===================================================================== */
 "use strict";
 
@@ -10,19 +9,30 @@ import { review } from "./review.js";
 import { DISCLAIMER } from "./compliance.js";
 import { EXAMPLES, EXAMPLE_NAMES } from "./examples.js";
 import { fmtDec } from "./decimal.js";
+import { tScenario, tHarness, tMainResult, tMarket } from "./i18n.js";
 
 const $ = (id) => document.getElementById(id);
 let currentPlan = null;
 let currentMatch = null;
+
+// 中文顯示名（給範例下拉用）
+const EXAMPLE_LABELS = {
+  belgium_nz_two_goal: "比利時 vs 紐西蘭（兩球落點盤）",
+  egypt_iran_pressure_under: "埃及 vs 伊朗（末輪雙方需贏、小分）",
+  rotation_trap_skip: "巴西 vs 巴拿馬（強隊輪休陷阱 → 跳過）",
+};
 
 function loadExamplesList() {
   const sel = $("example-select");
   for (const name of EXAMPLE_NAMES) {
     const opt = document.createElement("option");
     opt.value = name;
-    opt.textContent = name;
+    opt.textContent = EXAMPLE_LABELS[name] || name;
     sel.appendChild(opt);
   }
+  // Default the dropdown to the belgium example so "載入" without touching
+  // the dropdown does the intuitive thing.
+  sel.value = "belgium_nz_two_goal";
 }
 
 function loadExample() {
@@ -82,7 +92,7 @@ function readForm() {
 
 function showError(msg) {
   const el = $("error-panel");
-  el.textContent = msg;
+  el.textContent = "⚠️ " + msg;
   el.style.display = "block";
   $("result").style.display = "none";
 }
@@ -100,23 +110,38 @@ function analyze() {
     currentPlan = plan;
     currentMatch = match;
     render(plan);
+    // 分析完自動捲到結果區
+    document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
-    showError(e.message || String(e));
+    showError(translateError(e.message || String(e)));
   }
+}
+
+function translateError(en) {
+  if (/bare float rejected/.test(en)) return "盤口 / 賠率 / 本金請用文字（例如 \"-1.75\"），不要用純數字。";
+  if (/StrictDecimal/.test(en)) return "有欄位不是有效數字，請檢查盤口與賠率。";
+  if (/bankroll must be > 0/.test(en)) return "本金要大於 0。";
+  if (/prices must be > 1/.test(en)) return "所有賠率必須大於 1.0。";
+  if (/totals\.line must be > 0/.test(en)) return "大小盤口必須大於 0。";
+  if (/kickoff_utc/.test(en)) return "開賽時間格式錯誤，應是 ISO-8601（例：2026-06-22T22:00:00+00:00）。";
+  if (/match_id: must be lowercase/.test(en)) return "比賽識別碼只能用小寫英文、數字、連字號。";
+  if (/required/.test(en)) return "有欄位沒填：" + en;
+  return en;
 }
 
 function render(plan) {
   $("result").style.display = "block";
+
   const scen = $("scenario");
-  scen.textContent = plan.scenario;
+  scen.textContent = tScenario(plan.scenario);
   scen.classList.toggle(
     "skip",
     plan.scenario === "rotation_trap" || plan.harness.adjustment === "skip",
   );
 
-  $("confidence").textContent = `confidence ${plan.classification.confidence.toFixed(2)}`;
+  $("confidence").textContent = `信心 ${plan.classification.confidence.toFixed(2)}`;
   const harness = $("harness");
-  harness.textContent = `harness ${plan.harness.adjustment}`;
+  harness.textContent = "門檻：" + tHarness(plan.harness.adjustment);
   harness.className = "badge " + (
     plan.harness.adjustment === "upgrade" ? "up"
     : plan.harness.adjustment === "skip" ? "down"
@@ -125,12 +150,12 @@ function render(plan) {
 
   renderList($("reasons"), plan.classification.reasons);
 
-  const corr = plan.corridor.scores.map(([h, a]) => `${h}-${a}`).join(" · ");
+  const corrStrs = plan.corridor.scores.map(([h, a]) => `${h}-${a}`);
   const prim = plan.corridor.primary
-    ? ` (primary ${plan.corridor.primary[0]}-${plan.corridor.primary[1]})` : "";
-  $("corridor").textContent = corr + prim || "—";
+    ? `（主推 ${plan.corridor.primary[0]}-${plan.corridor.primary[1]}）` : "";
+  $("corridor").textContent = corrStrs.length ? corrStrs.join(" · ") + prim : "—";
 
-  renderLeg($("main-bet"), plan.main_bet);
+  renderLeg($("main-bet"), plan.main_bet, true);
   renderLegs($("secondary"), plan.secondary);
   renderLegs($("cs-legs"), plan.correct_score);
   renderList($("avoid"), plan.avoid);
@@ -141,24 +166,27 @@ function render(plan) {
   $("review-result").style.display = "none";
 }
 
-function renderLeg(el, leg) {
-  if (!leg) { el.textContent = "— SKIP —"; return; }
+function renderLeg(el, leg, big = false) {
+  if (!leg) {
+    el.innerHTML = `<div class="skip-note">— 這場跳過、不下 —</div>`;
+    return;
+  }
   el.innerHTML = "";
   const box = document.createElement("div");
-  box.className = "leg";
+  box.className = "leg" + (big ? " big" : "");
   const sel = document.createElement("div");
   sel.className = "sel";
   sel.textContent = leg.selection;
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = `${leg.market} · ${leg.level} · ${leg.stake_amount} (${fmtDec(leg.stake_pct, 3)} of bankroll)`;
+  meta.textContent = `${tMarket(leg.market)} · 等級 ${leg.level} · 下 ${leg.stake_amount}（本金 ${fmtDec(leg.stake_pct * 100, 1)}%）`;
   box.appendChild(sel); box.appendChild(meta);
   el.appendChild(box);
 }
 
 function renderLegs(el, legs) {
   el.innerHTML = "";
-  if (!legs || !legs.length) { el.textContent = "—"; return; }
+  if (!legs || !legs.length) { el.innerHTML = `<div class="none">—</div>`; return; }
   for (const leg of legs) {
     const box = document.createElement("div");
     box.className = "leg";
@@ -167,7 +195,7 @@ function renderLegs(el, legs) {
     sel.textContent = leg.selection;
     const meta = document.createElement("div");
     meta.className = "meta";
-    meta.textContent = `${leg.market} · ${leg.level} · ${leg.stake_amount}`;
+    meta.textContent = `${tMarket(leg.market)} · 等級 ${leg.level} · 下 ${leg.stake_amount}`;
     box.appendChild(sel); box.appendChild(meta);
     el.appendChild(box);
   }
@@ -199,7 +227,7 @@ function submitReview() {
     renderReview(r);
     clearError();
   } catch (e) {
-    showError(e.message || String(e));
+    showError(translateError(e.message || String(e)));
   }
 }
 
@@ -208,11 +236,11 @@ function renderReview(r) {
   const kv = $("review-kv");
   kv.innerHTML = "";
   const rows = [
-    ["Actual", `${r.actual_score[0]}-${r.actual_score[1]}`],
-    ["Scenario", r.scenario_correct ? "✓ correct" : "✗ drifted"],
-    ["Corridor", r.corridor_hit ? "✓ hit" : "✗ missed"],
-    ["Main", r.main_result],
-    ["Score", `${r.score}/100`],
+    ["實際比分", `${r.actual_score[0]}-${r.actual_score[1]}`],
+    ["場型判斷", r.scenario_correct ? "✅ 正確" : "❌ 判錯"],
+    ["比分走廊", r.corridor_hit ? "✅ 命中" : "❌ 沒中"],
+    ["主單結果", tMainResult(r.main_result)],
+    ["綜合分數", `${r.score} / 100`],
   ];
   for (const [k, v] of rows) {
     const dt = document.createElement("dt"); dt.textContent = k;
@@ -224,6 +252,7 @@ function renderReview(r) {
   for (const s of r.suggestions || []) {
     const li = document.createElement("li"); li.textContent = s; sug.appendChild(li);
   }
+  document.getElementById("review-result").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 $("analyze-btn").addEventListener("click", analyze);
@@ -231,7 +260,10 @@ $("load-example").addEventListener("click", loadExample);
 $("toggle-review").addEventListener("click", () => {
   const p = $("review-panel");
   p.style.display = p.style.display === "block" ? "none" : "block";
+  if (p.style.display === "block") p.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 $("review-btn").addEventListener("click", submitReview);
 
+// 一打開就把 Belgium 範例載入表單 — 讓使用者立刻看到欄位長怎樣、按分析就有結果
 loadExamplesList();
+fillForm(EXAMPLES.belgium_nz_two_goal);
