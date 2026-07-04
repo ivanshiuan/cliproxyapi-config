@@ -1,0 +1,44 @@
+# Fly.io app config for TIGER LINE PRIME.
+#
+# Usage:
+#   cd tigerline && fly launch --no-deploy      # first time only, or:
+#   cd tigerline && fly apps create tigerline   # explicit
+#   fly deploy --config tigerline/fly.toml \
+#              --dockerfile tigerline/Dockerfile
+#
+# We deliberately do NOT set an "app = ..." name here — Fly will prompt on
+# first launch and remember the name in ~/.fly/. That lets multiple users of
+# this repo each pick a unique app name without editing tracked files.
+
+primary_region = "nrt"   # Tokyo — closest to Taipei; change to hkg / sin if preferred
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"       # 24-h idle → machine stops → no cost
+  auto_start_machines = true         # any request wakes it back up
+  min_machines_running = 0           # cold-start OK for a personal tool
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 100
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/health"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
