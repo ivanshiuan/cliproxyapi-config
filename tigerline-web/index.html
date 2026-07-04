@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TIGER LINE PRIME</title>
+<link rel="stylesheet" href="./css/app.css" />
+</head>
+<body>
+<header>
+  <h1>🐅 TIGER LINE PRIME</h1>
+  <span class="tag">決策支援 · 非獲利承諾</span>
+</header>
+
+<main>
+  <div class="card">
+    <h2>載入範例</h2>
+    <div class="row">
+      <select id="example-select">
+        <option value="">— 選一個範例 —</option>
+      </select>
+      <button class="ghost" id="load-example">載入</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>賽事</h2>
+    <div class="row">
+      <div><label>Match ID</label><input id="match_id" placeholder="2026-wc-belgium-newzealand" /></div>
+      <div><label>開賽 UTC</label><input id="kickoff_utc" placeholder="2026-06-22T22:00:00+00:00" /></div>
+    </div>
+    <div class="row">
+      <div><label>主隊</label><input id="home" placeholder="Belgium" /></div>
+      <div><label>客隊</label><input id="away" placeholder="New Zealand" /></div>
+    </div>
+    <div class="row full">
+      <div><label>積分概況</label><input id="standings_summary" placeholder="Belgium 3 pts, NZ 0 pts..." /></div>
+    </div>
+    <div class="row">
+      <div class="checkbox"><input type="checkbox" id="final_round" /><label for="final_round">末輪</label></div>
+      <div class="checkbox"><input type="checkbox" id="same_time_kickoff" /><label for="same_time_kickoff">同時開賽</label></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>戰意</h2>
+    <div class="row">
+      <div><label>主隊需求</label><select id="need_home"><option>must_win</option><option>draw_ok</option><option>rotation</option><option selected>neutral</option><option>unknown</option></select></div>
+      <div><label>客隊需求</label><select id="need_away"><option>must_win</option><option>draw_ok</option><option selected>rotation</option><option>neutral</option><option>unknown</option></select></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>亞洲讓球盤</h2>
+    <div class="row three">
+      <div><label>Line</label><input id="ah_line" placeholder="-1.75" /></div>
+      <div><label>Favorite</label><select id="ah_fav"><option value="home" selected>home</option><option value="away">away</option></select></div>
+      <div></div>
+    </div>
+    <div class="row">
+      <div><label>主隊價</label><input id="ah_home_price" placeholder="1.92" /></div>
+      <div><label>客隊價</label><input id="ah_away_price" placeholder="1.90" /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>大小盤</h2>
+    <div class="row three">
+      <div><label>Line</label><input id="tot_line" placeholder="3.0" /></div>
+      <div><label>Over</label><input id="tot_over" placeholder="1.95" /></div>
+      <div><label>Under</label><input id="tot_under" placeholder="1.87" /></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>本金</h2>
+    <div class="row">
+      <div><label>Bankroll (TWD)</label><input id="bankroll" placeholder="5000" /></div>
+      <div></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button id="analyze-btn">Analyze</button>
+  </div>
+
+  <div id="error-panel" style="display:none;margin-top:14px;" class="error"></div>
+
+  <div id="result">
+    <div class="card">
+      <h2>Scenario</h2>
+      <div id="scenario" class="scenario">—</div>
+      <div style="margin-top:8px;">
+        <span class="badge" id="confidence">confidence —</span>
+        <span class="badge" id="harness">harness —</span>
+      </div>
+      <ul class="list" id="reasons" style="margin-top:10px;"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Score Corridor</h2>
+      <div id="corridor">—</div>
+    </div>
+
+    <div class="card">
+      <h2>Main Bet</h2>
+      <div id="main-bet">—</div>
+    </div>
+
+    <div class="card">
+      <h2>Secondary</h2>
+      <div id="secondary">—</div>
+    </div>
+
+    <div class="card">
+      <h2>Correct Score Sprinkles</h2>
+      <div id="cs-legs">—</div>
+    </div>
+
+    <div class="card">
+      <h2>Avoid</h2>
+      <ul class="list avoid" id="avoid"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Reserve for Live</h2>
+      <ul class="list reserve" id="reserve"></ul>
+    </div>
+
+    <div class="toggle-review">
+      <button class="ghost" id="toggle-review">Post-match review</button>
+    </div>
+
+    <div id="review-panel">
+      <div class="card">
+        <h2>賽後比分</h2>
+        <div class="row">
+          <div><label>主隊進球</label><input id="hg" type="number" min="0" max="20" placeholder="5" /></div>
+          <div><label>客隊進球</label><input id="ag" type="number" min="0" max="20" placeholder="1" /></div>
+        </div>
+        <div class="actions">
+          <button id="review-btn">Review</button>
+        </div>
+      </div>
+      <div id="review-result">
+        <div class="card">
+          <h2>Review</h2>
+          <dl class="kv" id="review-kv"></dl>
+          <ul class="list" id="review-suggestions" style="margin-top:10px;"></ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="disclaimer" id="disclaimer"></div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/ivanshiuan/cliproxyapi-config/tree/main/tigerline" target="_blank" rel="noopener">source</a>
+    · fully client-side · 100% static
+  </footer>
+</main>
+
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>
