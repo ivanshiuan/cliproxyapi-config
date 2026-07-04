@@ -31,6 +31,12 @@ from ..config import get_settings
 from ..middleware import configure_logging
 from .campaign_expiry import run_campaign_voucher_expiry
 from .cogs_variance import run_cogs_variance_check
+from .daily_brief import (
+    run_engineering_gaps,
+    run_investor_qa_prep,
+    run_today_top5,
+    run_weekly_review,
+)
 from .expiry_warning import run_expiry_warning
 from .membership_lifecycle import run_membership_lifecycle
 from .points_expire import run_points_expire
@@ -86,6 +92,40 @@ def _register(scheduler: AsyncIOScheduler) -> None:
         coalesce=True,
         misfire_grace_time=600,
     )
+    # ── BUFF OS Week 3 · daily / weekly briefs (proposal, not action) ──
+    # Register the 4 briefs but only when both LLM + retrieval clients can
+    # be resolved by the runtime. The Protocol-only slice ships without
+    # defaults, so we skip registration if we'd blow up at first fire.
+    for job_id, cron_kwargs, fn in (
+        (
+            "today_top5",
+            {"hour": 9, "minute": 0},
+            run_today_top5,
+        ),
+        (
+            "engineering_gaps",
+            {"hour": 18, "minute": 0},
+            run_engineering_gaps,
+        ),
+        (
+            "investor_qa_prep",
+            {"day_of_week": "mon", "hour": 9, "minute": 0},
+            run_investor_qa_prep,
+        ),
+        (
+            "weekly_review",
+            {"day_of_week": "fri", "hour": 17, "minute": 0},
+            run_weekly_review,
+        ),
+    ):
+        scheduler.add_job(
+            _wrap(job_id, fn),
+            trigger=CronTrigger(timezone=tz, **cron_kwargs),
+            id=job_id,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=600,
+        )
 
 
 def _wrap(name: str, fn: JobFn) -> JobFn:
@@ -128,8 +168,12 @@ async def run_scheduler() -> None:
 __all__ = [
     "run_campaign_voucher_expiry",
     "run_cogs_variance_check",
+    "run_engineering_gaps",
     "run_expiry_warning",
+    "run_investor_qa_prep",
     "run_membership_lifecycle",
     "run_points_expire",
     "run_scheduler",
+    "run_today_top5",
+    "run_weekly_review",
 ]

@@ -16,6 +16,7 @@ from .base import (
     TimestampedMixin,
     uuid7,
 )
+from .brief import BriefRun
 from .campaigns import (
     CampaignPrize,
     CampaignSpin,
@@ -154,4 +155,6 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "KnowledgeScope",
     "SOURCE_TYPES",
     "ACTOR_KINDS",
+    # daily brief runs (BUFF OS Week 3)
+    "BriefRun",
 ]
