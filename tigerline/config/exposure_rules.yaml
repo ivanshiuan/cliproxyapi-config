@@ -1,0 +1,8 @@
+# TIGER LINE PRIME V3.0 Sprint 3 — Exposure caps (fractions of bankroll).
+# Applied in order: per-match → per-scenario → correlation → daily.
+
+daily_total: "0.45"
+per_scenario: "0.30"
+per_correlation_group: "0.25"
+correct_score_total: "0.12"
+parlay_total: "0.08"

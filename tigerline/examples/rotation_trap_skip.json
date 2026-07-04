@@ -1,0 +1,28 @@
+{
+  "match_id": "2026-wc-germany-ecuador",
+  "kickoff_utc": "2026-06-25T19:00:00+00:00",
+  "home": "Germany",
+  "away": "Ecuador",
+  "group_context": {
+    "standings_summary": "Germany already qualified top of group; Ecuador needs win to advance.",
+    "final_round": true,
+    "same_time_kickoff": true
+  },
+  "team_need": {
+    "home": "rotation",
+    "away": "must_win"
+  },
+  "market": {
+    "line": "-1.25",
+    "favorite": "home",
+    "home_price": "1.88",
+    "away_price": "1.94"
+  },
+  "totals": {
+    "line": "2.5",
+    "over_price": "1.92",
+    "under_price": "1.90"
+  },
+  "bankroll": "5000",
+  "risk_flags": ["favorite_already_qualified"]
+}

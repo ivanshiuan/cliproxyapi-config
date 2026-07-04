@@ -1,0 +1,17 @@
+{
+  "snapshot_id": "2026-wc-belgium-nz_pinnacle_ah_t1h",
+  "match_id": "2026-wc-belgium-newzealand",
+  "bookmaker": "pinnacle",
+  "market_type": "AH_full",
+  "selection": "Belgium",
+  "line": "-1.75",
+  "price": "1.92",
+  "odds_format": "decimal",
+  "metadata": {
+    "source": "manual",
+    "collected_at": "2026-06-22T21:00:00+00:00",
+    "source_confidence": "high",
+    "is_verified": true,
+    "notes": "Pre-match line one hour before kickoff."
+  }
+}

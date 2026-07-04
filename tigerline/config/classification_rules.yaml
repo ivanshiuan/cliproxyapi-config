@@ -1,0 +1,50 @@
+# TIGER LINE PRIME — Scenario classification rules.
+#
+# Order matters: the first rule whose ``when`` clause is fully satisfied wins.
+# Put short-circuit rules (rotation_trap) at the top.
+#
+# ``handicap_abs_*`` is the absolute value of the home-line as the favorite sees it.
+# So Belgium -1.75 → handicap_abs=1.75; Egypt -0.25 → handicap_abs=0.25.
+
+- scenario: rotation_trap
+  when:
+    favorite_need: rotation
+    handicap_abs_gte: "1.0"
+  reason: "Market priced favorite as if at full strength but favorite is rotating."
+
+- scenario: pressure_under
+  when:
+    handicap_abs_lte: "0.5"
+    totals_lte: "2.25"
+    either_need_in: [must_win]
+    final_round: true
+  reason: "Shallow handicap + low totals + must-win pressure in final round."
+
+- scenario: must_win_pressure
+  when:
+    handicap_abs_gte: "0.75"
+    handicap_abs_lte: "1.5"
+    totals_gte: "2.5"
+    favorite_need: must_win
+  reason: "Favorite must win, market gives them headroom but not a blowout line."
+
+- scenario: two_goal_landing
+  when:
+    handicap_abs_gte: "1.5"
+    totals_gte: "2.75"
+    favorite_need_in: [must_win, neutral]
+    underdog_need_in: [rotation, draw_ok, neutral, unknown]
+  reason: "Two-goal handicap + open totals + favorite not rotating."
+
+- scenario: goal_market
+  when:
+    handicap_abs_lte: "1.0"
+    totals_gte: "2.75"
+  reason: "Shallow handicap but open totals — bet the goal market, not the side."
+
+- scenario: narrow_win
+  when:
+    handicap_abs_gte: "0.25"
+    handicap_abs_lte: "0.75"
+    totals_lte: "2.5"
+  reason: "Shallow handicap + medium totals — favorite edges by one."
