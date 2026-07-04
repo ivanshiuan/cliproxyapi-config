@@ -134,6 +134,32 @@ async def get_campaign(
     )
 
 
+async def get_campaign_by_slug(
+    session: AsyncSession, slug: str, *, tenant_id: uuid.UUID
+) -> CampaignResponse:
+    """Resolve a campaign by its human-chosen slug instead of its UUIDv7 id.
+
+    The id is random per environment (fresh seed on each DB), so QR codes and
+    LINE rich-menu links point at the stable ``slug`` and resolve here rather
+    than baking in an id that only exists in one deployment's database.
+    """
+    row = (
+        await session.execute(
+            select(MarketingCampaign).where(
+                MarketingCampaign.slug == slug,
+                MarketingCampaign.tenant_id == tenant_id,
+                MarketingCampaign.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError(
+            message=f"campaign slug {slug!r} not found",
+            details={"slug": slug},
+        )
+    return CampaignResponse.model_validate(row)
+
+
 async def list_campaigns(
     session: AsyncSession,
     *,

@@ -757,3 +757,73 @@ async def test_store_scoped_campaign_roundtrips(
     cid = await _make_campaign(db_session, seed_tenant.id, store_id=seed_store.id)
     got = await campaigns_service.get_campaign(db_session, cid, tenant_id=seed_tenant.id)
     assert got.store_id == seed_store.id
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# QR / poster by slug — the id is a random UUIDv7 minted fresh per database
+# (local/staging/Render prod all differ), so print assets resolve by the
+# stable slug instead of a baked-in id.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def test_qr_svg_by_slug_matches_by_id(client: httpx.AsyncClient) -> None:
+    slug = _slug()
+    create = await client.post("/campaigns", json={"name": "開幕輪盤", "slug": slug, "status": "active"})
+    cid = create.json()["id"]
+
+    by_id = await client.get(f"/campaigns/{cid}/qr.svg")
+    by_slug = await client.get(f"/campaigns/by-slug/{slug}/qr.svg")
+
+    assert by_slug.status_code == 200
+    assert by_slug.headers["content-type"].startswith("image/svg+xml")
+    assert by_slug.text == by_id.text  # same campaign id encoded either way
+
+
+async def test_qr_by_slug_unknown_slug_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/campaigns/by-slug/does-not-exist/qr.svg")
+    assert resp.status_code == 404
+
+
+async def test_poster_by_slug_renders_brand(client: httpx.AsyncClient) -> None:
+    slug = _slug()
+    await client.post("/campaigns", json={"name": "開幕輪盤", "slug": slug, "status": "active"})
+    resp = await client.get(
+        f"/campaigns/by-slug/{slug}/poster",
+        params={"brand": "鼎鼎餐酒館", "tagline": "開幕同樂", "base_url": "https://shop.example"},
+    )
+    assert resp.status_code == 200
+    body = resp.text
+    assert "鼎鼎餐酒館" in body
+    assert "開幕同樂" in body
+    assert "<svg" in body
+
+
+async def test_poster_by_slug_unknown_slug_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/campaigns/by-slug/does-not-exist/poster")
+    assert resp.status_code == 404
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# /demo/campaign/{slug} — the redirect a printed QR / LINE rich-menu button
+# actually points at, resolving to whatever campaign_id this deployment has.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def test_demo_slug_redirect_resolves_to_campaign_id(client: httpx.AsyncClient) -> None:
+    slug = _slug()
+    create = await client.post("/campaigns", json={"name": "開幕輪盤", "slug": slug, "status": "active"})
+    cid = create.json()["id"]
+
+    resp = await client.get(f"/demo/campaign/{slug}", params={"liff": "abc", "brand": "鼎鼎"}, follow_redirects=False)
+
+    assert resp.status_code == 307
+    location = resp.headers["location"]
+    assert f"campaign={cid}" in location
+    assert "liff=abc" in location
+    assert "brand=" in location
+    assert location.startswith("/demo/?")
+
+
+async def test_demo_slug_redirect_unknown_slug_404(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/demo/campaign/does-not-exist", follow_redirects=False)
+    assert resp.status_code == 404

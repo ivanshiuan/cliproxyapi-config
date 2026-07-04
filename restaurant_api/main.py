@@ -13,13 +13,16 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlencode
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .api import auth as auth_router
 from .api import health as health_router
+from .api.deps import DbSession, TenantId
 from .api.errors import DomainError, domain_error_handler
 from .config import get_settings
 from .database import dispose_engine
@@ -34,6 +37,7 @@ from .routers import orders as orders_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
 from .routers import ugc as ugc_router
+from .services import campaigns_service
 from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
 
 logger = logging.getLogger("restaurant_api")
@@ -106,7 +110,29 @@ app.include_router(health_router.router)
 if not any(getattr(r, "path", "").startswith("/admin") for r in app.routes):
     app.include_router(auth_router.router)
 
-# Static wheel-spin demo page (門口 QR Code 指向 /demo/?campaign=<id>). Same-origin
+@app.get("/demo/campaign/{slug}", tags=["meta"], include_in_schema=False)
+async def redirect_campaign_by_slug(
+    slug: str,
+    request: Request,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> RedirectResponse:
+    """Stable QR-code / rich-menu target: ``/demo/campaign/grand-open``.
+
+    A campaign's id is a random UUIDv7 minted fresh on each database (local,
+    staging, Render prod all differ) — so print/LINE assets point at this
+    slug instead, and it resolves to whatever id this deployment's DB has.
+    Extra query params (``liff``, ``brand``, …) pass through untouched.
+    """
+    campaign = await campaigns_service.get_campaign_by_slug(
+        session, slug, tenant_id=tenant_id
+    )
+    params = dict(request.query_params)
+    params["campaign"] = str(campaign.id)
+    return RedirectResponse(url=f"/demo/?{urlencode(params)}", status_code=307)
+
+
+# Static wheel-spin demo page (門口 QR Code 指向 /demo/campaign/<slug>). Same-origin
 # with the API so no CORS is needed. Mounted last so it can't shadow API routes.
 _STATIC_DIR = Path(__file__).parent / "static"
 if _STATIC_DIR.is_dir():

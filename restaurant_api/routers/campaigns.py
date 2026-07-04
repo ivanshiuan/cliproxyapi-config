@@ -19,6 +19,12 @@ Wallet / counter:
 - GET    /campaigns/{id}/vouchers                    a member's wallet
 - GET    /campaigns/{id}/vouchers/by-code/{code}     look up by redemption code
 - POST   /campaigns/{id}/vouchers/{voucher_id}/redeem  redeem one (1 per visit/day)
+
+QR / poster (public, no admin auth — printable door signage):
+- GET    /campaigns/{id}/qr.svg                      QR pointing at the demo page
+- GET    /campaigns/{id}/poster                      printable A4 poster with embedded QR
+- GET    /campaigns/by-slug/{slug}/qr.svg            same, resolved by stable slug
+- GET    /campaigns/by-slug/{slug}/poster            same, resolved by stable slug
 """
 
 from __future__ import annotations
@@ -377,6 +383,12 @@ def _demo_url(request: Request, campaign_id: uuid.UUID, base_url: str | None, br
     return f"{root}/demo/?{urlencode(params)}"
 
 
+def _render_qr(campaign_id: uuid.UUID, request: Request, base_url: str | None, brand_params: dict[str, str]) -> Response:
+    url = _demo_url(request, campaign_id, base_url, brand_params)
+    svg = make_qr_svg(url)
+    return Response(content=svg, media_type="image/svg+xml")
+
+
 @router.get(
     "/{campaign_id}/qr.svg",
     response_class=Response,
@@ -399,18 +411,16 @@ async def campaign_qr(
     # 404 + tenant scope via the normal loader.
     await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
     brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
-    url = _demo_url(request, campaign_id, base_url, brand_params)
-    svg = make_qr_svg(url)
-    return Response(content=svg, media_type="image/svg+xml")
+    return _render_qr(campaign_id, request, base_url, brand_params)
 
 
 @router.get(
-    "/{campaign_id}/poster",
-    response_class=HTMLResponse,
-    summary="門口海報 (campaign 名稱 + 標語 + 內嵌 QR, 可列印)",
+    "/by-slug/{slug}/qr.svg",
+    response_class=Response,
+    summary="輪盤抽獎 QR Code by slug (環境間 id 不同時用固定 slug)",
 )
-async def campaign_poster(
-    campaign_id: uuid.UUID,
+async def campaign_qr_by_slug(
+    slug: str,
     request: Request,
     session: DbSession,
     tenant_id: TenantId,
@@ -421,14 +431,30 @@ async def campaign_poster(
     primary: str | None = None,
     accent: str | None = None,
     bg: str | None = None,
-) -> HTMLResponse:
-    """Render a printable A4 door poster with the campaign's embedded QR."""
-    campaign = await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
+) -> Response:
+    """Same as ``/{campaign_id}/qr.svg`` but resolved by the stable slug."""
+    campaign = await campaigns_service.get_campaign_by_slug(session, slug, tenant_id=tenant_id)
     brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
+    return _render_qr(campaign.id, request, base_url, brand_params)
+
+
+def _render_poster(
+    campaign_id: uuid.UUID,
+    campaign_name: str,
+    request: Request,
+    base_url: str | None,
+    brand_params: dict[str, str],
+    *,
+    brand: str | None,
+    tagline: str | None,
+    logo: str | None,
+    primary: str | None,
+    accent: str | None,
+) -> HTMLResponse:
     url = _demo_url(request, campaign_id, base_url, brand_params)
     svg = make_qr_svg(url, box_size=8).decode("utf-8")
 
-    title = html.escape(brand or campaign.name)
+    title = html.escape(brand or campaign_name)
     sub = html.escape(tagline or "掃碼抽獎 · 加入會員 · 來店兌換")
     primary_c = primary or "#ff5d8f"
     accent_c = accent or "#ffd34e"
@@ -468,6 +494,60 @@ async def campaign_poster(
   <div class="foot">最大獎 免單四人套餐 · 每日一抽 · 抽中即加入會員</div>
 </div></body></html>"""
     return HTMLResponse(content=page)
+
+
+@router.get(
+    "/{campaign_id}/poster",
+    response_class=HTMLResponse,
+    summary="門口海報 (campaign 名稱 + 標語 + 內嵌 QR, 可列印)",
+)
+async def campaign_poster(
+    campaign_id: uuid.UUID,
+    request: Request,
+    session: DbSession,
+    tenant_id: TenantId,
+    base_url: str | None = None,
+    brand: str | None = None,
+    tagline: str | None = None,
+    logo: str | None = None,
+    primary: str | None = None,
+    accent: str | None = None,
+    bg: str | None = None,
+) -> HTMLResponse:
+    """Render a printable A4 door poster with the campaign's embedded QR."""
+    campaign = await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
+    brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
+    return _render_poster(
+        campaign_id, campaign.name, request, base_url, brand_params,
+        brand=brand, tagline=tagline, logo=logo, primary=primary, accent=accent,
+    )
+
+
+@router.get(
+    "/by-slug/{slug}/poster",
+    response_class=HTMLResponse,
+    summary="門口海報 by slug (環境間 id 不同時用固定 slug)",
+)
+async def campaign_poster_by_slug(
+    slug: str,
+    request: Request,
+    session: DbSession,
+    tenant_id: TenantId,
+    base_url: str | None = None,
+    brand: str | None = None,
+    tagline: str | None = None,
+    logo: str | None = None,
+    primary: str | None = None,
+    accent: str | None = None,
+    bg: str | None = None,
+) -> HTMLResponse:
+    """Same as ``/{campaign_id}/poster`` but resolved by the stable slug."""
+    campaign = await campaigns_service.get_campaign_by_slug(session, slug, tenant_id=tenant_id)
+    brand_params = {k: v for k, v in locals().items() if k in _BRAND_PARAMS and v is not None}
+    return _render_poster(
+        campaign.id, campaign.name, request, base_url, brand_params,
+        brand=brand, tagline=tagline, logo=logo, primary=primary, accent=accent,
+    )
 
 
 __all__ = ["router"]
