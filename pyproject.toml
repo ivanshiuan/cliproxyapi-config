@@ -124,6 +124,9 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/seed_wheel_campaign.py" = ["RUF001"]
 "scripts/seed_growth_demo.py" = ["RUF001"]
 "scripts/line_check.py" = ["RUF001"]
+# knowledge-* tests use 中文標點 in fixture bodies to mimic real投資人 dumps.
+"tests/services/test_knowledge_ingestion.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/models/test_knowledge_models.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"
