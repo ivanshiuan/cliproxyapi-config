@@ -1,0 +1,68 @@
+diff --git a/src/opensquilla/gateway/websocket.py b/src/opensquilla/gateway/websocket.py
+index 74d6d18..3f36d3b 100644
+--- a/src/opensquilla/gateway/websocket.py
++++ b/src/opensquilla/gateway/websocket.py
+@@ -523,6 +523,44 @@ def get_registry() -> ConnectionRegistry:
+     return _registry
+ 
+ 
++def _ws_origin_allowed(ws: WebSocket, config: GatewayConfig) -> bool:
++    """Reject cross-site WebSocket handshakes (CSWSH / ClawJacked class).
++
++    Browsers always send an ``Origin`` header on WS handshakes; native
++    clients (CLI, desktop) send none. Policy:
++
++    * No Origin header -> allow (non-browser client).
++    * Origin present  -> allow only if it is the gateway's own loopback
++      origin or an operator-configured ``control_ui.allowed_origins`` entry.
++
++    Without this check, a page on *any* website can open
++    ``ws://127.0.0.1:<port>/ws`` and — in the default ``auth.mode=none``
++    deployment — be handed owner+admin scopes purely from loopback peer
++    provenance, then disable the sandbox and reach host RCE. This is the
++    load-bearing fix. (Verifying the connect.challenge nonce does NOT defend
++    CSWSH: the attacker's JS can read the challenge frame and echo it back,
++    so nonce-echo is deliberately not used here.) See
++    docs/opensquilla/01_security_audit.md (F0).
++
++    Note: when the gateway is bound to a non-loopback address and the Control
++    UI is served from that host, add its origin to
++    ``control_ui.allowed_origins`` explicitly.
++    """
++    origin = ws.headers.get("origin")
++    if not origin:
++        return True  # non-browser client; browsers always send Origin
++    allowed = {
++        f"http://127.0.0.1:{config.port}",
++        f"http://localhost:{config.port}",
++        f"http://[::1]:{config.port}",
++        f"https://127.0.0.1:{config.port}",
++        f"https://localhost:{config.port}",
++        f"https://[::1]:{config.port}",
++    }
++    allowed.update(o.rstrip("/") for o in config.control_ui.allowed_origins)
++    return origin.rstrip("/") in allowed
++
++
+ async def handle_ws_connection(
+     ws: WebSocket,
+     config: GatewayConfig,
+@@ -548,6 +586,18 @@ async def handle_ws_connection(
+     memory_retrievers: dict[str, Any] | None = None,
+ ) -> None:
+     """Main WebSocket connection handler."""
++    # Cross-site WebSocket hijacking guard (CSWSH / ClawJacked class). Reject
++    # the upgrade BEFORE accept() so a drive-by page from a foreign origin
++    # never reaches auth resolution. See docs/opensquilla/01_security_audit.md.
++    if not _ws_origin_allowed(ws, config):
++        log.warning(
++            "ws.origin_rejected",
++            origin=ws.headers.get("origin"),
++            remote=str(ws.client),
++        )
++        await ws.close(code=1008)  # policy violation; pre-accept -> HTTP 403
++        return
++
+     conn_id = str(uuid.uuid4())
+     conn = WsConnection(conn_id=conn_id, ws=ws)
+     registry = get_registry()
