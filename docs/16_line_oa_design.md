@@ -11,7 +11,7 @@
 
 | 檔案 | 內容 |
 |---|---|
-| `richmenu_launch.json` + `richmenu_launch_mockup.html` | 2 格圖文選單：🎡 開幕輪盤抽獎 ／ 🎁 我的獎品錢包（兩格連到同一頁，該頁面已內建會員錢包顯示） |
+| `richmenu_launch.json` + `richmenu_launch.png` | 2 格圖文選單：🎡 開幕輪盤抽獎 ／ 🎁 我的獎品錢包（兩格連到同一頁，該頁面已內建會員錢包顯示）。PNG 已經是 LINE 要求的 2500×843，直接上傳，不用截圖 |
 | `flex_welcome_launch.json` | 加好友歡迎訊息，只有一個「🎡 立即抽獎」按鈕，沒有會 404 的死連結 |
 
 裡面的 `BASE_URL` 只有一個值要換：**`https://chouhutiger.onrender.com`**（Render 部署網址，已確認上線）。
@@ -189,7 +189,7 @@
        -H "Content-Type: application/json" \
        -d @restaurant_api/line_assets/flex_welcome_launch.json
      ```
-- **圖文選單圖片**：把 `richmenu_launch_mockup.html`（現在馬上上架用）或 `richmenu_mockup.html`（官網做好再用的 6 格版）用瀏覽器開→截圖存成對應尺寸 PNG，上傳後台即可。
+- **圖文選單圖片**：不用截圖了 — `richmenu_launch.png`（現在馬上上架用，2500×843）或 `richmenu_full.png`（官網做好再用的 6 格版，2500×1686）已經是成品，直接上傳後台即可。設計改了想重新產生，跑 `python scripts/render_richmenu_png.py`（需要 `pip install playwright && playwright install chromium`，僅開發工具用，非專案 runtime 依賴）。
 
 > ⚠️ Flex 訊息的 Hero 圖需要 HTTPS 圖片網址。圖片可放官網／圖床，網址填進各 JSON 的 `url` 欄位（目前是佔位）——`flex_welcome_launch.json` 沒有這個問題，已拿掉 hero 圖，只保留純文字＋抽獎按鈕。
 
