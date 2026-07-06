@@ -1,0 +1,16 @@
+{
+  "size": { "width": 2500, "height": 843 },
+  "selected": true,
+  "name": "周霸虎-開幕上線版-v1",
+  "chatBarText": "🎡 開幕輪盤抽獎",
+  "areas": [
+    {
+      "bounds": { "x": 0, "y": 0, "width": 1250, "height": 843 },
+      "action": { "type": "uri", "label": "開幕輪盤抽獎", "uri": "https://chouhutiger.onrender.com/demo/campaign/grand-open" }
+    },
+    {
+      "bounds": { "x": 1250, "y": 0, "width": 1250, "height": 843 },
+      "action": { "type": "uri", "label": "我的獎品錢包", "uri": "https://chouhutiger.onrender.com/demo/campaign/grand-open" }
+    }
+  ]
+}
