@@ -31,12 +31,13 @@ https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
    - **Bot link feature：On (Aggressive)**（客人玩遊戲同時自動加好友，這格最關鍵）
 5. 存檔拿到 **LIFF ID**
 
-### 3. LINE Official Account Manager 上傳圖文選單（不用截圖，PNG 已經做好）
+### 3. LINE Official Account Manager 上傳圖文選單（不用截圖、不用換網址，都已經填好了）
 
 1. 打開 [manager.line.biz](https://manager.line.biz/) → 你的官方帳號 → **圖文選單**
 2. 上傳 `restaurant_api/line_assets/richmenu_launch.png`（2500×843，已是成品）
 3. 兩格動作都設「開啟網址」，貼 `https://chouhutiger.onrender.com/demo/campaign/grand-open`
-4. 歡迎訊息用 `restaurant_api/line_assets/flex_welcome_launch.json`（把裡面的 `BASE_URL` 換成 `https://chouhutiger.onrender.com`，`【地址】`／`【營業時間】` 換成真實資訊）
+   （或直接匯入 `richmenu_launch.final.json` —— 這份網址已經填好，不是 `BASE_URL` 佔位）
+4. 歡迎訊息用 `restaurant_api/line_assets/flex_welcome_launch.final.json`（網址已填好；只剩 `【地址】`／`【營業時間】` 兩個真實資訊要你填，其他都不用改）
 
 做完這 3 步，「掃 QR → 加 LINE 好友 → 玩輪盤 → 領券 → 綁會員」全流程就是真的上線，不是 demo。詳細素材說明在 `docs/16_line_oa_design.md` §0-A。
 
