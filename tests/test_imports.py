@@ -13,8 +13,10 @@ import pytest
 _MODULES = [
     "devswarm",
     "devswarm.cli",
+    "devswarm.codex",
     "devswarm.config",
     "devswarm.graph",
+    "devswarm.hermes",
     "devswarm.llm",
     "devswarm.sandbox",
     "devswarm.state",
@@ -23,11 +25,16 @@ _MODULES = [
     "devswarm.nodes.pm",
     "devswarm.nodes.architect",
     "devswarm.nodes.coder",
+    "devswarm.nodes.reviewer",
     "devswarm.nodes.qa",
+    "devswarm.evals",
+    "devswarm.evals.cases",
+    "devswarm.evals.runner",
     "devswarm.prompts",
     "devswarm.prompts.pm",
     "devswarm.prompts.architect",
     "devswarm.prompts.coder",
+    "devswarm.prompts.reviewer",
     "devswarm.prompts.qa",
 ]
 
@@ -37,7 +44,7 @@ def test_module_imports(module_name: str):
     importlib.import_module(module_name)
 
 
-def test_all_four_system_prompts_meet_floor():
+def test_all_system_prompts_meet_floor():
     """Cache floor sanity — Opus/Sonnet need >=1024 tokens, Haiku >=2048.
 
     Rough estimate: 1 token ≈ 4 chars of English. We check char length as a proxy.
@@ -47,10 +54,16 @@ def test_all_four_system_prompts_meet_floor():
         CODER_SYSTEM,
         PM_SYSTEM,
         QA_SYSTEM,
+        REVIEWER_SYSTEM,
     )
 
     # Opus/Sonnet floor: 1024 tokens ≈ 4096 chars (very rough; English ~4 chars/token).
-    for name, text in [("PM", PM_SYSTEM), ("ARCHITECT", ARCHITECT_SYSTEM), ("CODER", CODER_SYSTEM)]:
+    for name, text in [
+        ("PM", PM_SYSTEM),
+        ("ARCHITECT", ARCHITECT_SYSTEM),
+        ("CODER", CODER_SYSTEM),
+        ("REVIEWER", REVIEWER_SYSTEM),
+    ]:
         assert len(text) >= 4096, f"{name}_SYSTEM too short for prompt cache floor: {len(text)} chars"
 
     # Haiku floor: 2048 tokens ≈ 8192 chars.
@@ -88,12 +101,28 @@ def test_heal_template_formats_without_error():
     assert "Iteration 1 of 5" in result
 
 
-def test_prompt_versions_registered_for_all_four_roles():
+def test_review_heal_template_formats_without_error():
+    """The review-heal template's placeholders accept arbitrary strings."""
+    from devswarm.prompts import CODER_REVIEW_HEAL_USER_TEMPLATE
+
+    for placeholder in ["{review_iter}", "{max_review_iters}", "{review_findings}", "{file_tree}"]:
+        assert placeholder in CODER_REVIEW_HEAL_USER_TEMPLATE, f"missing placeholder: {placeholder}"
+
+    result = CODER_REVIEW_HEAL_USER_TEMPLATE.format(
+        review_iter=1,
+        max_review_iters=3,
+        review_findings="1. [CRITICAL] x",
+        file_tree="  a.py",
+    )
+    assert "round 1 of 3" in result
+
+
+def test_prompt_versions_registered_for_all_roles():
     """E7: every role must have a version string so telemetry can pin it."""
     from devswarm.prompts import PROMPT_VERSIONS, get_version
 
-    assert set(PROMPT_VERSIONS) == {"pm", "architect", "coder", "qa"}
-    for role in ("pm", "architect", "coder", "qa"):
+    assert set(PROMPT_VERSIONS) == {"pm", "architect", "coder", "reviewer", "qa"}
+    for role in ("pm", "architect", "coder", "reviewer", "qa"):
         assert get_version(role)  # non-empty
 
 

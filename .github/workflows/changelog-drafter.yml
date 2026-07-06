@@ -1,0 +1,35 @@
+name: Changelog Drafter
+
+on:
+  push:
+    branches: [claude/autonomous-resttech-enterprise-oW9jp]
+
+permissions:
+  contents: write
+
+jobs:
+  draft:
+    # Skip loop-bot's own commits to avoid infinite triggers
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Draft changelog
+        run: python scripts/draft_changelog.py
+
+      - name: Commit draft
+        run: |
+          git config user.name  "loop-bot"
+          git config user.email "loop@noreply.github.com"
+          git add RELEASE_NOTES_DRAFT.md
+          git diff --staged --quiet || (
+            git commit -m "chore(loop): update changelog draft [skip ci]" &&
+            git push origin claude/autonomous-resttech-enterprise-oW9jp
+          )

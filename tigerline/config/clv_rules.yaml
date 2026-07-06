@@ -1,0 +1,4 @@
+# TIGER LINE PRIME V3.0 Sprint 4 — CLV tracker thresholds.
+# dead_band in line units — within this distance, the move is "flat".
+
+dead_band: "0.01"

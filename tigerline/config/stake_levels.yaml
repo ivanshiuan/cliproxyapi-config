@@ -1,0 +1,30 @@
+# TIGER LINE PRIME — Stake levels.
+#
+# Single-match bankroll percentage by confidence level.
+# default_pct is what stake.allocate() returns at the ``normal`` harness verdict.
+# upgrade/downgrade move one notch up/down by clamping to min/max of the band.
+
+- level: "A+"
+  min_pct: "0.18"
+  max_pct: "0.25"
+  default_pct: "0.20"
+
+- level: "A"
+  min_pct: "0.12"
+  max_pct: "0.18"
+  default_pct: "0.15"
+
+- level: "B"
+  min_pct: "0.07"
+  max_pct: "0.12"
+  default_pct: "0.09"
+
+- level: "C"
+  min_pct: "0.03"
+  max_pct: "0.06"
+  default_pct: "0.04"
+
+- level: "D"
+  min_pct: "0"
+  max_pct: "0"
+  default_pct: "0"

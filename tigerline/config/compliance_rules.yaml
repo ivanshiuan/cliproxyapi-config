@@ -1,0 +1,20 @@
+# TIGER LINE PRIME V3.0 Sprint 5 — Compliance guard.
+#
+# disclaimer_zh / disclaimer_en append to every report.
+# forbidden_patterns are regexes; ANY match causes the report to be rejected.
+
+disclaimer_zh: "本報告僅供體育賽事資料研究與風險控管參考，不構成保證獲利承諾。投注涉及風險，請遵守所在地法律，並量力而為。"
+disclaimer_en: "This report is for sports data research and risk management reference only. It does not constitute a guarantee of profit. Betting involves risk; comply with local law and bet within your means."
+
+forbidden_patterns:
+  - "保證獲利"
+  - "保證賺錢"
+  - "保證命中"
+  - "保證穩贏"
+  - "穩賺"
+  - "必中"
+  - "包贏"
+  - "guaranteed (profit|win|hits?|returns?)"
+  - "100%\\s*(win|guarantee|profit)"
+  - "can'?t\\s+lose"
+  - "risk[-\\s]?free"

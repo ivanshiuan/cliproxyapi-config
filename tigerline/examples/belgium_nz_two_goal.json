@@ -1,0 +1,28 @@
+{
+  "match_id": "2026-wc-belgium-newzealand",
+  "kickoff_utc": "2026-06-22T22:00:00+00:00",
+  "home": "Belgium",
+  "away": "New Zealand",
+  "group_context": {
+    "standings_summary": "Belgium 3 pts, NZ 0 pts; NZ already eliminated, Belgium needs win for top seed.",
+    "final_round": false,
+    "same_time_kickoff": false
+  },
+  "team_need": {
+    "home": "neutral",
+    "away": "rotation"
+  },
+  "market": {
+    "line": "-1.75",
+    "favorite": "home",
+    "home_price": "1.92",
+    "away_price": "1.90"
+  },
+  "totals": {
+    "line": "3.0",
+    "over_price": "1.95",
+    "under_price": "1.87"
+  },
+  "bankroll": "5000",
+  "risk_flags": []
+}
