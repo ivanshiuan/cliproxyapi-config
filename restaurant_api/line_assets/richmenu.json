@@ -6,7 +6,7 @@
   "areas": [
     {
       "bounds": { "x": 0, "y": 0, "width": 833, "height": 843 },
-      "action": { "type": "uri", "label": "開幕輪盤抽獎", "uri": "https://your-domain.tw/demo/?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8" }
+      "action": { "type": "uri", "label": "開幕輪盤抽獎", "uri": "BASE_URL/demo/campaign/grand-open" }
     },
     {
       "bounds": { "x": 833, "y": 0, "width": 834, "height": 843 },

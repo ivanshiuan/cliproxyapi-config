@@ -5,18 +5,11 @@
       "altText": "🔥 歡迎加入周霸虎老火鍋，開幕輪盤天天抽！",
       "contents": {
         "type": "bubble",
-        "hero": {
-          "type": "image",
-          "url": "https://your-domain.tw/static/img/welcome_hero.jpg",
-          "size": "full",
-          "aspectRatio": "20:13",
-          "aspectMode": "cover"
-        },
         "body": {
           "type": "box",
           "layout": "vertical",
           "backgroundColor": "#1b1033",
-          "paddingAll": "20px",
+          "paddingAll": "24px",
           "contents": [
             { "type": "text", "text": "🔥 歡迎加入周霸虎老火鍋", "weight": "bold", "size": "lg", "color": "#ffd34e", "wrap": true },
             { "type": "text", "text": "你已是會員！開幕期間天天抽大獎，和牛、免單套餐、招待飲料等你拿。", "size": "sm", "color": "#f4f0ff", "wrap": true, "margin": "md" },
@@ -33,16 +26,11 @@
           "type": "box",
           "layout": "vertical",
           "backgroundColor": "#1b1033",
-          "spacing": "sm",
           "paddingAll": "16px",
           "contents": [
             {
               "type": "button", "style": "primary", "color": "#ff5d8f", "height": "md",
               "action": { "type": "uri", "label": "🎡 立即抽獎", "uri": "BASE_URL/demo/campaign/grand-open" }
-            },
-            {
-              "type": "button", "style": "secondary", "height": "md",
-              "action": { "type": "uri", "label": "🏠 逛逛官網", "uri": "https://your-domain.tw" }
             }
           ]
         }

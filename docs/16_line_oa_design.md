@@ -5,16 +5,30 @@
 
 ---
 
-## 0. 開工前你要補的 3 個值（補完我一鍵替換全文）
+## 0-A. 現在馬上能用（只需要 `BASE_URL` 這一個值）
+
+開幕輪盤（掃碼→LINE→抽獎→領券→綁會員）已經上線可用，不需要等官網做好。用這兩個檔案：
+
+| 檔案 | 內容 |
+|---|---|
+| `richmenu_launch.json` + `richmenu_launch_mockup.html` | 2 格圖文選單：🎡 開幕輪盤抽獎 ／ 🎁 我的獎品錢包（兩格連到同一頁，該頁面已內建會員錢包顯示） |
+| `flex_welcome_launch.json` | 加好友歡迎訊息，只有一個「🎡 立即抽獎」按鈕，沒有會 404 的死連結 |
+
+裡面的 `BASE_URL` 只有一個值要換：**`https://chouhutiger.onrender.com`**（Render 部署網址，已確認上線）。
+
+連結用的是 `BASE_URL/demo/campaign/grand-open`——固定 slug，不是資料庫隨機 UUID，換部署環境／重建資料庫都不用重印 QR code。
+
+---
+
+## 0-B. 之後官網做好再升級（目前是佔位，先別上架）
+
+`richmenu.json`（6 格滿版）、`flex_campaign.json`、`flex_menu.json`、`flex_membership.json` 這幾份還留著「招牌菜單／線上訂位／會員／點餐／官網」等 5 個按鈕，指向 `OFFICIAL_SITE` 或 `/menu` `/booking` `/member` `/order`——**這些頁面現在都還不存在**，上架會變成客人點了 404。等你有這些頁面（或決定不做，只用同一個 App 擴充）再套用下面 3 個值：
 
 | 變數 | 目前佔位 | 你要給我 |
 |---|---|---|
-| `OFFICIAL_SITE` | `https://your-domain.tw` | 官網網址（你說要全部塞進去） |
-| `BASE_URL` | `https://your-domain.tw` | App 對外網址（抽獎/點餐/訂位/會員頁，跟官網可同網域） |
+| `OFFICIAL_SITE` | `https://your-domain.tw` | 官網網址 |
 | 門市資訊 | `【地址】/【電話】/【營業時間】` | 真實地址、訂位電話、營業時間 |
 | 菜單 | 下方第 6 節草稿 | 真實招牌菜＋價格（先用草稿可改） |
-
-> 這四個值集中放，改一次全套更新。下面文案出現 `OFFICIAL_SITE` / `BASE_URL` 都指這兩個網址。
 
 ---
 
@@ -168,13 +182,35 @@
 - **圖文選單 / 歡迎訊息 / 關鍵字** → LINE Official Account Manager 後台（`manager.line.biz`）手動貼上即可，不用寫程式。
 - **Flex 圖文訊息** → 兩種方式：
   1. 後台「圖文訊息」用視覺編輯（簡單版）。
-  2. 用 Messaging API 推 Flex JSON（完整版，本資料夾 JSON 可直接用）。範例：
+  2. 用 Messaging API 推 Flex JSON（完整版，本資料夾 JSON 可直接用，記得先把 `BASE_URL` 換成 `https://chouhutiger.onrender.com`）。範例：
      ```bash
      curl -X POST https://api.line.me/v2/bot/message/broadcast \
        -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN" \
        -H "Content-Type: application/json" \
-       -d @restaurant_api/line_assets/flex_campaign.json
+       -d @restaurant_api/line_assets/flex_welcome_launch.json
      ```
-- **圖文選單圖片**：把 `richmenu_mockup.html` 用瀏覽器開→截圖存成 2500×1686 PNG（或我再幫你出 PNG），上傳後台即可。
+- **圖文選單圖片**：把 `richmenu_launch_mockup.html`（現在馬上上架用）或 `richmenu_mockup.html`（官網做好再用的 6 格版）用瀏覽器開→截圖存成對應尺寸 PNG，上傳後台即可。
 
-> ⚠️ Flex 訊息的 Hero 圖需要 HTTPS 圖片網址。圖片可放官網／圖床，網址填進各 JSON 的 `url` 欄位（目前是佔位）。
+> ⚠️ Flex 訊息的 Hero 圖需要 HTTPS 圖片網址。圖片可放官網／圖床，網址填進各 JSON 的 `url` 欄位（目前是佔位）——`flex_welcome_launch.json` 沒有這個問題，已拿掉 hero 圖，只保留純文字＋抽獎按鈕。
+
+---
+
+## 9. 門口海報：不用開 LINE Developers 也能先印
+
+如果只是要一張門口貼的海報（不透過 LINE 圖文選單），後端已經有現成的印刷端點，直接開瀏覽器就有結果，不用寫任何設定檔：
+
+```
+https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
+```
+
+打開就是一張排版好的 A4 海報（含內嵌 QR、活動名稱、標語），瀏覽器 `Ctrl/Cmd+P` 存成 PDF 或直接印。想換品牌色/標語可以加參數，例如：
+
+```
+https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster?brand=周霸虎老火鍋&tagline=盛大開幕%20天天抽大獎&primary=%23ff5d8f&accent=%23ffd34e
+```
+
+同一組 slug 也有純 QR 版本（`qr.svg`），要自己排版套版可以用：
+
+```
+https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/qr.svg
+```

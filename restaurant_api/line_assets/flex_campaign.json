@@ -12,7 +12,7 @@
           "size": "full",
           "aspectRatio": "20:13",
           "aspectMode": "cover",
-          "action": { "type": "uri", "uri": "https://your-domain.tw/demo/?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8" }
+          "action": { "type": "uri", "uri": "BASE_URL/demo/campaign/grand-open" }
         },
         "body": {
           "type": "box",
@@ -43,7 +43,7 @@
           "contents": [
             {
               "type": "button", "style": "primary", "color": "#ff5d8f", "height": "md",
-              "action": { "type": "uri", "label": "🎡 立即抽獎", "uri": "https://your-domain.tw/demo/?campaign=019eea5e-c121-79c3-9046-1d4bc52a3fa8" }
+              "action": { "type": "uri", "label": "🎡 立即抽獎", "uri": "BASE_URL/demo/campaign/grand-open" }
             },
             {
               "type": "button", "style": "link", "height": "sm",
