@@ -31,6 +31,7 @@ from ..config import get_settings
 from ..middleware import configure_logging
 from .campaign_expiry import run_campaign_voucher_expiry
 from .cogs_variance import run_cogs_variance_check
+from .daily_brief import _dispatch as _brief_dispatch
 from .daily_brief import (
     run_engineering_gaps,
     run_investor_qa_prep,
@@ -93,33 +94,65 @@ def _register(scheduler: AsyncIOScheduler) -> None:
         misfire_grace_time=600,
     )
     # ── BUFF OS Week 3 · daily / weekly briefs (proposal, not action) ──
-    # Register the 4 briefs but only when both LLM + retrieval clients can
-    # be resolved by the runtime. The Protocol-only slice ships without
-    # defaults, so we skip registration if we'd blow up at first fire.
-    for job_id, cron_kwargs, fn in (
-        (
-            "today_top5",
-            {"hour": 9, "minute": 0},
-            run_today_top5,
-        ),
-        (
-            "engineering_gaps",
-            {"hour": 18, "minute": 0},
-            run_engineering_gaps,
-        ),
+    #
+    # Build real LLM + embedding + retrieval clients from settings ONCE,
+    # then hand each cron a closure that reuses them. If either the LLM
+    # key or the embedding backend can't authenticate, we register the
+    # jobs anyway but they'll skip loudly rather than crash the scheduler.
+    from ..services.knowledge_ingestion.embed_backends import (
+        make_embedding_client_from_settings,
+    )
+    from ..services.knowledge_retrieval import (
+        build_retrieval_client_from_settings,
+    )
+    from ..services.llm_client import build_llm_client_from_settings
+
+    llm_client = build_llm_client_from_settings()
+    embed_client = make_embedding_client_from_settings()
+    retrieval_client = None
+    if embed_client is not None:
+        retrieval_client = build_retrieval_client_from_settings(
+            embedding_client=embed_client,
+        )
+
+    def _brief_runner(kind: str):
+        async def runner() -> None:
+            if llm_client is None or retrieval_client is None:
+                logger.warning(
+                    "brief.skip_no_credentials",
+                    extra={
+                        "brief_kind": kind,
+                        "has_llm": llm_client is not None,
+                        "has_retrieval": retrieval_client is not None,
+                    },
+                )
+                return
+            await _brief_dispatch(
+                kind,  # type: ignore[arg-type]
+                session=None,
+                now=None,
+                sink=None,
+                retrieval=retrieval_client,
+                llm=llm_client,
+                tenant_id=None,
+            )
+
+        return runner
+
+    for job_id, cron_kwargs in (
+        ("today_top5", {"hour": 9, "minute": 0}),
+        ("engineering_gaps", {"hour": 18, "minute": 0}),
         (
             "investor_qa_prep",
             {"day_of_week": "mon", "hour": 9, "minute": 0},
-            run_investor_qa_prep,
         ),
         (
             "weekly_review",
             {"day_of_week": "fri", "hour": 17, "minute": 0},
-            run_weekly_review,
         ),
     ):
         scheduler.add_job(
-            _wrap(job_id, fn),
+            _wrap(job_id, _brief_runner(job_id)),
             trigger=CronTrigger(timezone=tz, **cron_kwargs),
             id=job_id,
             max_instances=1,
