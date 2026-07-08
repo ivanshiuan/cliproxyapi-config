@@ -256,6 +256,9 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「審查目前 diff」 | 用 `/code-review` skill |
 | 「找 bug」 | 用 `/bugfix` skill |
 | 「文件交接」 | 看 `COMMANDER_HANDOFF.md` |
+| 「建檔 / digest / 整理這篇 / 幫我消化 / 存進知識庫 / 把 XX 學起來」+ 一條連結或內容 | 用 `digest` skill → 提煉成知識卡存 `docs/knowledge/` |
+| 「幫我開網站 / 登入抓資料 / 監看競品菜單價格 / 填沒 API 的後台表單 / 過驗證碼」 | 用 `browser-act` skill（需先開網路白名單，見 `docs/18`） |
+| 「帝國大腦怎麼運作 / 知識庫架構」 | 看 `docs/19_empire_brain.md` |
 
 ---
 
