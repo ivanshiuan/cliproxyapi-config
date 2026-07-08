@@ -7,11 +7,11 @@
 
 ---
 
-## 🔴 現在最急：開幕輪盤上線只剩 2 步，都要你登入才能做
+## 🔴 現在最急：開幕輪盤上線，LIFF + 圖文選單已經不用登入 LINE Console 了
 
-Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 回 200，本地端跑過 120 人份完整壓測全過）。QR / 海報 / LINE 素材已經全部做完、不會有死連結、不用截圖。**卡住的只剩這 2 個要登入 LINE 帳號的步驟，我這邊的工具連不到 LINE / Render 的網域（環境網路政策擋掉外部連線，不是我偷懶）：**
+Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 回 200，本地端跑過 120 人份完整壓測全過）。**重大進展**：LIFF 建立跟圖文選單上架這兩件事，原本以為一定要你登入 LINE Developers Console / Official Account Manager 手動點——後來發現 LINE 這兩個功能都有對應的 API，而且你已經有的 `LINE_CHANNEL_ACCESS_TOKEN` 就能呼叫，所以我直接把它們做成兩個後端端點。**Render 的伺服器連得到 LINE 的 API（我這邊的沙盒連不到，但這不影響 Render 本身）**，所以你只要對已上線的 Render 服務打 2 個 API 就好，不用開瀏覽器登入 LINE。
 
-### 1. 印海報（不用等 LIFF，現在就能做）
+### 1. 印海報（現在就能做，不用等任何東西）
 
 打開瀏覽器貼這個網址，直接是排好版的 A4 海報（含 QR），`Ctrl/Cmd+P` 存 PDF 送印：
 
@@ -19,25 +19,36 @@ Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 
 https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
 ```
 
-### 2. LINE Developers Console 開 LIFF（5 分鐘）
+### 2. 呼叫 2 個 API，一次搞定 LIFF + 圖文選單
 
-1. 打開 [developers.line.biz/console](https://developers.line.biz/console/)
-2. 選你官方帳號的 Provider → 選 Messaging API channel
-3. 左側 **LIFF** 分頁 → **Add**
-4. 填：
-   - Size：**Full**
-   - Endpoint URL：`https://chouhutiger.onrender.com/demo/campaign/grand-open`
-   - Scope：勾 `profile`
-   - **Bot link feature：On (Aggressive)**（客人玩遊戲同時自動加好友，這格最關鍵）
-5. 存檔拿到 **LIFF ID**
+先登入店長後台拿 session cookie（跟平常登入後台一樣，用 `RESTO_ADMIN_PASSCODE`）：
 
-### 3. LINE Official Account Manager 上傳圖文選單（不用截圖、不用換網址，都已經填好了）
+```bash
+curl -c cookies.txt -X POST https://chouhutiger.onrender.com/admin/login \
+  -H "Content-Type: application/json" -d '{"passcode":"你的店長密碼"}'
+```
 
-1. 打開 [manager.line.biz](https://manager.line.biz/) → 你的官方帳號 → **圖文選單**
-2. 上傳 `restaurant_api/line_assets/richmenu_launch.png`（2500×843，已是成品）
-3. 兩格動作都設「開啟網址」，貼 `https://chouhutiger.onrender.com/demo/campaign/grand-open`
-   （或直接匯入 `richmenu_launch.final.json` —— 這份網址已經填好，不是 `BASE_URL` 佔位）
-4. 歡迎訊息用 `restaurant_api/line_assets/flex_welcome_launch.final.json`（網址已填好；只剩 `【地址】`／`【營業時間】` 兩個真實資訊要你填，其他都不用改）
+然後兩個 API 各打一次：
+
+```bash
+# 建立 LIFF app（免開 LINE Developers Console）
+curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/liff \
+  -H "Content-Type: application/json" -d '{}'
+# 回傳 { "liff_id": "...", "wheel_url_with_liff": "...?liff=..." }
+
+# 上傳圖文選單並設為預設（免開 LINE Official Account Manager）
+curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/richmenu \
+  -H "Content-Type: application/json" -d '{}'
+# 回傳 { "richmenu_id": "...", "replaced_existing": false }
+```
+
+兩個都回 200 就代表完成了——LIFF 建好、圖文選單也上架且設為預設，客人這時候點圖文選單任一格，就會走真正的 LIFF 零打字流程。
+
+**如果失敗**：兩個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
+
+### 3. 歡迎訊息（唯一還需要手動一步的地方）
+
+LINE 的「加好友歡迎訊息」目前沒有對應的公開 API，這步仍需登入 [manager.line.biz](https://manager.line.biz/) → 你的官方帳號 → 貼上 `restaurant_api/line_assets/flex_welcome_launch.final.json` 的內容（網址已填好；只剩 `【地址】`／`【營業時間】` 兩個真實資訊要你填）。
 
 做完這 3 步，「掃 QR → 加 LINE 好友 → 玩輪盤 → 領券 → 綁會員」全流程就是真的上線，不是 demo。詳細素材說明在 `docs/16_line_oa_design.md` §0-A。
 
