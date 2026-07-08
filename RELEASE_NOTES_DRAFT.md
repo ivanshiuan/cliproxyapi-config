@@ -1,9 +1,11 @@
 # Release Notes Draft
 
-> Auto-generated 2026-07-04 19:49 UTC — 118 commit(s) since first commit
+> Auto-generated 2026-07-08 13:46 UTC — 125 commit(s) since first commit
 > **Human review required before publishing.**
 
 ## ✨ Features
+- Obsidian-ready vault + MOC + empire canvas + full skill routing table (`f9069e1`)
+- empire second-brain — knowledge pipeline, digest skill, skill router (`a505977`)
 - three-loop automation — Daily Brief, PR Babysitter, Changelog Drafter (`2eb0e7d`)
 - Reviewer 回歸 eval 骨架 — 把 prompt 版本接成真正的回歸網 (`91bdddc`)
 - Codex — 不變法則的單一真相源,Architect 與 Reviewer 共用 (`2efbfc5`)
@@ -122,6 +124,11 @@
 - full project planning artifacts (`c50de45`)
 
 ## 🔧 Chores
+- daily brief 2026-07-08 [skip ci] (`91fdc77`)
+- add BrowserAct skill, setup script, and setup docs (`07da0b0`)
+- daily brief 2026-07-07 [skip ci] (`dc7eccf`)
+- daily brief 2026-07-06 [skip ci] (`1c1dac2`)
+- update changelog draft [skip ci] (`67eae05`)
 - daily brief 2026-07-03 [skip ci] (`94ba11a`)
 - daily brief 2026-07-02 [skip ci] (`419b673`)
 - daily brief 2026-07-01 [skip ci] (`3782471`)
