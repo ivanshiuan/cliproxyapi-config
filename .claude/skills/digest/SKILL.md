@@ -21,6 +21,8 @@ allowed-tools: Read, Write, WebFetch, Bash
 
 3. **歸檔**：存成 `docs/knowledge/YYYY-MM-DD-<slug>.md`（日期用今天；slug 用簡短英文/拼音）。
 
+3b. **登記進 MOC**：把 `[[<檔名不含.md>]]` 依 `applies_to` 加到 `docs/knowledge/00_MOC.md` 對應環節的小節下（一卡可登多個環節）。這步讓 Obsidian 的 Graph/Canvas 格局圖自動長出連結，不可省略。
+
 4. **回報**：一句話講「存到哪 + 一句話重點 + 我建議的行動項」。若有明顯可立即執行的行動，問使用者要不要接著做。
 
 ## 原則

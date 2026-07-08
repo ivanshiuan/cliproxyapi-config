@@ -21,5 +21,9 @@
 ## 標籤慣例（先小後大，用到再加）
 `行銷 / 會員 / 定價 / 供應鏈 / 內場KDS / 門市營運 / 品牌 / 財務 / 競品`
 
-## 之後想升級成「格局圖」
-這些 markdown 可直接放進 **Obsidian vault** → 用 Graph view 看關係網、用 Canvas 排九宮格／世界格局圖。檔案格式不用改，Obsidian 原生吃 markdown + `[[雙向連結]]`。
+## 用 Obsidian 開（格局圖）
+這個資料夾**本身就是一個 Obsidian vault**：
+1. 下載 [Obsidian](https://obsidian.md)（免費）→「開啟資料夾作為儲存庫」→ 選 `docs/knowledge/`。
+2. 入口：`00_MOC.md`（總覽索引）；視覺版：`帝國格局圖.canvas`（九宮格）。
+3. AI 每建一張卡就會登進 MOC 對應環節 → Graph view 的關係網**自動長大**。
+4. Obsidian 會生成 `.obsidian/` 設定資料夾——那是個人偏好，不用 commit（已在 .gitignore）。
