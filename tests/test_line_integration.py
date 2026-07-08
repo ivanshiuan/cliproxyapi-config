@@ -14,6 +14,8 @@ from restaurant_api.config import get_settings
 from restaurant_api.integrations.line import (
     BroadcastAudience,
     HttpLineMessenger,
+    LiffAdminClient,
+    LiffApiError,
     LineApiError,
     LineMessage,
     LineMessenger,
@@ -163,6 +165,24 @@ def test_http_push_raises_line_api_error_on_non_2xx():
     assert "Authentication failed" in excinfo.value.body
 
 
+def test_http_push_wraps_connection_failure_as_line_api_error():
+    """A network-level failure (proxy block, DNS, timeout — never got an HTTP
+    response at all) must not escape as a raw httpx exception; best-effort
+    push wrappers at call sites only ever catch LineApiError."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused")
+
+    with pytest.raises(LineApiError) as excinfo:
+        asyncio.run(
+            _push_and_close(
+                _mock_messenger(handler), "U1", LineMessage(kind="text", text="x")
+            )
+        )
+    assert excinfo.value.status == 0
+    assert "ConnectError" in excinfo.value.body
+
+
 def test_http_broadcast_multicasts_in_batches_of_500():
     batch_sizes: list[int] = []
 
@@ -216,3 +236,146 @@ def test_line_messenger_is_abstract():
     """Concrete classes must implement push/broadcast/reply."""
     with pytest.raises(TypeError):
         LineMessenger()  # type: ignore[abstract]
+
+
+# ── LiffAdminClient: real transport behaviour (mocked) ──────────────────────
+
+
+def _mock_liff_client(handler) -> LiffAdminClient:
+    return LiffAdminClient(
+        channel_access_token="test-token",
+        transport=httpx.MockTransport(handler),
+    )
+
+
+async def _ensure_and_close(client: LiffAdminClient, *args, **kwargs):
+    try:
+        return await client.ensure_app(*args, **kwargs)
+    finally:
+        await client.aclose()
+
+
+def test_liff_list_apps_sends_bearer_auth():
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["auth"] = request.headers.get("authorization")
+        return httpx.Response(200, json={"apps": [{"liffId": "L1", "view": {"url": "https://x/a"}}]})
+
+    async def _run():
+        client = _mock_liff_client(handler)
+        try:
+            return await client.list_apps()
+        finally:
+            await client.aclose()
+
+    apps = asyncio.run(_run())
+    assert captured["url"].endswith("/apps")  # type: ignore[union-attr]
+    assert captured["auth"] == "Bearer test-token"
+    assert apps == [{"liffId": "L1", "view": {"url": "https://x/a"}}]
+
+
+def test_liff_create_app_posts_view_and_returns_id():
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"liffId": "1234567890-AbCdEfGh"})
+
+    async def _run():
+        client = _mock_liff_client(handler)
+        try:
+            return await client.create_app(
+                view_url="https://chouhutiger.onrender.com/demo/campaign/grand-open",
+                description="開幕輪盤-grand-open",
+            )
+        finally:
+            await client.aclose()
+
+    liff_id = asyncio.run(_run())
+    assert liff_id == "1234567890-AbCdEfGh"
+    body = captured["body"]
+    assert body["view"] == {  # type: ignore[index]
+        "type": "full",
+        "url": "https://chouhutiger.onrender.com/demo/campaign/grand-open",
+    }
+    assert body["description"] == "開幕輪盤-grand-open"  # type: ignore[index]
+
+
+def test_liff_create_app_raises_on_non_2xx():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text='{"message":"invalid view url"}')
+
+    async def _run():
+        client = _mock_liff_client(handler)
+        try:
+            await client.create_app(view_url="not-a-url")
+        finally:
+            await client.aclose()
+
+    with pytest.raises(LiffApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 400
+    assert "invalid view url" in excinfo.value.body
+
+
+def test_liff_list_apps_wraps_connection_failure():
+    """Same regression guard as HttpLineMessenger: a proxy block / DNS
+    failure / timeout must come back as LiffApiError, not a raw httpx
+    exception bubbling up as an unhandled 500 at the router."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ProxyError("403 Forbidden")
+
+    async def _run():
+        client = _mock_liff_client(handler)
+        try:
+            await client.list_apps()
+        finally:
+            await client.aclose()
+
+    with pytest.raises(LiffApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 0
+    assert "ProxyError" in excinfo.value.body
+
+
+def test_liff_ensure_app_reuses_existing_matching_view_url():
+    """Idempotent: a matching view.url on an existing app is reused, not
+    duplicated — re-running the setup call after the first success is a no-op."""
+    target_url = "https://chouhutiger.onrender.com/demo/campaign/grand-open"
+    create_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal create_calls
+        if request.url.path.endswith("/apps") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={"apps": [{"liffId": "EXISTING-ID", "view": {"url": target_url}}]},
+            )
+        create_calls += 1
+        return httpx.Response(200, json={"liffId": "SHOULD-NOT-BE-CALLED"})
+
+    liff_id, created = asyncio.run(
+        _ensure_and_close(_mock_liff_client(handler), view_url=target_url)
+    )
+    assert liff_id == "EXISTING-ID"
+    assert created is False
+    assert create_calls == 0
+
+
+def test_liff_ensure_app_creates_when_no_match():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"apps": []})
+        return httpx.Response(200, json={"liffId": "NEW-ID"})
+
+    liff_id, created = asyncio.run(
+        _ensure_and_close(
+            _mock_liff_client(handler),
+            view_url="https://chouhutiger.onrender.com/demo/campaign/grand-open",
+        )
+    )
+    assert liff_id == "NEW-ID"
+    assert created is True

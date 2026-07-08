@@ -219,7 +219,14 @@ class HttpLineMessenger(LineMessenger):
             self._client = None
 
     async def _post(self, path: str, body: dict[str, object]) -> None:
-        resp = await self._get_client().post(path, json=body)
+        # Catch connection-level failures (DNS, proxy block, timeout — anything
+        # short of getting an HTTP response at all) too, not just non-2xx —
+        # otherwise a raw httpx exception escapes past every "best-effort
+        # push" wrapper at call sites as an unhandled 500.
+        try:
+            resp = await self._get_client().post(path, json=body)
+        except httpx.HTTPError as e:
+            raise LineApiError(0, f"{type(e).__name__}: {e}", path) from e
         if resp.status_code >= 400:
             raise LineApiError(resp.status_code, resp.text, path)
 

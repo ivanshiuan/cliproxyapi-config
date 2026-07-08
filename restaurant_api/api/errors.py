@@ -68,6 +68,13 @@ class ValidationError(DomainError):
     status_code = 422
 
 
+class UpstreamError(DomainError):
+    """A third-party API (e.g. LINE) rejected or failed a request we made to it."""
+
+    code = "UPSTREAM_ERROR"
+    status_code = status.HTTP_502_BAD_GATEWAY
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Exception handlers — attach to the FastAPI app
 # ──────────────────────────────────────────────────────────────────────────
@@ -87,6 +94,7 @@ __all__ = [
     "ErrorBody",
     "ErrorResponse",
     "NotFoundError",
+    "UpstreamError",
     "ValidationError",
     "domain_error_handler",
 ]

@@ -23,6 +23,7 @@ the real LINE Messaging API.
 
 from __future__ import annotations
 
+from .liff_admin import LiffAdminClient, LiffApiError
 from .messenger import (
     BroadcastAudience,
     HttpLineMessenger,
@@ -38,6 +39,8 @@ from .messenger import (
 __all__ = [
     "BroadcastAudience",
     "HttpLineMessenger",
+    "LiffAdminClient",
+    "LiffApiError",
     "LineApiError",
     "LineMessage",
     "LineMessenger",
