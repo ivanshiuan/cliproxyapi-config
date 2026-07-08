@@ -19,6 +19,8 @@ from restaurant_api.integrations.line import (
     LineApiError,
     LineMessage,
     LineMessenger,
+    RichMenuAdminClient,
+    RichMenuApiError,
     StubLineMessenger,
     get_messenger,
     line_message_payload,
@@ -379,3 +381,174 @@ def test_liff_ensure_app_creates_when_no_match():
     )
     assert liff_id == "NEW-ID"
     assert created is True
+
+
+# ── RichMenuAdminClient: real transport behaviour (mocked) ──────────────────
+
+
+def _mock_richmenu_client(handler) -> RichMenuAdminClient:
+    return RichMenuAdminClient(
+        channel_access_token="test-token",
+        transport=httpx.MockTransport(handler),
+    )
+
+
+_RICHMENU_BODY = {
+    "size": {"width": 2500, "height": 843},
+    "selected": True,
+    "name": "周霸虎-開幕上線版-v1",
+    "chatBarText": "🎡 開幕輪盤抽獎",
+    "areas": [],
+}
+
+
+def test_richmenu_create_posts_body_and_returns_id():
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["host"] = request.url.host
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"richMenuId": "RM-1"})
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            return await client.create_richmenu(_RICHMENU_BODY)
+        finally:
+            await client.aclose()
+
+    richmenu_id = asyncio.run(_run())
+    assert richmenu_id == "RM-1"
+    assert captured["host"] == "api.line.me"
+    assert captured["body"] == _RICHMENU_BODY
+
+
+def test_richmenu_upload_image_posts_bytes_to_data_host():
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["host"] = request.url.host
+        captured["content_type"] = request.headers.get("content-type")
+        captured["body"] = request.content
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            await client.upload_image("RM-1", b"\x89PNG-fake-bytes")
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    assert captured["host"] == "api-data.line.me"
+    assert captured["content_type"] == "image/png"
+    assert captured["body"] == b"\x89PNG-fake-bytes"
+
+
+def test_richmenu_set_default_posts_to_user_all():
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            await client.set_default("RM-1")
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    assert captured["path"] == "/v2/bot/user/all/richmenu/RM-1"
+
+
+def test_richmenu_create_raises_on_non_2xx():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, text='{"message":"invalid richmenu"}')
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            await client.create_richmenu(_RICHMENU_BODY)
+        finally:
+            await client.aclose()
+
+    with pytest.raises(RichMenuApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 400
+    assert "invalid richmenu" in excinfo.value.body
+
+
+def test_richmenu_wraps_connection_failure():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("timed out")
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            await client.list_richmenus()
+        finally:
+            await client.aclose()
+
+    with pytest.raises(RichMenuApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 0
+    assert "ConnectTimeout" in excinfo.value.body
+
+
+def test_richmenu_ensure_creates_fresh_when_no_name_match():
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url.path}")
+        if request.url.path == "/v2/bot/richmenu/list":
+            return httpx.Response(200, json={"richmenus": []})
+        if request.url.path == "/v2/bot/richmenu":
+            return httpx.Response(200, json={"richMenuId": "RM-NEW"})
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            return await client.ensure_richmenu(_RICHMENU_BODY, b"png-bytes")
+        finally:
+            await client.aclose()
+
+    richmenu_id, replaced = asyncio.run(_run())
+    assert richmenu_id == "RM-NEW"
+    assert replaced is False
+    assert "DELETE /v2/bot/richmenu/RM-NEW" not in calls
+    assert "POST /v2/bot/richmenu/RM-NEW/content" in calls
+    assert "POST /v2/bot/user/all/richmenu/RM-NEW" in calls
+
+
+def test_richmenu_ensure_deletes_existing_same_name_first():
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(f"{request.method} {request.url.path}")
+        if request.url.path == "/v2/bot/richmenu/list":
+            return httpx.Response(
+                200,
+                json={
+                    "richmenus": [
+                        {"richMenuId": "RM-OLD", "name": "周霸虎-開幕上線版-v1"}
+                    ]
+                },
+            )
+        if request.url.path == "/v2/bot/richmenu":
+            return httpx.Response(200, json={"richMenuId": "RM-NEW"})
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            return await client.ensure_richmenu(_RICHMENU_BODY, b"png-bytes")
+        finally:
+            await client.aclose()
+
+    richmenu_id, replaced = asyncio.run(_run())
+    assert richmenu_id == "RM-NEW"
+    assert replaced is True
+    assert "DELETE /v2/bot/richmenu/RM-OLD" in calls

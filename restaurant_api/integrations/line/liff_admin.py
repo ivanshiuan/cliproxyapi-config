@@ -25,15 +25,20 @@ LiffViewType = Literal["full", "tall", "compact"]
 
 
 class LiffApiError(RuntimeError):
-    """Non-2xx from the LIFF management API — carries status + body for the
-    caller to surface verbatim (this is a manually-triggered admin action,
-    not a background job, so a detailed error is more useful than a generic one)."""
+    """Non-2xx (or connection failure) from a LINE management API — carries
+    status + body for the caller to surface verbatim (this is a
+    manually-triggered admin action, not a background job, so a detailed
+    error is more useful than a generic one).
+
+    Shared verbatim by richmenu_admin.py (as ``RichMenuApiError``) since the
+    shape is identical; the message stays API-agnostic ("LINE API", not
+    "LINE LIFF API") so a rich-menu failure doesn't get mislabeled as one."""
 
     def __init__(self, status: int, body: str, path: str) -> None:
         self.status = status
         self.body = body
         self.path = path
-        super().__init__(f"LINE LIFF API {path} failed: HTTP {status}: {body[:500]}")
+        super().__init__(f"LINE API {path} failed: HTTP {status}: {body[:500]}")
 
 
 @dataclass

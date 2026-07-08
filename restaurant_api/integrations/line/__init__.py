@@ -35,6 +35,7 @@ from .messenger import (
     line_message_payload,
     reset_messenger,
 )
+from .richmenu_admin import RichMenuAdminClient, RichMenuApiError
 
 __all__ = [
     "BroadcastAudience",
@@ -44,6 +45,8 @@ __all__ = [
     "LineApiError",
     "LineMessage",
     "LineMessenger",
+    "RichMenuAdminClient",
+    "RichMenuApiError",
     "StubLineMessenger",
     "get_messenger",
     "line_message_payload",
