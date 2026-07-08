@@ -15,9 +15,27 @@
 | **環境間 UUID 不穩定** | ✅ 新增 slug-based 路由（`by-slug/{slug}`、`/demo/campaign/{slug}`），QR/海報網址不再綁死某一次資料庫重建產生的隨機 id |
 | **LINE 素材死連結** | ✅ 原本 6 格圖文選單有 5 個連到不存在的官網頁面（會 404），改做「現在能用」的 2 格精簡版 |
 | **真人瀏覽器測試（新增）** | ✅ 用無頭瀏覽器（非 API call）實際點擊「抽獎」按鈕、驗證畫面渲染，抓到一個真的 404（favicon，已修） |
-| **卡住的部分** | 🔴 LIFF 建立 / 圖文選單上架 / 真人手機掃碼驗證——**確認**（非猜測）是這個執行環境的網路政策擋掉所有外部網域，且 OAuth 登入無法在非互動 session 執行 |
+| **LIFF / 圖文選單上架（重大突破）** | ✅ 不用登入 LINE Console——`POST /admin/line/liff`、`/admin/line/richmenu` 用既有的 `LINE_CHANNEL_ACCESS_TOKEN` 直接呼叫 LINE 官方 API 完成，Render 的伺服器連得到 `api.line.me`（這個沙盒連不到，但無所謂，因為呼叫方是 Render 不是這裡） |
+| **卡住的部分** | 🔴 只剩：加好友歡迎訊息（LINE 沒有對應 API，需登入 manager.line.biz 貼一次）、真人手機掃碼驗證——後者物理上不可能由 AI agent 代勞 |
 
 ---
+
+## 七、LIFF / 圖文選單上架：從「一定要你登入」到「兩個 API」
+
+原本判斷 LIFF 建立跟圖文選單上架都需要使用者登入 LINE 的網頁後台，因為這個沙盒連不到 `developers.line.biz` / `manager.line.biz` / `api.line.me`（403，組織網路政策擋的，已用該環境自己的政策文件核實）。
+
+後來重新檢視這個限制的**範圍**：擋掉的是「這個沙盒」的出站連線，不是「Render 部署的服務」的出站連線。Render 的伺服器是完全獨立的網路環境，而且它已經有 `LINE_CHANNEL_ACCESS_TOKEN`（原本只用來推播訊息），這把權杖同時也能呼叫 LINE 的：
+
+- **LIFF 管理 API**（`api.line.me/liff/v1/apps`）——建立/查詢 LIFF app
+- **圖文選單 API**（`api.line.me/v2/bot/richmenu` + `api-data.line.me` 上傳圖片 + 設為預設）
+
+於是把這兩個操作各包成一個 admin 端點：`POST /admin/line/liff`、`POST /admin/line/richmenu`。使用者只要對已上線的 Render 服務打這兩個 API（不是對這個沙盒），LINE 那邊的呼叫就會從 Render 的網路發出去，不受這個沙盒的限制。
+
+兩個端點都做成**冪等**：LIFF 先查有沒有 `view.url` 相同的既有 app，有就重用；圖文選單先查有沒有同名的既有選單，有就刪掉重建（LINE 沒有「更新現有選單」的 API，只能整個換掉）。都有完整的 mocked-HTTP 測試（`httpx.MockTransport`，比照專案既有的 `HttpLineMessenger` 測試手法）覆蓋成功／既有重用／非 2xx／連線層失敗四種路徑。
+
+**副產物**：真的用本地伺服器打過這兩個端點一次（故意讓它打到這個沙盒擋掉的網路），發現原本的 HTTP 客戶端只處理「LINE 回應非 2xx」，沒處理「連線根本打不通」（proxy 擋、逾時、DNS 失敗）——這類錯誤會直接變成沒有處理過的 500。已修好（`httpx.HTTPError` 統一包裝成同一種乾淨的錯誤），連帶修了既有 `HttpLineMessenger` 的同一個洞。
+
+至此，task #5（綁定 LINE 官方帳號）只剩「加好友歡迎訊息」這一項沒有對應 API（LINE 沒開放這個功能的公開 API），仍需登入 `manager.line.biz` 貼一次內容——但這比原本「整個官方帳號後台都要手動設定」小非常多。
 
 ## 一、Render `exit 127` 根因與修法
 
