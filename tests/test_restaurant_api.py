@@ -202,3 +202,48 @@ def test_walk_in_queue_lifecycle_enum():
     from restaurant_api.models import QueueStatus
 
     assert {v.value for v in QueueStatus} == {"waiting", "called", "seated", "abandoned"}
+
+
+def _run_lifespan_with_fake_settings(monkeypatch, capfd, *, token: str) -> str:
+    """Boot + shut down the app once under fake prod settings, returning
+    everything written to stdout during that window. `configure_logging()`
+    (called from the real lifespan) replaces the root logger's StreamHandlers
+    — including pytest's caplog handler — with its own JSON-to-stdout one, so
+    stdout capture (what Render actually reads) is the faithful way to assert
+    on this, not caplog.records. Snapshots/restores the health module's
+    shutdown flag since `with TestClient(app):` runs the real lifespan
+    shutdown, which flips it — same guard as test_health_endpoints.py."""
+    from types import SimpleNamespace
+
+    import restaurant_api.main as main_module
+    from restaurant_api.api import health as health_module
+
+    async def _noop_holiday_refresh() -> int:
+        return 0
+
+    fake_settings = SimpleNamespace(env="prod", log_level="INFO", line_channel_access_token=token)
+    monkeypatch.setattr(main_module, "get_settings", lambda: fake_settings)
+    monkeypatch.setattr(main_module, "refresh_holiday_cache", _noop_holiday_refresh)
+
+    original_shutting_down = health_module._SHUTTING_DOWN
+    capfd.readouterr()  # drain anything buffered before this test's window
+    try:
+        with TestClient(main_module.app):
+            pass
+    finally:
+        health_module._SHUTTING_DOWN = original_shutting_down
+    return capfd.readouterr().out
+
+
+def test_lifespan_warns_when_line_token_missing_in_prod(monkeypatch, capfd):
+    """Missing LINE_CHANNEL_ACCESS_TOKEN silently falls back to StubLineMessenger
+    (no crash, no visible error) — in prod that means push never actually goes
+    out. Regression guard for the loud startup warning added to catch this."""
+    out = _run_lifespan_with_fake_settings(monkeypatch, capfd, token="")
+    assert "line_messenger.token_missing_in_prod" in out
+
+
+def test_lifespan_silent_when_line_token_set_in_prod(monkeypatch, capfd):
+    """Regression guard the other direction: token present → no false-alarm warning."""
+    out = _run_lifespan_with_fake_settings(monkeypatch, capfd, token="real-token-abc")
+    assert "line_messenger.token_missing_in_prod" not in out

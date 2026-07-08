@@ -51,6 +51,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "restaurant_api.starting",
         extra={"env": settings.env, "version": __version__},
     )
+    # LINE push is a silent fallback (StubLineMessenger, no error) when the
+    # token env var is unset — fine in dev, but in prod it means welcome/
+    # points-earned messages never actually go out with no visible failure
+    # anywhere. Surface it loudly here so it shows up in the deploy logs
+    # instead of being discovered by "why didn't my customer get a message".
+    if settings.env == "prod" and not settings.line_channel_access_token:
+        logger.warning(
+            "line_messenger.token_missing_in_prod",
+            extra={
+                "fallback": "StubLineMessenger",
+                "impact": "no LINE push (welcome / points-earned) will actually be sent",
+                "fix": "set LINE_CHANNEL_ACCESS_TOKEN in the deploy environment",
+            },
+        )
     # Prime the in-memory Taiwan holiday cache. Failure here is non-fatal —
     # the calendar falls back to weekend-only mode and the warning surfaces
     # in the /health/ready check downstream.
