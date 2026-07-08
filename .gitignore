@@ -111,3 +111,4 @@ tmp/
 # explicitly if you want PR diffs to track API contract changes.
 /openapi.json
 /openapi.yaml
+.obsidian/

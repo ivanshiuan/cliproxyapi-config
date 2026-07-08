@@ -256,6 +256,16 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「審查目前 diff」 | 用 `/code-review` skill |
 | 「找 bug」 | 用 `/bugfix` skill |
 | 「文件交接」 | 看 `COMMANDER_HANDOFF.md` |
+| 「建檔 / digest / 整理這篇 / 幫我消化 / 存進知識庫 / 把 XX 學起來」+ 一條連結或內容 | 用 `digest` skill → 提煉成知識卡存 `docs/knowledge/` + 登進 `00_MOC.md` |
+| 「幫我開網站 / 登入抓資料 / 監看競品菜單價格 / 填沒 API 的後台表單 / 過驗證碼」 | 用 `browser-act` skill（需先開網路白名單，見 `docs/18`） |
+| 「帝國大腦怎麼運作 / 知識庫架構 / 格局圖」 | 看 `docs/19_empire_brain.md`；vault 入口 `docs/knowledge/00_MOC.md` |
+| 「早安 / 開工 / 今天狀況」 | 用 `/morning` command（起 DB、跑測試、列 backlog、亮 blocker） |
+| 「交接 / 收工 / 記錄進度」 | 用 `/handoff` command（更新 COMMANDER_HANDOFF.md） |
+| 「跑蜂群做 XX」 | 用 `/swarm` command（帶預算守門） |
+| 「部署 SID / 網站上線」 | 用 `deploy-sid` skill |
+| 「分析這場球 / 賽前 memo / 盤口」 | 用 `match-intel` skill（僅分析，不推薦下注） |
+| 「賽後覆盤 / 準備比賽輸入」 | 用 `tiger-pm` agent |
+| 「食安 / 勞基法 / 發票 / 對帳的領域問題」 | 用 `restaurant-domain-expert` agent |
 
 ---
 
