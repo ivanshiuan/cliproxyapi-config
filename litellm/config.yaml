@@ -1,0 +1,70 @@
+# ──────────────────────────────────────────────────────────────────────────
+# LiteLLM Proxy — 三層模型分流
+#
+#   smart       開發 / 重要任務。Claude 優先，MiniMax、DeepSeek 依序 fallback。
+#   code-local  日常寫程式小任務。本地 Ornith-1.0（Ollama）。
+#   chat-local  日常組織語言 / 聊天 / 文案。本地 Qwen3.5（Ollama）。
+#               Ornith 是純 coding 模型，沒工具時幻覺明顯，不要拿來聊天。
+#
+# 啟動：
+#   pip install 'litellm[proxy]'
+#   litellm --config litellm/config.yaml --port 4000
+#
+# 所有工具的 base URL 一律指向 http://localhost:4000/v1，
+# model 欄位填 smart / code-local / chat-local 三選一。
+# ──────────────────────────────────────────────────────────────────────────
+
+model_list:
+  # ---- smart：雲端優先序（同一個對外別名 = 開發 / 重要任務用這個） ----
+  - model_name: claude-dev
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: minimax-dev
+    litellm_params:
+      # MiniMax 是 OpenAI 相容端點；上 https://www.minimax.io/platform 確認目前的模型代號
+      # 再改這裡，型號名稱常變動。
+      model: openai/MiniMax-M2
+      api_base: https://api.minimax.io/v1
+      api_key: os.environ/MINIMAX_API_KEY
+
+  - model_name: deepseek-dev
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  # ---- code-local：日常寫程式，本地 Ornith-1.0（35B MoE，需 ~24GB VRAM/統一記憶體） ----
+  - model_name: code-local
+    litellm_params:
+      model: ollama/ornith:35b
+      api_base: http://localhost:11434
+
+  # 硬體不夠 24GB 的話，把上面那組註解掉，改用這個 9B 版本：
+  # - model_name: code-local
+  #   litellm_params:
+  #     model: ollama/ornith:9b
+  #     api_base: http://localhost:11434
+
+  # ---- chat-local：日常聊天 / 組織語言，本地通用模型（不要用 Ornith） ----
+  - model_name: chat-local
+    litellm_params:
+      model: ollama/qwen3.5:32b
+      api_base: http://localhost:11434
+
+  # 記憶體吃緊就換小一點的通用模型：
+  # - model_name: chat-local
+  #   litellm_params:
+  #     model: ollama/qwen3.5:8b
+  #     api_base: http://localhost:11434
+
+router_settings:
+  # smart 呼叫 claude-dev；失敗（額度/超時/5xx）才依序轉 minimax-dev → deepseek-dev。
+  # 這是「優先序 fallback」，不是隨機負載均衡，確保重要任務預設一定是 Claude。
+  fallbacks:
+    - claude-dev: ["minimax-dev", "deepseek-dev"]
+  num_retries: 1
+  timeout: 90
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -26,6 +26,7 @@
 | 09 | [docs/09_phase1_extension_kit.md](docs/09_phase1_extension_kit.md) | KDS / 訂位 / LINE |
 | 10 | [docs/10_claude_code_workflow.md](docs/10_claude_code_workflow.md) | Claude Code 工作流 |
 | 11 | [docs/11_production_deployment.md](docs/11_production_deployment.md) | 部署 SOP + T-7 開店 |
+| 18 | [docs/18_model_routing.md](docs/18_model_routing.md) | 模型分流：Claude/MiniMax/DeepSeek + 本地 Ornith/Qwen |
 
 ---
 
