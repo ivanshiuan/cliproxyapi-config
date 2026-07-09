@@ -37,6 +37,7 @@ from .messenger import (
 )
 from .richmenu_admin import RichMenuAdminClient, RichMenuApiError
 from .webhook import LineEvent, parse_events, verify_signature
+from .webhook_admin import WebhookAdminClient, WebhookApiError
 
 __all__ = [
     "BroadcastAudience",
@@ -50,6 +51,8 @@ __all__ = [
     "RichMenuAdminClient",
     "RichMenuApiError",
     "StubLineMessenger",
+    "WebhookAdminClient",
+    "WebhookApiError",
     "get_messenger",
     "line_message_payload",
     "parse_events",

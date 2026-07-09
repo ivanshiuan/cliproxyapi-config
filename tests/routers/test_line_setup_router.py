@@ -18,7 +18,7 @@ import pytest
 import pytest_asyncio  # type: ignore[import-not-found]
 
 from restaurant_api.api.auth import AdminPrincipal, require_admin
-from restaurant_api.integrations.line import LiffApiError, RichMenuApiError
+from restaurant_api.integrations.line import LiffApiError, RichMenuApiError, WebhookApiError
 from restaurant_api.main import app
 from restaurant_api.routers import line_setup
 
@@ -276,10 +276,26 @@ class _FakeStatusRichMenuClient:
         pass
 
 
+class _FakeStatusWebhookClient:
+    endpoint: ClassVar[str | None] = None
+    active: ClassVar[bool] = False
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def get_endpoint(self) -> tuple[str | None, bool]:
+        return _FakeStatusWebhookClient.endpoint, _FakeStatusWebhookClient.active
+
+    async def aclose(self) -> None:
+        pass
+
+
 @pytest_asyncio.fixture(autouse=True)
 def _reset_status_fakes():
     _FakeStatusLiffClient.apps = []
     _FakeStatusRichMenuClient.default_id = None
+    _FakeStatusWebhookClient.endpoint = None
+    _FakeStatusWebhookClient.active = False
     yield
 
 
@@ -302,8 +318,11 @@ async def test_status_all_ready(client: httpx.AsyncClient, monkeypatch) -> None:
         {"liffId": "L-1", "view": {"url": "https://x.onrender.com/demo/campaign/grand-open"}}
     ]
     _FakeStatusRichMenuClient.default_id = "RM-1"
+    _FakeStatusWebhookClient.endpoint = "https://x.onrender.com/line/webhook"
+    _FakeStatusWebhookClient.active = True
     monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeStatusLiffClient)
     monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeStatusRichMenuClient)
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeStatusWebhookClient)
 
     resp = await client.get("/admin/line/status", params={"base_url": "https://x.onrender.com"})
     assert resp.status_code == 200
@@ -313,6 +332,9 @@ async def test_status_all_ready(client: httpx.AsyncClient, monkeypatch) -> None:
     assert body["default_richmenu_id"] == "RM-1"
     assert body["push_token_configured"] is True
     assert body["webhook_secret_configured"] is True
+    assert body["webhook_endpoint_url"] == "https://x.onrender.com/line/webhook"
+    assert body["webhook_endpoint_matches"] is True
+    assert body["webhook_active"] is True
 
 
 async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatch) -> None:
@@ -323,9 +345,10 @@ async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatc
             line_channel_access_token="tok", line_channel_secret=""
         ),
     )
-    # No LIFF app matches, no default rich menu.
+    # No LIFF app matches, no default rich menu, no webhook endpoint set.
     monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeStatusLiffClient)
     monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeStatusRichMenuClient)
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeStatusWebhookClient)
 
     resp = await client.get("/admin/line/status", params={"base_url": "https://x.onrender.com"})
     assert resp.status_code == 200
@@ -334,10 +357,42 @@ async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatc
     assert body["liff_app_registered"] is False
     assert body["richmenu_set_as_default"] is False
     assert body["webhook_secret_configured"] is False
+    assert body["webhook_endpoint_matches"] is False
     joined = " ".join(body["notes"])
     assert "LINE_CHANNEL_SECRET" in joined
     assert "POST /admin/line/liff" in joined
     assert "POST /admin/line/richmenu" in joined
+    assert "POST /admin/line/webhook" in joined
+
+
+async def test_status_endpoint_matches_but_toggle_off(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """Endpoint URL already set correctly but "Use webhook" is still off —
+    the one gap that has no public API, so status must call it out clearly."""
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="tok", line_channel_secret="sec"),
+    )
+    _FakeStatusLiffClient.apps = [
+        {"liffId": "L-1", "view": {"url": "https://x.onrender.com/demo/campaign/grand-open"}}
+    ]
+    _FakeStatusRichMenuClient.default_id = "RM-1"
+    _FakeStatusWebhookClient.endpoint = "https://x.onrender.com/line/webhook"
+    _FakeStatusWebhookClient.active = False
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeStatusLiffClient)
+    monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeStatusRichMenuClient)
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeStatusWebhookClient)
+
+    resp = await client.get("/admin/line/status", params={"base_url": "https://x.onrender.com"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ready"] is False
+    assert body["webhook_endpoint_matches"] is True
+    assert body["webhook_active"] is False
+    joined = " ".join(body["notes"])
+    assert "Use webhook" in joined
 
 
 async def test_status_no_token_reports_cleanly(client: httpx.AsyncClient, monkeypatch) -> None:
@@ -352,3 +407,122 @@ async def test_status_no_token_reports_cleanly(client: httpx.AsyncClient, monkey
     assert body["push_token_configured"] is False
     assert body["ready"] is False
     assert any("LINE_CHANNEL_ACCESS_TOKEN" in n for n in body["notes"])
+
+
+# ── POST /admin/line/webhook ─────────────────────────────────────────────
+
+
+class _FakeWebhookAdminClient:
+    calls: ClassVar[list[dict[str, object]]] = []
+    ensure_result: ClassVar[tuple[bool, bool]] = (True, False)
+    test_result: ClassVar[dict[str, object]] = {"success": True, "statusCode": 200}
+    ensure_error: ClassVar[WebhookApiError | None] = None
+
+    def __init__(self, channel_access_token: str) -> None:
+        self.channel_access_token = channel_access_token
+
+    async def ensure_endpoint(self, url: str) -> tuple[bool, bool]:
+        _FakeWebhookAdminClient.calls.append({"op": "ensure_endpoint", "url": url})
+        if _FakeWebhookAdminClient.ensure_error is not None:
+            raise _FakeWebhookAdminClient.ensure_error
+        return _FakeWebhookAdminClient.ensure_result
+
+    async def test_endpoint(self) -> dict[str, object]:
+        _FakeWebhookAdminClient.calls.append({"op": "test_endpoint"})
+        return _FakeWebhookAdminClient.test_result
+
+    async def aclose(self) -> None:
+        pass
+
+
+@pytest_asyncio.fixture(autouse=True)
+def _reset_fake_webhook_client():
+    _FakeWebhookAdminClient.calls = []
+    _FakeWebhookAdminClient.ensure_result = (True, False)
+    _FakeWebhookAdminClient.test_result = {"success": True, "statusCode": 200}
+    _FakeWebhookAdminClient.ensure_error = None
+    yield
+
+
+async def test_webhook_setup_requires_admin() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/admin/line/webhook", json={})
+    assert resp.status_code in (401, 403)
+
+
+async def test_webhook_setup_rejects_missing_token(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup, "get_settings", lambda: SimpleNamespace(line_channel_access_token="")
+    )
+    resp = await client.post("/admin/line/webhook", json={})
+    assert resp.status_code == 422
+    assert "LINE_CHANNEL_ACCESS_TOKEN" in resp.json()["error"]["message"]
+
+
+async def test_webhook_setup_success_builds_url_and_runs_test(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token"),
+    )
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeWebhookAdminClient)
+
+    resp = await client.post(
+        "/admin/line/webhook",
+        json={"base_url": "https://chouhutiger.onrender.com"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["endpoint_url"] == "https://chouhutiger.onrender.com/line/webhook"
+    assert body["changed"] is True
+    assert body["active"] is False
+    assert body["test_result"] == {"success": True, "statusCode": 200}
+    assert _FakeWebhookAdminClient.calls == [
+        {"op": "ensure_endpoint", "url": "https://chouhutiger.onrender.com/line/webhook"},
+        {"op": "test_endpoint"},
+    ]
+
+
+async def test_webhook_setup_skips_test_when_requested(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token"),
+    )
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeWebhookAdminClient)
+
+    resp = await client.post(
+        "/admin/line/webhook",
+        json={"base_url": "https://chouhutiger.onrender.com", "run_test": False},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["test_result"] is None
+    assert _FakeWebhookAdminClient.calls == [
+        {"op": "ensure_endpoint", "url": "https://chouhutiger.onrender.com/line/webhook"},
+    ]
+
+
+async def test_webhook_setup_wraps_upstream_error_as_502(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token"),
+    )
+    _FakeWebhookAdminClient.ensure_error = WebhookApiError(400, "bad endpoint", "/endpoint")
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeWebhookAdminClient)
+
+    resp = await client.post("/admin/line/webhook", json={})
+    assert resp.status_code == 502
+    body = resp.json()
+    assert body["error"]["code"] == "UPSTREAM_ERROR"
+    assert body["error"]["details"]["status"] == 400

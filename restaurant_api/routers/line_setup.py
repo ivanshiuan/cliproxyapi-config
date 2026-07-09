@@ -22,6 +22,8 @@ from ..integrations.line import (
     LiffApiError,
     RichMenuAdminClient,
     RichMenuApiError,
+    WebhookAdminClient,
+    WebhookApiError,
 )
 
 router = APIRouter(prefix="/admin/line", tags=["admin-line-setup"])
@@ -40,6 +42,9 @@ class LineStatusResponse(BaseModel):
     liff_view_url: str | None
     richmenu_set_as_default: bool
     default_richmenu_id: str | None
+    webhook_endpoint_url: str | None
+    webhook_endpoint_matches: bool
+    webhook_active: bool
     ready: bool
     notes: list[str]
 
@@ -62,10 +67,13 @@ async def line_status(
 
     root = (base_url or str(request.base_url)).rstrip("/")
     expected_view_url = f"{root}/demo/campaign/{slug}"
+    expected_webhook_url = f"{root}/line/webhook"
 
     liff_id: str | None = None
     liff_view_url: str | None = None
     default_richmenu_id: str | None = None
+    webhook_endpoint_url: str | None = None
+    webhook_active = False
 
     if not token:
         notes.append("LINE_CHANNEL_ACCESS_TOKEN 未設定 — LIFF/圖文選單/推播都無法運作")
@@ -91,16 +99,37 @@ async def line_status(
         finally:
             await rm_client.aclose()
 
+        wh_client = WebhookAdminClient(channel_access_token=token)
+        try:
+            webhook_endpoint_url, webhook_active = await wh_client.get_endpoint()
+        except WebhookApiError as e:
+            notes.append(f"查 webhook endpoint 失敗: {e}")
+        finally:
+            await wh_client.aclose()
+
+    webhook_endpoint_matches = webhook_endpoint_url == expected_webhook_url
+
     if not secret:
         notes.append("LINE_CHANNEL_SECRET 未設定 — 加好友歡迎訊息 webhook 無法驗證簽章")
     if liff_id is None and token:
         notes.append("尚未建立對應此活動的 LIFF app — 打 POST /admin/line/liff")
     if default_richmenu_id is None and token:
         notes.append("尚未設定預設圖文選單 — 打 POST /admin/line/richmenu")
+    if token and not webhook_endpoint_matches:
+        notes.append("webhook endpoint 尚未設成本服務網址 — 打 POST /admin/line/webhook")
+    if token and webhook_endpoint_matches and not webhook_active:
+        notes.append(
+            "webhook endpoint 網址已對, 但「Use webhook」還是關的 —"
+            " 這個開關 LINE 沒開放 API, 去 LINE Developers Console"
+            " → Messaging API 分頁手動打開"
+        )
 
-    ready = bool(token and secret and liff_id and default_richmenu_id)
+    ready = bool(
+        token and secret and liff_id and default_richmenu_id
+        and webhook_endpoint_matches and webhook_active
+    )
     if ready:
-        notes.append("全部就緒: LIFF + 圖文選單 + webhook 簽章金鑰都到位")
+        notes.append("全部就緒: LIFF + 圖文選單 + webhook 端點與簽章金鑰都到位")
 
     return LineStatusResponse(
         push_token_configured=bool(token),
@@ -110,6 +139,9 @@ async def line_status(
         liff_view_url=liff_view_url,
         richmenu_set_as_default=default_richmenu_id is not None,
         default_richmenu_id=default_richmenu_id,
+        webhook_endpoint_url=webhook_endpoint_url,
+        webhook_endpoint_matches=webhook_endpoint_matches,
+        webhook_active=webhook_active,
         ready=ready,
         notes=notes,
     )
@@ -244,6 +276,63 @@ async def setup_richmenu(
 
     return RichMenuSetupResponse(
         richmenu_id=richmenu_id, replaced_existing=replaced, wheel_url=wheel_url
+    )
+
+
+class WebhookSetupRequest(BaseModel):
+    """All optional — matches this deployment's own ``/line/webhook`` route."""
+
+    base_url: str | None = None
+    run_test: bool = True
+
+
+class WebhookSetupResponse(BaseModel):
+    endpoint_url: str
+    changed: bool
+    active: bool
+    test_result: dict[str, object] | None
+
+
+@router.post(
+    "/webhook",
+    response_model=WebhookSetupResponse,
+    summary="設定 webhook endpoint 網址, 免手動貼到 LINE Developers Console",
+)
+async def setup_webhook(
+    payload: WebhookSetupRequest,
+    request: Request,
+    _admin: Admin,
+) -> WebhookSetupResponse:
+    """Sets the webhook endpoint URL via LINE's API — the one step that used
+    to be copy-pasted by hand (and easy to typo). LINE still requires a
+    console click to flip "Use webhook" on; that toggle has no public API.
+    """
+    settings = get_settings()
+    token = settings.line_channel_access_token
+    if not token:
+        raise ValidationError(
+            "LINE_CHANNEL_ACCESS_TOKEN 未設定 — 先在部署環境填入這把金鑰再呼叫此端點",
+        )
+
+    root = (payload.base_url or str(request.base_url)).rstrip("/")
+    endpoint_url = f"{root}/line/webhook"
+
+    client = WebhookAdminClient(channel_access_token=token)
+    try:
+        changed, active = await client.ensure_endpoint(endpoint_url)
+        test_result: dict[str, object] | None = None
+        if payload.run_test:
+            test_result = await client.test_endpoint()
+    except WebhookApiError as e:
+        raise UpstreamError(
+            f"LINE Webhook API 呼叫失敗: {e}",
+            details={"status": e.status, "body": e.body[:1000], "path": e.path},
+        ) from e
+    finally:
+        await client.aclose()
+
+    return WebhookSetupResponse(
+        endpoint_url=endpoint_url, changed=changed, active=active, test_result=test_result
     )
 
 

@@ -22,6 +22,8 @@ from restaurant_api.integrations.line import (
     RichMenuAdminClient,
     RichMenuApiError,
     StubLineMessenger,
+    WebhookAdminClient,
+    WebhookApiError,
     get_messenger,
     line_message_payload,
 )
@@ -598,3 +600,164 @@ def test_richmenu_ensure_deletes_existing_same_name_first():
     assert richmenu_id == "RM-NEW"
     assert replaced is True
     assert "DELETE /v2/bot/richmenu/RM-OLD" in calls
+
+
+# ── WebhookAdminClient: real transport behaviour (mocked) ───────────────────
+
+
+def _mock_webhook_client(handler) -> WebhookAdminClient:
+    return WebhookAdminClient(
+        channel_access_token="test-token",
+        transport=httpx.MockTransport(handler),
+    )
+
+
+def test_webhook_get_endpoint_returns_url_and_active():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v2/bot/channel/webhook/endpoint"
+        return httpx.Response(
+            200, json={"endpoint": "https://x/line/webhook", "active": True}
+        )
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            return await client.get_endpoint()
+        finally:
+            await client.aclose()
+
+    endpoint, active = asyncio.run(_run())
+    assert endpoint == "https://x/line/webhook"
+    assert active is True
+
+
+def test_webhook_get_endpoint_returns_none_on_404():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text='{"message":"not found"}')
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            return await client.get_endpoint()
+        finally:
+            await client.aclose()
+
+    endpoint, active = asyncio.run(_run())
+    assert endpoint is None
+    assert active is False
+
+
+def test_webhook_get_endpoint_reraises_non_404():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            await client.get_endpoint()
+        finally:
+            await client.aclose()
+
+    with pytest.raises(WebhookApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 500
+
+
+def test_webhook_set_endpoint_puts_url():
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["path"] = request.url.path
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            await client.set_endpoint("https://x/line/webhook")
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    assert captured["method"] == "PUT"
+    assert captured["path"] == "/v2/bot/channel/webhook/endpoint"
+    assert captured["body"] == {"endpoint": "https://x/line/webhook"}
+
+
+def test_webhook_test_endpoint_posts_and_returns_result():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v2/bot/channel/webhook/test"
+        return httpx.Response(200, json={"success": True, "statusCode": 200})
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            return await client.test_endpoint()
+        finally:
+            await client.aclose()
+
+    result = asyncio.run(_run())
+    assert result == {"success": True, "statusCode": 200}
+
+
+def test_webhook_ensure_endpoint_skips_set_when_already_matching():
+    set_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal set_calls
+        if request.method == "GET":
+            return httpx.Response(
+                200, json={"endpoint": "https://x/line/webhook", "active": True}
+            )
+        set_calls += 1
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            return await client.ensure_endpoint("https://x/line/webhook")
+        finally:
+            await client.aclose()
+
+    changed, active = asyncio.run(_run())
+    assert changed is False
+    assert active is True
+    assert set_calls == 0
+
+
+def test_webhook_ensure_endpoint_sets_when_mismatched():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(
+                200, json={"endpoint": "https://old/line/webhook", "active": False}
+            )
+        return httpx.Response(200, json={})
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            return await client.ensure_endpoint("https://x/line/webhook")
+        finally:
+            await client.aclose()
+
+    changed, active = asyncio.run(_run())
+    assert changed is True
+    assert active is False
+
+
+def test_webhook_wraps_connection_failure():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("blocked")
+
+    async def _run():
+        client = _mock_webhook_client(handler)
+        try:
+            await client.set_endpoint("https://x/line/webhook")
+        finally:
+            await client.aclose()
+
+    with pytest.raises(WebhookApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 0
+    assert "ConnectError" in excinfo.value.body

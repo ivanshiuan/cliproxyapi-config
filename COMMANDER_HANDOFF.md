@@ -19,7 +19,7 @@ Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 
 https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
 ```
 
-### 2. 一個指令，一次搞定 LIFF + 圖文選單
+### 2. 一個指令，一次搞定 LIFF + 圖文選單 + webhook 網址
 
 **在你自己的電腦跑**（不是這個沙盒 — 這裡的網路連不到 LINE，你的電腦連得到）：
 
@@ -27,9 +27,9 @@ https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
 RESTO_ADMIN_PASSCODE=你的店長密碼 ./scripts/finalize_line_setup.sh https://chouhutiger.onrender.com
 ```
 
-這支腳本會依序：登入店長後台 → 呼叫 `/admin/line/liff`（建立/重用 LIFF app）→ 呼叫 `/admin/line/richmenu`（上傳圖文選單並設為預設）。兩個都印出 JSON 結果，沒有 `"error"` 欄位就代表成功。
+這支腳本會依序：登入店長後台 → 呼叫 `/admin/line/liff`（建立/重用 LIFF app）→ 呼叫 `/admin/line/richmenu`（上傳圖文選單並設為預設）→ 呼叫 `/admin/line/webhook`（**新**：直接用 LINE API 把 webhook endpoint 網址設成 `https://chouhutiger.onrender.com/line/webhook`，不用再手動貼網址）→ 印出 `/admin/line/status` 總覽。全部印出 JSON 結果，沒有 `"error"` 欄位就代表成功。
 
-沒有 bash 環境的話，手動打這兩個 API 也可以：
+沒有 bash 環境的話，手動打這四個 API 也可以：
 
 ```bash
 curl -c cookies.txt -X POST https://chouhutiger.onrender.com/admin/login \
@@ -37,6 +37,8 @@ curl -c cookies.txt -X POST https://chouhutiger.onrender.com/admin/login \
 curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/liff \
   -H "Content-Type: application/json" -d '{}'
 curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/richmenu \
+  -H "Content-Type: application/json" -d '{}'
+curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/webhook \
   -H "Content-Type: application/json" -d '{}'
 ```
 
@@ -56,21 +58,24 @@ Invoke-RestMethod -Uri "$base/admin/line/liff" -Method Post `
 Invoke-RestMethod -Uri "$base/admin/line/richmenu" -Method Post `
   -ContentType "application/json" -Body '{}' -WebSession $session
 
+Invoke-RestMethod -Uri "$base/admin/line/webhook" -Method Post `
+  -ContentType "application/json" -Body '{}' -WebSession $session
+
 Invoke-RestMethod -Uri "$base/admin/line/status" -Method Get -WebSession $session
 ```
 
-最後一行 `/admin/line/status` 的回應如果 `"ready": true`，代表 LIFF + 圖文選單 + webhook 簽章金鑰全部到位，可以直接進行第 3 步。`notes` 陣列裡如果有文字，就是還缺什麼、照著做就好。
+最後一行 `/admin/line/status` 的回應如果 `"ready": true`，代表 LIFF + 圖文選單 + webhook 端點網址 + 簽章金鑰全部到位，只剩下面第 3 步「flip 一個開關」。`notes` 陣列裡如果有文字，就是還缺什麼、照著做就好。
 
-**如果失敗**：兩個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
+**如果失敗**：四個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
 
-### 3. 歡迎訊息（已改成 Webhook 自動送，設定一次就好）
+### 3. 只剩一個開關要點（LINE 沒開放 API，這個真的只能你手動點）
 
-原本 LINE 的「靜態加好友歡迎訊息」要手動貼到後台。改成用 **Webhook 的 follow 事件自動推播**——客人一加好友，後端就自動送出歡迎 Flex 卡（比靜態訊息更漂亮，且網址都已填好）。你只要在 LINE Developers Console 設定一次：
+原本要手動做的「貼 webhook 網址」已經被上面的 `/admin/line/webhook` 自動做掉了。LINE 唯獨「Use webhook」這顆開關本身沒有公開 API 可以切——這是目前唯一還卡在 LINE Developers Console 裡的一步：
 
 1. [developers.line.biz/console](https://developers.line.biz/console/) → 你的 Messaging API channel → **Messaging API** 分頁
-2. **Webhook URL** 填：`https://chouhutiger.onrender.com/line/webhook`
-3. **Use webhook** 打開（開關切成 on）
-4. （可選）下方「自動回應訊息」的「加入好友的歡迎訊息」可以關掉，因為改由 webhook 送
+2. 確認 **Webhook URL** 已經是 `https://chouhutiger.onrender.com/line/webhook`（跑完第 2 步的腳本後應該已經自動填好了，這裡只是確認）
+3. **Use webhook** 打開（開關切成 on）— 這是唯一要手點的動作
+4. （可選）下方「自動回應訊息」的「加入好友的歡迎訊息」可以關掉，因為改由 webhook 的 follow 事件自動送
 
 設定完，`【地址】`／`【營業時間】` 這兩個真實資訊要填的話，改 `restaurant_api/line_assets/flex_welcome_launch.final.json` 再 push（或先上線、晚點補）。
 
