@@ -46,7 +46,8 @@ PM 工程師（Claude，本 session 常駐角色）
 |---|---|---|---|
 | 1.1 | 桌位資料層：`dining_tables` + `table_sessions` + orders 加欄（order_type/table_session_id/channel）+ migration | alembic 升降級乾淨；模型過 pyright | ✅ 2026-07-09 |
 | 1.2 | 菜單 CRUD API（categories/items，含軟刪與排序） | 整合測試綠；seed 可跑 | ✅ 2026-07-09 |
-| 1.3 | 訂單升級：開桌、逐項加點/改量/退菜（audit）、轉桌 | 既有進單流程不破壞；37 個舊測試全綠 | ⬜ |
+| 1.3a | 樓面/桌位層：桌位 CRUD + 開桌/結桌/取消/轉桌 + 桌況板（/tables） | 9 測全綠；既有訂單流程不動 | ✅ 2026-07-09 |
+| 1.3b | 訂單升級：綁桌開單、逐項加點/改量/退菜（audit）— 建在 /tables 之上 | 既有進單流程不破壞；37 個舊測試全綠 | ⬜ |
 | 1.4 | 現金結帳 + 找零 + cash_drawer 聯動 | 金額全 Decimal；結帳寫 order_payments | ⬜ |
 | 1.5 | WebSocket hub + `order_events` append-only 事件表 | 斷線重連用 last_event_id 補拉 | ⬜ |
 | 1.6 | POS 前台（輕量 Web：桌位圖/點餐/結帳） | 平板瀏覽器實機可操作一整輪 | ⬜ |
