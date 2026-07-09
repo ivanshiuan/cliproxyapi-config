@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>POS · 桌況點餐</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #1a1e27; --panel2: #232936; --line: #2c3444;
+    --txt: #e8ecf3; --muted: #8a93a6; --accent: #4f8cff; --ok: #33c481;
+    --busy: #ffb020; --danger: #ff5c5c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--txt); font: 15px/1.4 -apple-system,
+    "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  header .stat { color: var(--muted); font-size: 13px; }
+  input, select, button {
+    font: inherit; color: var(--txt); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { background: transparent; }
+  button:active { transform: translateY(1px); }
+  main { flex: 1; overflow: auto; padding: 16px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .table-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; min-height: 110px; display: flex; flex-direction: column;
+    gap: 6px; position: relative; cursor: pointer; transition: border-color .15s;
+  }
+  .table-card:hover { border-color: var(--accent); }
+  .table-card .name { font-size: 20px; font-weight: 700; }
+  .table-card .zone { color: var(--muted); font-size: 12px; }
+  .table-card .badge {
+    position: absolute; top: 12px; right: 12px; width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .free .badge { background: var(--ok); }
+  .busy .badge { background: var(--busy); box-shadow: 0 0 0 4px rgba(255,176,32,.18); }
+  .table-card .meta { margin-top: auto; font-size: 13px; color: var(--muted); }
+  .busy .meta { color: var(--busy); }
+  .add-card {
+    background: transparent; border: 1px dashed var(--line); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    border-radius: 14px; cursor: pointer; min-height: 110px;
+  }
+  .add-card:hover { color: var(--accent); border-color: var(--accent); }
+  /* modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none;
+    align-items: center; justify-content: center; padding: 16px; z-index: 20;
+  }
+  .overlay.show { display: flex; }
+  .sheet {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    width: 100%; max-width: 460px; max-height: 88vh; overflow: auto; padding: 20px;
+  }
+  .sheet h2 { margin: 0 0 4px; font-size: 18px; }
+  .sheet .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .row > * { flex: 1; }
+  .row label { align-self: center; color: var(--muted); font-size: 13px; flex: 0 0 72px; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .actions button { flex: 1; min-width: 110px; }
+  .menu-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .menu-item {
+    display: flex; justify-content: space-between; padding: 10px 12px;
+    background: var(--panel2); border-radius: 10px;
+  }
+  .menu-item .price { color: var(--ok); font-variant-numeric: tabular-nums; }
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px;
+    border-radius: 10px; opacity: 0; transition: opacity .2s; z-index: 40;
+    max-width: 90vw;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--danger); color: #ffd0d0; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍜 POS 桌況</h1>
+  <span class="stat" id="summary">—</span>
+  <span class="spacer"></span>
+  <select id="storeSel" title="門市"></select>
+  <button class="ghost" id="menuBtn">菜單</button>
+  <button class="ghost" id="refreshBtn">↻</button>
+</header>
+
+<main>
+  <div class="grid" id="floor"></div>
+  <div class="empty" id="emptyHint" style="display:none">
+    這間店還沒有桌位 — 點右下的「＋ 新增桌位」開始。
+  </div>
+</main>
+
+<!-- Open / manage a table -->
+<div class="overlay" id="tableModal">
+  <div class="sheet">
+    <h2 id="tmTitle">桌位</h2>
+    <div class="sub" id="tmSub"></div>
+    <div id="tmBody"></div>
+    <div class="actions" id="tmActions"></div>
+    <div class="actions"><button class="ghost" onclick="closeModal()">關閉</button></div>
+  </div>
+</div>
+
+<!-- Add table -->
+<div class="overlay" id="addModal">
+  <div class="sheet">
+    <h2>新增桌位</h2>
+    <div class="sub">建立一張實體桌，會自動產生桌位 QR token。</div>
+    <div class="row"><label>桌名</label><input id="ntName" placeholder="A1" /></div>
+    <div class="row"><label>區域</label><input id="ntZone" placeholder="一樓 (可空)" /></div>
+    <div class="row"><label>座位</label><input id="ntSeats" type="number" value="4" min="1" /></div>
+    <div class="actions">
+      <button class="primary" onclick="createTable()">建立</button>
+      <button class="ghost" onclick="hide('addModal')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- Menu browser -->
+<div class="overlay" id="menuModal">
+  <div class="sheet">
+    <h2>菜單</h2>
+    <div class="sub" id="menuSub">目前這間店的可售品項。</div>
+    <div class="menu-list" id="menuList"></div>
+    <div class="actions"><button class="ghost" onclick="hide('menuModal')">關閉</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Same-origin API. This page is served from /pos/ so the API is at the root.
+const API = "";
+let stores = [];
+let storeId = null;
+let floor = [];
+
+const $ = (id) => document.getElementById(id);
+
+function toast(msg, isErr) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast show" + (isErr ? " err" : "");
+  setTimeout(() => (t.className = "toast"), 2200);
+}
+
+async function api(path, opts) {
+  const res = await fetch(API + path, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const j = await res.json(); detail = j.error?.message || detail; } catch {}
+    throw new Error(detail);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function show(id) { $(id).classList.add("show"); }
+function hide(id) { $(id).classList.remove("show"); }
+function closeModal() { hide("tableModal"); }
+
+// ─── stores ───
+async function loadStores() {
+  // No public stores endpoint yet; let the operator paste a store_id via the
+  // URL (?store=<uuid>) or we surface a single manual entry. If a store query
+  // param is present we use it; otherwise show a prompt in the selector.
+  const params = new URLSearchParams(location.search);
+  const qs = params.get("store");
+  const sel = $("storeSel");
+  sel.innerHTML = "";
+  if (qs) {
+    storeId = qs;
+    const o = document.createElement("option");
+    o.value = qs; o.textContent = "店 " + qs.slice(0, 8);
+    sel.appendChild(o);
+  } else {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = "以 ?store=<id> 指定門市";
+    sel.appendChild(o);
+  }
+  sel.onchange = () => { storeId = sel.value || null; refresh(); };
+}
+
+// ─── floor plan ───
+async function refresh() {
+  if (!storeId) { $("floor").innerHTML = ""; $("emptyHint").style.display = "block";
+    $("emptyHint").textContent = "請在網址加上 ?store=<門市UUID> 來載入桌況。"; return; }
+  try {
+    floor = await api(`/tables/floor?store_id=${encodeURIComponent(storeId)}`);
+    render();
+  } catch (e) { toast("載入桌況失敗: " + e.message, true); }
+}
+
+function render() {
+  const g = $("floor");
+  g.innerHTML = "";
+  const busy = floor.filter((t) => t.is_occupied).length;
+  $("summary").textContent = `${floor.length} 桌 · ${busy} 用餐中 · ${floor.length - busy} 空桌`;
+  $("emptyHint").style.display = floor.length ? "none" : "block";
+
+  for (const t of floor) {
+    const card = document.createElement("div");
+    card.className = "table-card " + (t.is_occupied ? "busy" : "free");
+    card.innerHTML = `
+      <span class="badge"></span>
+      <div class="name">${escapeHtml(t.name)}</div>
+      <div class="zone">${t.zone ? escapeHtml(t.zone) : "&nbsp;"}</div>
+      <div class="meta">${t.is_occupied
+        ? `${t.session.party_size} 位 · 用餐中`
+        : `${t.seats} 座 · 空桌`}</div>`;
+    card.onclick = () => openTableModal(t);
+    g.appendChild(card);
+  }
+  const add = document.createElement("div");
+  add.className = "add-card";
+  add.textContent = "＋ 新增桌位";
+  add.onclick = () => { $("ntName").value = ""; $("ntZone").value = ""; $("ntSeats").value = 4; show("addModal"); };
+  g.appendChild(add);
+}
+
+function openTableModal(t) {
+  $("tmTitle").textContent = "桌位 " + t.name;
+  const body = $("tmBody");
+  const acts = $("tmActions");
+  body.innerHTML = "";
+  acts.innerHTML = "";
+
+  if (t.is_occupied) {
+    const s = t.session;
+    $("tmSub").textContent = `${s.party_size} 位 · 開桌於 ${fmt(s.opened_at)}`;
+    const btnClose = mkBtn("結帳離桌", "primary", async () => {
+      await guard(() => api(`/tables/sessions/${s.id}/close`, { method: "POST" }), "已結桌");
+    });
+    const btnCancel = mkBtn("取消開桌", "ghost", async () => {
+      await guard(() => api(`/tables/sessions/${s.id}/cancel`, { method: "POST" }), "已取消");
+    });
+    const btnTransfer = mkBtn("轉桌", "ghost", () => transferPrompt(s, t));
+    acts.append(btnClose, btnTransfer, btnCancel);
+  } else {
+    $("tmSub").textContent = `${t.seats} 座 · 空桌`;
+    body.innerHTML = `<div class="row"><label>人數</label>
+      <input id="partySize" type="number" value="2" min="1" /></div>`;
+    const btnOpen = mkBtn("開桌 (入座)", "primary", async () => {
+      const n = parseInt($("partySize").value || "1", 10);
+      await guard(() => api(`/tables/${t.id}/open`, {
+        method: "POST", body: JSON.stringify({ party_size: n }),
+      }), "已開桌");
+    });
+    const btnDel = mkBtn("刪除此桌", "ghost", async () => {
+      await guard(() => api(`/tables/${t.id}`, { method: "DELETE" }), "已刪除桌位");
+    });
+    acts.append(btnOpen, btnDel);
+  }
+  show("tableModal");
+}
+
+function transferPrompt(s, from) {
+  const free = floor.filter((t) => !t.is_occupied && t.id !== from.id);
+  if (!free.length) return toast("沒有空桌可轉", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>轉到</label>
+    <select id="targetTable">${free.map((t) =>
+      `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}</select></div>`;
+  const acts = $("tmActions");
+  acts.innerHTML = "";
+  acts.append(mkBtn("確認轉桌", "primary", async () => {
+    const target = $("targetTable").value;
+    await guard(() => api(`/tables/sessions/${s.id}/transfer`, {
+      method: "POST", body: JSON.stringify({ target_table_id: target }),
+    }), "已轉桌");
+  }));
+}
+
+async function createTable() {
+  const name = $("ntName").value.trim();
+  if (!name) return toast("請輸入桌名", true);
+  const body = {
+    store_id: storeId, name,
+    zone: $("ntZone").value.trim() || null,
+    seats: parseInt($("ntSeats").value || "4", 10),
+  };
+  try {
+    await api("/tables", { method: "POST", body: JSON.stringify(body) });
+    hide("addModal"); toast("已新增桌位"); refresh();
+  } catch (e) { toast("新增失敗: " + e.message, true); }
+}
+
+async function loadMenu() {
+  if (!storeId) return toast("先指定門市", true);
+  try {
+    const items = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true`);
+    const list = $("menuList");
+    list.innerHTML = items.length ? "" : `<div class="empty">尚無品項</div>`;
+    for (const it of items) {
+      const row = document.createElement("div");
+      row.className = "menu-item";
+      row.innerHTML = `<span>${escapeHtml(it.name)}</span>
+        <span class="price">$${Number(it.price).toFixed(0)}</span>`;
+      list.appendChild(row);
+    }
+    show("menuModal");
+  } catch (e) { toast("載入菜單失敗: " + e.message, true); }
+}
+
+// ─── helpers ───
+function mkBtn(label, cls, onClick) {
+  const b = document.createElement("button");
+  b.className = cls; b.textContent = label; b.onclick = onClick;
+  return b;
+}
+async function guard(fn, okMsg) {
+  try { await fn(); closeModal(); toast(okMsg); refresh(); }
+  catch (e) { toast(e.message, true); }
+}
+function fmt(iso) { try { return new Date(iso).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" }); } catch { return iso; } }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+$("refreshBtn").onclick = refresh;
+$("menuBtn").onclick = loadMenu;
+
+// Boot + light polling (WebSocket real-time lands in P1.5).
+loadStores().then(refresh);
+setInterval(() => { if (storeId && !document.querySelector(".overlay.show")) refresh(); }, 5000);
+</script>
+</body>
+</html>

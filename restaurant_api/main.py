@@ -118,6 +118,12 @@ _STATIC_DIR = Path(__file__).parent / "static"
 if _STATIC_DIR.is_dir():
     app.mount("/demo", StaticFiles(directory=str(_STATIC_DIR), html=True), name="demo")
 
+# POS front-end (P1.6) — floor-plan board + menu browser, runs on any tablet
+# browser. Same-origin with the API. Served at /pos/.
+_POS_DIR = Path(__file__).parent / "pos_static"
+if _POS_DIR.is_dir():
+    app.mount("/pos", StaticFiles(directory=str(_POS_DIR), html=True), name="pos")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:
