@@ -40,6 +40,27 @@ curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/richmenu
   -H "Content-Type: application/json" -d '{}'
 ```
 
+**Windows PowerShell 版本**（複製整段貼上，把 `你的店長密碼` 換成真的密碼）：
+
+```powershell
+$base = "https://chouhutiger.onrender.com"
+$session = $null
+
+Invoke-RestMethod -Uri "$base/admin/login" -Method Post `
+  -ContentType "application/json" -Body '{"passcode":"你的店長密碼"}' `
+  -SessionVariable session | Out-Null
+
+Invoke-RestMethod -Uri "$base/admin/line/liff" -Method Post `
+  -ContentType "application/json" -Body '{}' -WebSession $session
+
+Invoke-RestMethod -Uri "$base/admin/line/richmenu" -Method Post `
+  -ContentType "application/json" -Body '{}' -WebSession $session
+
+Invoke-RestMethod -Uri "$base/admin/line/status" -Method Get -WebSession $session
+```
+
+最後一行 `/admin/line/status` 的回應如果 `"ready": true`，代表 LIFF + 圖文選單 + webhook 簽章金鑰全部到位，可以直接進行第 3 步。`notes` 陣列裡如果有文字，就是還缺什麼、照著做就好。
+
 **如果失敗**：兩個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
 
 ### 3. 歡迎訊息（已改成 Webhook 自動送，設定一次就好）
