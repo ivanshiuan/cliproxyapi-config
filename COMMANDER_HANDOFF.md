@@ -19,30 +19,26 @@ Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 
 https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
 ```
 
-### 2. 呼叫 2 個 API，一次搞定 LIFF + 圖文選單
+### 2. 一個指令，一次搞定 LIFF + 圖文選單
 
-先登入店長後台拿 session cookie（跟平常登入後台一樣，用 `RESTO_ADMIN_PASSCODE`）：
+**在你自己的電腦跑**（不是這個沙盒 — 這裡的網路連不到 LINE，你的電腦連得到）：
+
+```bash
+RESTO_ADMIN_PASSCODE=你的店長密碼 ./scripts/finalize_line_setup.sh https://chouhutiger.onrender.com
+```
+
+這支腳本會依序：登入店長後台 → 呼叫 `/admin/line/liff`（建立/重用 LIFF app）→ 呼叫 `/admin/line/richmenu`（上傳圖文選單並設為預設）。兩個都印出 JSON 結果，沒有 `"error"` 欄位就代表成功。
+
+沒有 bash 環境的話，手動打這兩個 API 也可以：
 
 ```bash
 curl -c cookies.txt -X POST https://chouhutiger.onrender.com/admin/login \
   -H "Content-Type: application/json" -d '{"passcode":"你的店長密碼"}'
-```
-
-然後兩個 API 各打一次：
-
-```bash
-# 建立 LIFF app（免開 LINE Developers Console）
 curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/liff \
   -H "Content-Type: application/json" -d '{}'
-# 回傳 { "liff_id": "...", "wheel_url_with_liff": "...?liff=..." }
-
-# 上傳圖文選單並設為預設（免開 LINE Official Account Manager）
 curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/richmenu \
   -H "Content-Type: application/json" -d '{}'
-# 回傳 { "richmenu_id": "...", "replaced_existing": false }
 ```
-
-兩個都回 200 就代表完成了——LIFF 建好、圖文選單也上架且設為預設，客人這時候點圖文選單任一格，就會走真正的 LIFF 零打字流程。
 
 **如果失敗**：兩個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
 
