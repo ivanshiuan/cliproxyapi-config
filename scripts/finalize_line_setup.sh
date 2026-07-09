@@ -34,7 +34,12 @@ RICHMENU_RESULT=$(curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/admin/line/richme
 echo "$RICHMENU_RESULT"
 echo
 
-echo "Done. If both responses above show 200-shaped JSON (liff_id / richmenu_id,"
-echo "no \"error\" key), LIFF + rich menu are live. Remaining manual step: the"
-echo "welcome-message text in manager.line.biz (no API for that one) — see"
-echo "restaurant_api/line_assets/flex_welcome_launch.final.json."
+echo "4) GET /admin/line/status (launch-readiness summary) ..."
+STATUS_RESULT=$(curl -sS -b "$COOKIE_JAR" "$BASE_URL/admin/line/status")
+echo "$STATUS_RESULT"
+echo
+
+echo "Done. The status block above is the single source of truth: if \"ready\":true,"
+echo "LIFF + rich menu + webhook secret are all in place. The only remaining"
+echo "console step is turning on the Webhook URL ($BASE_URL/line/webhook) in"
+echo "LINE Developers Console so the auto-welcome fires — see COMMANDER_HANDOFF.md."

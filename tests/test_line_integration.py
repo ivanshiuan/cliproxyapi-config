@@ -463,6 +463,52 @@ def test_richmenu_set_default_posts_to_user_all():
     assert captured["path"] == "/v2/bot/user/all/richmenu/RM-1"
 
 
+def test_richmenu_get_default_returns_id_when_set():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"richMenuId": "RM-DEFAULT"})
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            return await client.get_default_richmenu_id()
+        finally:
+            await client.aclose()
+
+    assert asyncio.run(_run()) == "RM-DEFAULT"
+
+
+def test_richmenu_get_default_returns_none_on_404():
+    """LINE returns 404 when no default is configured — must map to None, not raise."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, text='{"message":"no default richmenu"}')
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            return await client.get_default_richmenu_id()
+        finally:
+            await client.aclose()
+
+    assert asyncio.run(_run()) is None
+
+
+def test_richmenu_get_default_reraises_non_404():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    async def _run():
+        client = _mock_richmenu_client(handler)
+        try:
+            await client.get_default_richmenu_id()
+        finally:
+            await client.aclose()
+
+    with pytest.raises(RichMenuApiError) as excinfo:
+        asyncio.run(_run())
+    assert excinfo.value.status == 500
+
+
 def test_richmenu_create_raises_on_non_2xx():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(400, text='{"message":"invalid richmenu"}')

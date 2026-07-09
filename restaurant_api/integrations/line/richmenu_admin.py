@@ -96,6 +96,18 @@ class RichMenuAdminClient:
     async def set_default(self, richmenu_id: str) -> None:
         await self._call(self._get_api_client(), "POST", f"/user/all/richmenu/{richmenu_id}")
 
+    async def get_default_richmenu_id(self) -> str | None:
+        """The rich menu currently shown to all users, or None if none is set.
+        LINE returns 404 when no default is configured — treated as None here."""
+        try:
+            resp = await self._call(self._get_api_client(), "GET", "/user/all/richmenu")
+        except RichMenuApiError as e:
+            if e.status == 404:
+                return None
+            raise
+        rid = resp.json().get("richMenuId")
+        return str(rid) if rid else None
+
     async def ensure_richmenu(
         self, body: dict[str, object], image_bytes: bytes, *, content_type: str = "image/png"
     ) -> tuple[str, bool]:

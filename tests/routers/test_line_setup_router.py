@@ -245,3 +245,110 @@ async def test_richmenu_setup_wraps_upstream_error_as_502(
     body = resp.json()
     assert body["error"]["code"] == "UPSTREAM_ERROR"
     assert body["error"]["details"]["status"] == 400
+
+
+# ── GET /admin/line/status ───────────────────────────────────────────────
+
+
+class _FakeStatusLiffClient:
+    apps: ClassVar[list[dict[str, object]]] = []
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def list_apps(self) -> list[dict[str, object]]:
+        return _FakeStatusLiffClient.apps
+
+    async def aclose(self) -> None:
+        pass
+
+
+class _FakeStatusRichMenuClient:
+    default_id: ClassVar[str | None] = None
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def get_default_richmenu_id(self) -> str | None:
+        return _FakeStatusRichMenuClient.default_id
+
+    async def aclose(self) -> None:
+        pass
+
+
+@pytest_asyncio.fixture(autouse=True)
+def _reset_status_fakes():
+    _FakeStatusLiffClient.apps = []
+    _FakeStatusRichMenuClient.default_id = None
+    yield
+
+
+async def test_status_requires_admin() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/admin/line/status")
+    assert resp.status_code in (401, 403)
+
+
+async def test_status_all_ready(client: httpx.AsyncClient, monkeypatch) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(
+            line_channel_access_token="tok", line_channel_secret="sec"
+        ),
+    )
+    _FakeStatusLiffClient.apps = [
+        {"liffId": "L-1", "view": {"url": "https://x.onrender.com/demo/campaign/grand-open"}}
+    ]
+    _FakeStatusRichMenuClient.default_id = "RM-1"
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeStatusLiffClient)
+    monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeStatusRichMenuClient)
+
+    resp = await client.get("/admin/line/status", params={"base_url": "https://x.onrender.com"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ready"] is True
+    assert body["liff_id"] == "L-1"
+    assert body["default_richmenu_id"] == "RM-1"
+    assert body["push_token_configured"] is True
+    assert body["webhook_secret_configured"] is True
+
+
+async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatch) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(
+            line_channel_access_token="tok", line_channel_secret=""
+        ),
+    )
+    # No LIFF app matches, no default rich menu.
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeStatusLiffClient)
+    monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeStatusRichMenuClient)
+
+    resp = await client.get("/admin/line/status", params={"base_url": "https://x.onrender.com"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ready"] is False
+    assert body["liff_app_registered"] is False
+    assert body["richmenu_set_as_default"] is False
+    assert body["webhook_secret_configured"] is False
+    joined = " ".join(body["notes"])
+    assert "LINE_CHANNEL_SECRET" in joined
+    assert "POST /admin/line/liff" in joined
+    assert "POST /admin/line/richmenu" in joined
+
+
+async def test_status_no_token_reports_cleanly(client: httpx.AsyncClient, monkeypatch) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="", line_channel_secret=""),
+    )
+    resp = await client.get("/admin/line/status")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["push_token_configured"] is False
+    assert body["ready"] is False
+    assert any("LINE_CHANNEL_ACCESS_TOKEN" in n for n in body["notes"])

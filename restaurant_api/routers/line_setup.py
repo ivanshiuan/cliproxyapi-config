@@ -29,6 +29,92 @@ router = APIRouter(prefix="/admin/line", tags=["admin-line-setup"])
 _LINE_ASSETS_DIR = Path(__file__).resolve().parent.parent / "line_assets"
 
 
+class LineStatusResponse(BaseModel):
+    """One-shot launch-readiness snapshot — everything a human (or Claude) needs
+    to see whether the LINE side is fully wired, from a single call."""
+
+    push_token_configured: bool
+    webhook_secret_configured: bool
+    liff_app_registered: bool
+    liff_id: str | None
+    liff_view_url: str | None
+    richmenu_set_as_default: bool
+    default_richmenu_id: str | None
+    ready: bool
+    notes: list[str]
+
+
+@router.get(
+    "/status",
+    response_model=LineStatusResponse,
+    summary="上線就緒度總覽 (token/secret/LIFF/圖文選單 一次看完)",
+)
+async def line_status(
+    request: Request,
+    _admin: Admin,
+    slug: str = "grand-open",
+    base_url: str | None = None,
+) -> LineStatusResponse:
+    settings = get_settings()
+    token = settings.line_channel_access_token
+    secret = settings.line_channel_secret
+    notes: list[str] = []
+
+    root = (base_url or str(request.base_url)).rstrip("/")
+    expected_view_url = f"{root}/demo/campaign/{slug}"
+
+    liff_id: str | None = None
+    liff_view_url: str | None = None
+    default_richmenu_id: str | None = None
+
+    if not token:
+        notes.append("LINE_CHANNEL_ACCESS_TOKEN 未設定 — LIFF/圖文選單/推播都無法運作")
+    else:
+        liff_client = LiffAdminClient(channel_access_token=token)
+        try:
+            for app in await liff_client.list_apps():
+                view = app.get("view")
+                if isinstance(view, dict) and view.get("url") == expected_view_url:
+                    liff_id = str(app.get("liffId", "")) or None
+                    liff_view_url = str(view.get("url"))
+                    break
+        except LiffApiError as e:
+            notes.append(f"查 LIFF app 失敗: {e}")
+        finally:
+            await liff_client.aclose()
+
+        rm_client = RichMenuAdminClient(channel_access_token=token)
+        try:
+            default_richmenu_id = await rm_client.get_default_richmenu_id()
+        except RichMenuApiError as e:
+            notes.append(f"查預設圖文選單失敗: {e}")
+        finally:
+            await rm_client.aclose()
+
+    if not secret:
+        notes.append("LINE_CHANNEL_SECRET 未設定 — 加好友歡迎訊息 webhook 無法驗證簽章")
+    if liff_id is None and token:
+        notes.append("尚未建立對應此活動的 LIFF app — 打 POST /admin/line/liff")
+    if default_richmenu_id is None and token:
+        notes.append("尚未設定預設圖文選單 — 打 POST /admin/line/richmenu")
+
+    ready = bool(token and secret and liff_id and default_richmenu_id)
+    if ready:
+        notes.append("全部就緒: LIFF + 圖文選單 + webhook 簽章金鑰都到位")
+
+    return LineStatusResponse(
+        push_token_configured=bool(token),
+        webhook_secret_configured=bool(secret),
+        liff_app_registered=liff_id is not None,
+        liff_id=liff_id,
+        liff_view_url=liff_view_url,
+        richmenu_set_as_default=default_richmenu_id is not None,
+        default_richmenu_id=default_richmenu_id,
+        ready=ready,
+        notes=notes,
+    )
+
+
 class LiffSetupRequest(BaseModel):
     """All optional — sensible defaults cover the single-campaign launch case."""
 
