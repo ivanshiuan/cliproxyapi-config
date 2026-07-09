@@ -42,11 +42,18 @@ curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/richmenu
 
 **如果失敗**：兩個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
 
-### 3. 歡迎訊息（唯一還需要手動一步的地方）
+### 3. 歡迎訊息（已改成 Webhook 自動送，設定一次就好）
 
-LINE 的「加好友歡迎訊息」目前沒有對應的公開 API，這步仍需登入 [manager.line.biz](https://manager.line.biz/) → 你的官方帳號 → 貼上 `restaurant_api/line_assets/flex_welcome_launch.final.json` 的內容（網址已填好；只剩 `【地址】`／`【營業時間】` 兩個真實資訊要你填）。
+原本 LINE 的「靜態加好友歡迎訊息」要手動貼到後台。改成用 **Webhook 的 follow 事件自動推播**——客人一加好友，後端就自動送出歡迎 Flex 卡（比靜態訊息更漂亮，且網址都已填好）。你只要在 LINE Developers Console 設定一次：
 
-做完這 3 步，「掃 QR → 加 LINE 好友 → 玩輪盤 → 領券 → 綁會員」全流程就是真的上線，不是 demo。詳細素材說明在 `docs/16_line_oa_design.md` §0-A。
+1. [developers.line.biz/console](https://developers.line.biz/console/) → 你的 Messaging API channel → **Messaging API** 分頁
+2. **Webhook URL** 填：`https://chouhutiger.onrender.com/line/webhook`
+3. **Use webhook** 打開（開關切成 on）
+4. （可選）下方「自動回應訊息」的「加入好友的歡迎訊息」可以關掉，因為改由 webhook 送
+
+設定完，`【地址】`／`【營業時間】` 這兩個真實資訊要填的話，改 `restaurant_api/line_assets/flex_welcome_launch.final.json` 再 push（或先上線、晚點補）。
+
+做完 1~3 步，「掃 QR → 加 LINE 好友（自動收到歡迎訊息）→ 玩輪盤 → 領券 → 綁會員」全流程就是真的上線，不是 demo。詳細素材說明在 `docs/16_line_oa_design.md` §0-A。
 
 ---
 
