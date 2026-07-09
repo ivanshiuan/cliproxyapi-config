@@ -46,10 +46,12 @@ from .orders import (
     KitchenStation,
     KitchenStatus,
     Order,
+    OrderChannel,
     OrderDiscount,
     OrderLine,
     OrderPayment,
     OrderStatus,
+    OrderType,
     PaymentMethod,
 )
 from .public_holidays import PublicHoliday
@@ -60,6 +62,7 @@ from .reservations import (
     WalkInQueueEntry,
 )
 from .stores import Store
+from .tables import DiningTable, TableSession, TableSessionStatus
 from .tenants import Tenant
 from .ugc import UgcKind, UgcStatus, UgcSubmission
 
@@ -93,11 +96,17 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "KitchenStation",
     "KitchenStatus",
     "Order",
+    "OrderChannel",
     "OrderDiscount",
     "OrderLine",
     "OrderPayment",
     "OrderStatus",
+    "OrderType",
     "PaymentMethod",
+    # floor plan / table sessions (POS P1)
+    "DiningTable",
+    "TableSession",
+    "TableSessionStatus",
     # reservations / queue
     "QueueStatus",
     "Reservation",

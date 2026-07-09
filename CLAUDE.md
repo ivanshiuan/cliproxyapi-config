@@ -196,6 +196,16 @@ DB 沒起：`sudo service postgresql start`。
 ### ruff 抱怨中文標點
 demo / seed 腳本已加 `RUF001` per-file ignore。
 
+### SQLEnum(native_enum=False) 存的是 enum **NAME** 不是 value
+`SQLEnum(OrderStatus, native_enum=False)` 寫進 DB 的是 `"OPEN"`（member name），不是 `"open"`（value）。
+所以：**server_default 要用 `.name`**（加 NOT NULL 欄位時會回填舊列，用 value 會讓舊列 ORM 讀不回來）、
+**partial index 的 WHERE 條件也要比對 NAME**（寫 `status = 'open'` 的唯一索引會永遠不生效）。
+測試釘在 `tests/test_tables_model.py`。
+
+### 測試中不要 `await db_session.rollback()`
+savepoint fixture 會連 seed_tenant/seed_store 一起回滾，之後的 INSERT 全撞 FK。
+要測 IntegrityError 就把它放在該測試最後一步，或拆成獨立測試。
+
 ---
 
 ## 檔案攝取 — 看到檔案自己選武器（不用我下指令）

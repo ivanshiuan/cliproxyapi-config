@@ -39,6 +39,29 @@ class OrderStatus(enum.StrEnum):
     REFUNDED = "refunded"
 
 
+class OrderType(enum.StrEnum):
+    """How the meal is consumed. Drives table binding + packaging flow."""
+
+    DINE_IN = "dine_in"
+    TAKEOUT = "takeout"
+    DELIVERY = "delivery"
+
+
+class OrderChannel(enum.StrEnum):
+    """Where the order was captured.
+
+    ``external`` covers legacy ingest from third-party POS (the original
+    Phase-1 flow via ``external_pos_id``); the in-house POS surfaces use the
+    other values.
+    """
+
+    POS = "pos"  # staff POS terminal
+    TABLE_QR = "table_qr"  # customer phone via 桌位/訂單 QR
+    TABLET = "tablet"  # table-side kiosk tablet
+    ONLINE = "online"  # web takeout / delivery storefront
+    EXTERNAL = "external"  # ingested from an external POS
+
+
 class InvoiceStatus(enum.StrEnum):
     """Lifecycle of a Taiwan 統一發票 attached to this order.
 
@@ -169,6 +192,32 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         nullable=False,
         default=OrderStatus.OPEN,
         server_default=OrderStatus.OPEN.value,
+    )
+
+    # ─── POS front-of-house (P1) ───
+    # Pre-existing ingested rows default to dine_in/external; the in-house
+    # POS sets these explicitly on creation.
+    # NB: SQLEnum(native_enum=False) stores the member NAME ("DINE_IN"), not
+    # the value — the server_default backfills legacy rows, so it must be the
+    # NAME or those rows become unreadable through the ORM.
+    order_type: Mapped[OrderType] = mapped_column(
+        SQLEnum(OrderType, name="order_type", native_enum=False, length=16),
+        nullable=False,
+        default=OrderType.DINE_IN,
+        server_default=OrderType.DINE_IN.name,
+    )
+    channel: Mapped[OrderChannel] = mapped_column(
+        SQLEnum(OrderChannel, name="order_channel", native_enum=False, length=16),
+        nullable=False,
+        default=OrderChannel.EXTERNAL,
+        server_default=OrderChannel.EXTERNAL.name,
+    )
+    # SET NULL: an order must survive its seating record (financial ledger
+    # outlives floor-plan history).
+    table_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("table_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # 統一發票 fields — Taiwan-specific.
@@ -393,9 +442,11 @@ class OrderPayment(TenantScopedMixin, Base):
 __all__ = [
     "DiscountKind",
     "Order",
+    "OrderChannel",
     "OrderDiscount",
     "OrderLine",
     "OrderPayment",
     "OrderStatus",
+    "OrderType",
     "PaymentMethod",
 ]

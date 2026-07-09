@@ -44,7 +44,7 @@ PM 工程師（Claude，本 session 常駐角色）
 ### P1 店員 POS（先做 — Ivan 拍板）
 | # | 任務 | 驗收標準（摘要） | 狀態 |
 |---|---|---|---|
-| 1.1 | 桌位資料層：`dining_tables` + `table_sessions` + orders 加欄（order_type/table_session_id/channel）+ migration | alembic 升降級乾淨；模型過 pyright | ⬜ |
+| 1.1 | 桌位資料層：`dining_tables` + `table_sessions` + orders 加欄（order_type/table_session_id/channel）+ migration | alembic 升降級乾淨；模型過 pyright | ✅ 2026-07-09 |
 | 1.2 | 菜單 CRUD API（categories/items，含軟刪與排序） | 整合測試綠；seed 可跑 | ⬜ |
 | 1.3 | 訂單升級：開桌、逐項加點/改量/退菜（audit）、轉桌 | 既有進單流程不破壞；37 個舊測試全綠 | ⬜ |
 | 1.4 | 現金結帳 + 找零 + cash_drawer 聯動 | 金額全 Decimal；結帳寫 order_payments | ⬜ |

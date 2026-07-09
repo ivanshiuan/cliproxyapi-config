@@ -36,7 +36,7 @@ def test_root_endpoint():
 def test_models_metadata_has_30_tables():
     """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national
     + 4 marketing-campaign (wheel-spin lottery) + 1 stored-value + 1 referral
-    + 1 UGC = 33 total."""
+    + 1 UGC + 2 POS floor plan (dining_tables + table_sessions) = 35 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -81,10 +81,13 @@ def test_models_metadata_has_30_tables():
         "referrals",
         # UGC (打卡 / 評論換獎) (1)
         "ugc_submissions",
+        # POS floor plan — P1 (2)
+        "dining_tables",
+        "table_sessions",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 33
+    assert len(Base.metadata.tables) == 35
 
 
 def test_money_columns_are_numeric_14_4():
