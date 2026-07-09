@@ -138,6 +138,9 @@ ignore = ["E501"]  # line length handled by formatter
 "tests/jobs/test_daily_brief.py" = ["RUF001", "RUF002", "RUF003"]
 # Compliance disclaimer is canonical Chinese — fullwidth comma is correct.
 "tigerline/compliance_guard.py" = ["RUF001"]
+# BUFF OS CLI helpers print Traditional-Chinese guidance for Ivan.
+"scripts/ingest_knowledge.py" = ["RUF001", "RUF002", "RUF003"]
+"scripts/run_brief.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"
