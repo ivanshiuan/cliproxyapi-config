@@ -106,6 +106,18 @@ class LiffAdminClient:
             raise LiffApiError(resp.status_code, resp.text, "/apps")
         return str(liff_id)
 
+    async def find_by_view_url(self, view_url: str) -> str | None:
+        """Returns the ``liffId`` of an existing app whose ``view.url`` matches
+        exactly, or ``None`` — used by callers that only need the id (rich-menu
+        and welcome-message button URIs), not the full ``ensure_app`` result."""
+        for app in await self.list_apps():
+            view = app.get("view")
+            if isinstance(view, dict) and view.get("url") == view_url:
+                liff_id = str(app.get("liffId", "")) or None
+                if liff_id:
+                    return liff_id
+        return None
+
     async def ensure_app(
         self,
         *,

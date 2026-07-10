@@ -156,11 +156,34 @@ class _FakeRichMenuAdminClient:
         pass
 
 
+class _FakeRichMenuLiffLookupClient:
+    """Stand-in for the LiffAdminClient used inside setup_richmenu to make
+    the rich-menu buttons LIFF-aware. Defaults to "no matching app" so
+    existing assertions (button uri == plain wheel_url) hold unless a test
+    opts into ``found_liff_id``."""
+
+    found_liff_id: ClassVar[str | None] = None
+    lookup_error: ClassVar[LiffApiError | None] = None
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def find_by_view_url(self, view_url: str) -> str | None:
+        if _FakeRichMenuLiffLookupClient.lookup_error is not None:
+            raise _FakeRichMenuLiffLookupClient.lookup_error
+        return _FakeRichMenuLiffLookupClient.found_liff_id
+
+    async def aclose(self) -> None:
+        pass
+
+
 @pytest_asyncio.fixture(autouse=True)
 def _reset_fake_richmenu_client():
     _FakeRichMenuAdminClient.calls = []
     _FakeRichMenuAdminClient.ensure_result = ("FAKE-RM-ID", False)
     _FakeRichMenuAdminClient.ensure_error = None
+    _FakeRichMenuLiffLookupClient.found_liff_id = None
+    _FakeRichMenuLiffLookupClient.lookup_error = None
     yield
 
 
@@ -191,6 +214,7 @@ async def test_richmenu_setup_success_reads_real_png_and_builds_wheel_url(
         lambda: SimpleNamespace(line_channel_access_token="real-token"),
     )
     monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeRichMenuAdminClient)
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeRichMenuLiffLookupClient)
 
     resp = await client.post(
         "/admin/line/richmenu",
@@ -201,6 +225,7 @@ async def test_richmenu_setup_success_reads_real_png_and_builds_wheel_url(
     assert body["richmenu_id"] == "FAKE-RM-ID"
     assert body["replaced_existing"] is False
     assert body["wheel_url"] == "https://chouhutiger.onrender.com/demo/campaign/grand-open"
+    assert body["liff_id"] is None
 
     assert len(_FakeRichMenuAdminClient.calls) == 1
     call = _FakeRichMenuAdminClient.calls[0]
@@ -211,6 +236,56 @@ async def test_richmenu_setup_success_reads_real_png_and_builds_wheel_url(
     assert len(sent_body["areas"]) == 2  # type: ignore[arg-type]
     for area in sent_body["areas"]:  # type: ignore[union-attr]
         assert area["action"]["uri"] == "https://chouhutiger.onrender.com/demo/campaign/grand-open"
+
+
+async def test_richmenu_setup_embeds_liff_param_when_app_already_registered(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """The bug this guards: without the liff query param, tapping the rich
+    menu inside LINE silently falls back to anonymous guest play instead of
+    pulling the tapper's real LINE identity."""
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token"),
+    )
+    monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeRichMenuAdminClient)
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeRichMenuLiffLookupClient)
+    _FakeRichMenuLiffLookupClient.found_liff_id = "EXISTING-LIFF-ID"
+
+    resp = await client.post(
+        "/admin/line/richmenu",
+        json={"slug": "grand-open", "base_url": "https://chouhutiger.onrender.com"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    expected = "https://chouhutiger.onrender.com/demo/campaign/grand-open?liff=EXISTING-LIFF-ID"
+    assert body["wheel_url"] == expected
+    assert body["liff_id"] == "EXISTING-LIFF-ID"
+
+    call = _FakeRichMenuAdminClient.calls[0]
+    sent_body = call["body"]
+    for area in sent_body["areas"]:  # type: ignore[union-attr]
+        assert area["action"]["uri"] == expected
+
+
+async def test_richmenu_setup_falls_back_gracefully_when_liff_lookup_fails(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token"),
+    )
+    monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeRichMenuAdminClient)
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeRichMenuLiffLookupClient)
+    _FakeRichMenuLiffLookupClient.lookup_error = LiffApiError(500, "boom", "/apps")
+
+    resp = await client.post("/admin/line/richmenu", json={"base_url": "https://x.example"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["liff_id"] is None
+    assert body["wheel_url"] == "https://x.example/demo/campaign/grand-open"
 
 
 async def test_richmenu_setup_missing_png_gives_clear_error(
@@ -239,6 +314,7 @@ async def test_richmenu_setup_wraps_upstream_error_as_502(
     )
     _FakeRichMenuAdminClient.ensure_error = RichMenuApiError(400, "bad image", "/richmenu")
     monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeRichMenuAdminClient)
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeRichMenuLiffLookupClient)
 
     resp = await client.post("/admin/line/richmenu", json={})
     assert resp.status_code == 502
@@ -565,6 +641,12 @@ class _FakeFinalizeLiffClient:
         r = _FakeFinalizeLiffClient.registered
         return [{"liffId": r["liffId"], "view": {"url": r["view_url"]}}]
 
+    async def find_by_view_url(self, view_url: str) -> str | None:
+        r = _FakeFinalizeLiffClient.registered
+        if r is not None and r["view_url"] == view_url:
+            return r["liffId"]
+        return None
+
     async def aclose(self) -> None:
         pass
 
@@ -663,6 +745,10 @@ async def test_finalize_runs_all_three_and_reports_status(
     assert body["errors"] == []
     assert body["liff"]["liff_id"] == "FIN-LIFF-ID"
     assert body["richmenu"]["richmenu_id"] == "FIN-RM-ID"
+    # LIFF ensured before rich menu -> the rich-menu buttons must carry the
+    # liff id so tapping them inside LINE pulls real identity, not a guest.
+    assert body["richmenu"]["liff_id"] == "FIN-LIFF-ID"
+    assert body["richmenu"]["wheel_url"].endswith("?liff=FIN-LIFF-ID")
     assert body["webhook"]["endpoint_url"] == "https://chouhutiger.onrender.com/line/webhook"
     # webhook toggle still off (no public API for it) -> not fully ready yet,
     # but everything this endpoint controls succeeded.

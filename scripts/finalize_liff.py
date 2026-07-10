@@ -1,16 +1,19 @@
-"""One-shot: wire a real LIFF ID into the launch-ready LINE assets.
+"""OBSOLETE — kept only as a record of the pre-automation manual step.
 
-Usage:
+The rich-menu button URLs (POST /admin/line/richmenu) and the auto-welcome
+Flex message (routers/line_webhook.py) now look up the live LIFF id and
+inject ``?liff=<id>`` at request time, so this script's output is no longer
+read by anything: ``richmenu_launch.final.json`` isn't loaded by any running
+code at all, and ``flex_welcome_launch.final.json``'s baked-in query param
+(if any) is overwritten on every push regardless of what's on disk. Running
+this script is harmless but has no effect on production behavior.
+
+Original usage (pre-automation):
     python scripts/finalize_liff.py <LIFF_ID>
 
-Appends ``?liff=<LIFF_ID>`` to every wheel-page URI in the two ``*_launch.final.json``
-assets (rich menu + welcome flex). The rich-menu PNG does NOT need
-re-rendering — it is a pure visual mockup and never embeds a URL; only the
-JSON's ``action.uri`` fields (uploaded separately in LINE's console) carry
-the link.
-
-Idempotent: re-running with the same id is a no-op (detects an existing
-``?liff=`` and skips it) rather than accumulating duplicate params.
+Appended ``?liff=<LIFF_ID>`` to every wheel-page URI in the two ``*_launch.final.json``
+assets (rich menu + welcome flex) so they could be hand-uploaded to LINE's
+console with the correct link already baked in.
 """
 
 from __future__ import annotations

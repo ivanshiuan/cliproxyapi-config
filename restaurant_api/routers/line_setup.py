@@ -9,6 +9,7 @@ the token can do its own setup without an operator opening either console.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, Request
@@ -25,6 +26,8 @@ from ..integrations.line import (
     WebhookAdminClient,
     WebhookApiError,
 )
+
+logger = logging.getLogger("restaurant_api.routers.line_setup")
 
 router = APIRouter(prefix="/admin/line", tags=["admin-line-setup"])
 
@@ -227,6 +230,7 @@ class RichMenuSetupResponse(BaseModel):
     richmenu_id: str
     replaced_existing: bool
     wheel_url: str
+    liff_id: str | None
 
 
 @router.post(
@@ -255,6 +259,21 @@ async def setup_richmenu(
 
     root = (payload.base_url or str(request.base_url)).rstrip("/")
     wheel_url = f"{root}/demo/campaign/{payload.slug}"
+
+    # Prefer the LIFF-aware URL when a matching LIFF app already exists (the
+    # normal case — /admin/line/finalize ensures LIFF before rich menu) so
+    # tapping a rich-menu button pulls real LINE identity with zero typing,
+    # instead of silently falling back to anonymous guest play.
+    liff_client = LiffAdminClient(channel_access_token=token)
+    try:
+        liff_id = await liff_client.find_by_view_url(wheel_url)
+    except LiffApiError as e:
+        liff_id = None
+        logger.warning("richmenu_setup.liff_lookup_failed", extra={"error": str(e)})
+    finally:
+        await liff_client.aclose()
+
+    button_url = f"{wheel_url}?liff={liff_id}" if liff_id else wheel_url
     body: dict[str, object] = {
         "size": {"width": 2500, "height": 843},
         "selected": True,
@@ -263,11 +282,11 @@ async def setup_richmenu(
         "areas": [
             {
                 "bounds": {"x": 0, "y": 0, "width": 1250, "height": 843},
-                "action": {"type": "uri", "label": "開幕輪盤抽獎", "uri": wheel_url},
+                "action": {"type": "uri", "label": "開幕輪盤抽獎", "uri": button_url},
             },
             {
                 "bounds": {"x": 1250, "y": 0, "width": 1250, "height": 843},
-                "action": {"type": "uri", "label": "我的獎品錢包", "uri": wheel_url},
+                "action": {"type": "uri", "label": "我的獎品錢包", "uri": button_url},
             },
         ],
     }
@@ -284,7 +303,7 @@ async def setup_richmenu(
         await client.aclose()
 
     return RichMenuSetupResponse(
-        richmenu_id=richmenu_id, replaced_existing=replaced, wheel_url=wheel_url
+        richmenu_id=richmenu_id, replaced_existing=replaced, wheel_url=button_url, liff_id=liff_id
     )
 
 
