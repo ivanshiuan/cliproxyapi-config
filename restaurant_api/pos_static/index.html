@@ -200,7 +200,7 @@ async function loadStores() {
     o.value = ""; o.textContent = "以 ?store=<id> 指定門市";
     sel.appendChild(o);
   }
-  sel.onchange = () => { storeId = sel.value || null; refresh(); };
+  sel.onchange = () => { storeId = sel.value || null; menuCache = []; refresh(); };
 }
 
 // ─── floor plan ───
@@ -250,14 +250,14 @@ function openTableModal(t) {
   if (t.is_occupied) {
     const s = t.session;
     $("tmSub").textContent = `${s.party_size} 位 · 開桌於 ${fmt(s.opened_at)}`;
-    const btnClose = mkBtn("結帳離桌", "primary", async () => {
-      await guard(() => api(`/tables/sessions/${s.id}/close`, { method: "POST" }), "已結桌");
-    });
+    // Order panel: current bill + add items + checkout.
+    body.innerHTML = `<div id="orderPanel"><div class="empty">載入訂單…</div></div>`;
+    loadOrder(s);
     const btnCancel = mkBtn("取消開桌", "ghost", async () => {
       await guard(() => api(`/tables/sessions/${s.id}/cancel`, { method: "POST" }), "已取消");
     });
     const btnTransfer = mkBtn("轉桌", "ghost", () => transferPrompt(s, t));
-    acts.append(btnClose, btnTransfer, btnCancel);
+    acts.append(btnTransfer, btnCancel);
   } else {
     $("tmSub").textContent = `${t.seats} 座 · 空桌`;
     body.innerHTML = `<div class="row"><label>人數</label>
@@ -290,6 +290,100 @@ function transferPrompt(s, from) {
     await guard(() => api(`/tables/sessions/${s.id}/transfer`, {
       method: "POST", body: JSON.stringify({ target_table_id: target }),
     }), "已轉桌");
+  }));
+}
+
+// ─── order panel (add items + checkout) ───
+let menuCache = [];
+async function loadMenuCache() {
+  if (menuCache.length || !storeId) return menuCache;
+  try {
+    menuCache = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true`);
+  } catch { menuCache = []; }
+  return menuCache;
+}
+
+async function loadOrder(s) {
+  const panel = $("orderPanel");
+  try {
+    const order = await api(`/tables/sessions/${s.id}/order`);
+    const items = await loadMenuCache();
+    const total = order.lines.reduce((a, l) => a + Number(l.line_total), 0);
+    panel.innerHTML = `
+      <div style="font-weight:600;margin:6px 0">本桌帳單</div>
+      <div class="menu-list">
+        ${order.lines.length ? order.lines.map((l) => {
+          const it = items.find((m) => m.id === l.menu_item_id);
+          const nm = it ? it.name : l.menu_item_id.slice(0, 8);
+          return `<div class="menu-item">
+            <span>${escapeHtml(nm)} × ${Number(l.qty)}</span>
+            <span><span class="price">$${Number(l.line_total).toFixed(0)}</span>
+            <button class="ghost" style="padding:2px 8px;margin-left:8px"
+              onclick="voidLine('${s.id}','${l.id}')">退</button></span>
+          </div>`;
+        }).join("") : `<div class="empty" style="padding:14px">尚未點餐</div>`}
+      </div>
+      <div style="display:flex;justify-content:space-between;margin:10px 2px;font-size:17px;font-weight:700">
+        <span>合計</span><span class="price">$${total.toFixed(0)}</span>
+      </div>
+      <div style="font-weight:600;margin:10px 0 6px">加點</div>
+      <div class="menu-list" style="max-height:34vh;overflow:auto">
+        ${items.length ? items.map((m) => `<div class="menu-item"
+          style="cursor:pointer" onclick="addLine('${s.id}','${m.id}')">
+          <span>${escapeHtml(m.name)}</span><span class="price">$${Number(m.price).toFixed(0)}</span>
+        </div>`).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
+      </div>
+      <div class="actions" style="margin-top:12px">
+        <button class="primary" onclick="checkoutPrompt('${s.id}', ${total})"
+          ${order.lines.length ? "" : "disabled"}>結帳 ($${total.toFixed(0)})</button>
+      </div>`;
+  } catch (e) { panel.innerHTML = `<div class="empty">載入訂單失敗: ${escapeHtml(e.message)}</div>`; }
+}
+
+async function addLine(sessionId, itemId) {
+  try {
+    await api(`/tables/sessions/${sessionId}/lines`, {
+      method: "POST", body: JSON.stringify({ menu_item_id: itemId, qty: "1" }),
+    });
+    const t = floor.find((x) => x.session && x.session.id === sessionId);
+    if (t) loadOrder(t.session);
+    toast("已加點");
+  } catch (e) { toast(e.message, true); }
+}
+
+async function voidLine(sessionId, lineId) {
+  try {
+    await api(`/tables/order-lines/${lineId}/void`, {
+      method: "POST", body: JSON.stringify({ reason: "POS 退菜" }),
+    });
+    const t = floor.find((x) => x.session && x.session.id === sessionId);
+    if (t) loadOrder(t.session);
+    toast("已退菜");
+  } catch (e) { toast(e.message, true); }
+}
+
+function checkoutPrompt(sessionId, total) {
+  const body = $("tmBody");
+  body.innerHTML = `
+    <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 合計 $${total.toFixed(0)}</div>
+    <div class="row"><label>收現</label>
+      <input id="tendered" type="number" value="${total}" min="${total}" /></div>
+    <div id="changeHint" class="zone" style="margin:4px 2px"></div>`;
+  const inp = $("tendered");
+  const hint = $("changeHint");
+  const upd = () => { const c = Number(inp.value || 0) - total;
+    hint.textContent = c >= 0 ? `找零 $${c.toFixed(0)}` : "收現不足"; };
+  inp.oninput = upd; upd();
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認結帳", "primary", async () => {
+    const tendered = inp.value;
+    if (Number(tendered) < total) return toast("收現不足", true);
+    try {
+      const res = await api(`/tables/sessions/${sessionId}/checkout`, {
+        method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
+      });
+      closeModal(); toast(`結帳完成 · 找零 $${Number(res.change).toFixed(0)}`); refresh();
+    } catch (e) { toast(e.message, true); }
   }));
 }
 
