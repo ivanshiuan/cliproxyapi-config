@@ -206,6 +206,10 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 savepoint fixture 會連 seed_tenant/seed_store 一起回滾，之後的 INSERT 全撞 FK。
 要測 IntegrityError 就把它放在該測試最後一步，或拆成獨立測試。
 
+### L3 端到端驗證（起真 server 打真 DB）後一定要清 DB
+手動 curl/腳本 commit 進 resto_dev 的資料會殘留，讓 savepoint 測試（掃全表計數的那種，
+如 test_create_empty_order）看到多餘列而失敗。驗完跑 `make db-truncate` 清乾淨。
+
 ---
 
 ## 檔案攝取 — 看到檔案自己選武器（不用我下指令）

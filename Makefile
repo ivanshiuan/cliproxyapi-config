@@ -134,7 +134,7 @@ db-smoke: install ## End-to-end insert/select smoke against real DB
 .PHONY: db-truncate
 db-truncate: ## Wipe all rows (DB owner only; bypasses ledger append-only rules)
 	PGPASSWORD=$$RESTO_DB_PASSWORD psql -h $$RESTO_DB_HOST -U $$RESTO_DB_USER -d $$RESTO_DB_NAME -c \
-		"TRUNCATE TABLE order_payments, order_discounts, order_lines, orders, waste_events, staff_meal_events, tasting_events, time_clocks, shifts, leave_requests, customer_points_ledger, customers, stock_movements, recipes, menu_items, menu_categories, ingredients, cash_drawer_sessions, audit_log, employees, stores, tenants CASCADE;"
+		"TRUNCATE TABLE order_payments, order_discounts, order_lines, orders, table_sessions, dining_tables, waste_events, staff_meal_events, tasting_events, time_clocks, shifts, leave_requests, customer_points_ledger, customers, stock_movements, recipes, menu_items, menu_categories, ingredients, cash_drawer_sessions, audit_log, employees, stores, tenants CASCADE;"
 
 .PHONY: seed
 seed: install ## Seed demo restaurant data (1 tenant, 1 store, 5 employees, 12 menu items, 3 customers)
