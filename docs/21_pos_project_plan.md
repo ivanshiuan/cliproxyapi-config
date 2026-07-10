@@ -52,7 +52,7 @@ PM 工程師（Claude，本 session 常駐角色）
 | 1.5 | WebSocket hub + `order_events` append-only 事件表 | 斷線重連用 last_event_id 補拉 | ✅ 2026-07-10 |
 | 1.6a | POS 前台 shell（輕量 Web：桌況圖/開桌/結桌/轉桌/菜單瀏覽，/pos） | 真 HTTP 端到端跑過一輪 | ✅ 2026-07-09 |
 | 1.6b | POS 前台點餐/結帳（綁 P1.3b 訂單操作 + P1.4 結帳） | 前台帳單/加點/退菜/結帳找零 UI；API 全端到端驗過 | ✅ 2026-07-09 |
-| 1.7 | P1 驗收：demo-flow 全流程 + 復盤 | L1–L5 全過 | ⬜ |
+| 1.7 | P1 驗收：demo-flow 全流程 + 復盤 | L1–L5 全過 | ✅ 2026-07-10 |
 
 ### P2 桌邊平板點餐（第二優先 — Ivan 拍板）
 2.1 devices 裝置註冊（角色/綁桌）→ 2.2 顧客模式前端（綁桌 kiosk + 限定菜單）→ 2.3 桌位 QR 手機版 → 2.4 新單推播到 POS → 2.5 驗收復盤。
@@ -82,4 +82,21 @@ P3 KDS 螢幕 → P4 會員+折扣+**報表與後台匯出（CSV/Excel，Ivan �
 
 ## 6. 復盤記錄（隨 Phase 累積）
 
-- （空 — P1 收尾時寫第一筆）
+### 復盤 #1 — P1 店員 POS（2026-07-10）
+
+**做完了什麼**：一套平板打開就能用的完整收銀系統 — 桌位/菜單資料層、樓面桌況板、開桌/結桌/取消/轉桌、桌邊點餐（伺服器端快照價防改價）、改量/退菜（回沖庫存）、現金結帳找零 + 自動結桌、多平板即時桌況同步（WebSocket + append-only 事件流）、日結/熱銷報表 + CSV 對帳匯出、單檔 vanilla JS 前台。demo-flow 一日全流程（外送進單 + 店員 POS）跑通，678 測試綠。
+
+**遇到的坑 → 防再發機制**（每個都留了測試/lint/文件擋下次）：
+| # | 坑 | Root cause | 防再發 |
+|---|---|---|---|
+| 1 | 加 NOT NULL enum 欄回填舊列後 ORM 讀不回、partial index 永遠不生效 | `SQLEnum(native_enum=False)` 存的是 member **NAME**（"OPEN"）不是 value（"open"） | `tests/test_tables_model.py` 釘死 + CLAUDE.md 坑清單；server_default / index predicate 一律用 `.name` |
+| 2 | menu/tables 整合測撞 tenant FK | 預設租戶（全 0）未 seed | 各測試檔本地 `client` fixture 覆寫 `get_current_tenant_id`→`seed_tenant.id` |
+| 3 | 退菜刪不掉、reload 後還在 | `session.delete(line)` 未走 collection cascade | 改用 `order.lines.remove(line)`（delete-orphan）；測試釘住 `lines == []` |
+| 4 | 手動 L3 驗證污染 DB，savepoint 全表計數測試假性失敗 | curl/腳本 commit 進 resto_dev 殘留 | `make db-truncate` 納入所有新表 + CLAUDE.md「L3 後清 DB」坑；每次 L3 收尾實際清 |
+| 5 | WebSocket 廣播可能漏出幻影事件 | 若在 service 內 publish，交易 rollback 後平板已收到 | record_event 只寫列 + 塞 ContextVar buffer，**commit 成功後**才 drain publish（`api/deps.get_db`）；CLAUDE.md 記錄 |
+
+**估算 vs 實際**：P1.3b/P1.4（綁桌點餐 + 結帳）比預期省工 — 靠重用既有 `orders_service` 私有 helper（BOM 扣料/KDS/回應形狀零分歧），沒有另刻一套。P1.5 即時同步比預期多花在「廣播時機正確性」而非 WebSocket 本身。
+
+**新增的家規**（已進 CLAUDE.md）：enum NAME vs value、測試中不要 `db_session.rollback()`、L3 後清 DB、即時事件廣播必在 commit 之後。
+
+**下階段開工前要拍板的決策**：認證/權限模型（店員 PIN vs 獨立憑證表；刪單/折扣的 manager gate 機制）— 屬 security-sensitive，動工前用 AskUserQuestion 給 Ivan 選項，不自作主張定 credentials schema。
