@@ -219,6 +219,13 @@ savepoint fixture 會連 seed_tenant/seed_store 一起回滾，之後的 INSERT 
 手動 curl/腳本 commit 進 resto_dev 的資料會殘留，讓 savepoint 測試（掃全表計數的那種，
 如 test_create_empty_order）看到多餘列而失敗。驗完跑 `make db-truncate` 清乾淨。
 
+### 退菜/折扣的 audit `actor_id` 是「授權者」，必須是真員工（FK employees）
+`pos_order_service.void_line`/`apply_discount` 經 `authorize_sensitive` 決定授權者
+（self=登入者、override=覆核主管），audit 用那個 `actor_id`。`audit_log.actor_id` 有 FK 到
+`employees`，所以測試若用假的 `PosPrincipal(employee_id=uuid4())` 覆寫 `get_pos_principal`，
+退菜一 audit 就撞 FK。**測試要建一個真的 Employee 當授權者**（見 test_pos_orders_router 的
+`client` fixture 建 manager）。gate 本身（deny/override/wrong-pin）在 test_pos_auth_router 用真 PIN 測。
+
 ---
 
 ## 檔案攝取 — 看到檔案自己選武器（不用我下指令）

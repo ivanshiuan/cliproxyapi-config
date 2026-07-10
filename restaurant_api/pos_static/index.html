@@ -99,6 +99,7 @@
   <span class="stat" id="summary">—</span>
   <span class="stat" id="liveDot" title="即時連線狀態" style="font-size:13px">●</span>
   <span class="spacer"></span>
+  <span class="stat" id="whoami" style="cursor:pointer" title="點擊登出/切換員工"></span>
   <select id="storeSel" title="門市"></select>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
@@ -147,6 +148,16 @@
   </div>
 </div>
 
+<!-- Employee login / manager override (shared sheet, filled dynamically) -->
+<div class="overlay" id="authModal">
+  <div class="sheet">
+    <h2 id="authTitle">員工登入</h2>
+    <div class="sub" id="authSub">選擇你的名字並輸入 4-6 碼 PIN。</div>
+    <div id="authBody"></div>
+    <div class="actions" id="authActions"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -162,6 +173,10 @@ let wsBackoff = 1000;    // reconnect backoff, grows to a cap
 let reconnectTimer = null;
 let refreshTimer = null; // coalesces bursts of events into one board refresh
 let openSessionId = null; // session whose bill is currently on screen, if any
+// ── auth (P1 認證/權限) ──
+let posToken = localStorage.getItem("pos_token") || null; // POS session token
+let posMe = null;        // {employee_id, full_name, role, permissions[]}
+let empCache = [];       // store employees, for login + manager-override pickers
 
 const $ = (id) => document.getElementById(id);
 
@@ -173,16 +188,101 @@ function toast(msg, isErr) {
 }
 
 async function api(path, opts) {
-  const res = await fetch(API + path, {
-    headers: { "Content-Type": "application/json" },
-    ...opts,
-  });
+  opts = opts || {};
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (posToken) headers["Authorization"] = "Bearer " + posToken;
+  const res = await fetch(API + path, { ...opts, headers });
   if (!res.ok) {
     let detail = res.statusText;
     try { const j = await res.json(); detail = j.error?.message || detail; } catch {}
-    throw new Error(detail);
+    const err = new Error(detail); err.status = res.status; throw err;
   }
   return res.status === 204 ? null : res.json();
+}
+
+// ─── auth: login / identity / permission (P1 認證/權限) ───
+function hasPerm(p) { return !!(posMe && posMe.permissions.includes(p)); }
+
+function renderWhoami() {
+  const el = $("whoami");
+  if (posMe) { el.textContent = `👤 ${posMe.full_name} (${posMe.role})`; el.onclick = logout; }
+  else { el.textContent = "未登入"; el.onclick = () => showLogin(); }
+}
+
+async function refreshMe() {
+  if (!posToken) { posMe = null; renderWhoami(); return; }
+  try { posMe = await api("/pos-auth/me"); }
+  catch (e) { posToken = null; localStorage.removeItem("pos_token"); posMe = null; }
+  renderWhoami();
+}
+
+function logout() {
+  posToken = null; posMe = null; localStorage.removeItem("pos_token");
+  renderWhoami(); showLogin();
+}
+
+async function loadEmployees() {
+  if (!storeId) return [];
+  try { empCache = await api(`/pos-auth/employees?store_id=${encodeURIComponent(storeId)}`); }
+  catch { empCache = []; }
+  return empCache;
+}
+
+async function showLogin() {
+  if (!storeId) { toast("先指定門市 (?store=)", true); return; }
+  await loadEmployees();
+  $("authTitle").textContent = "員工登入";
+  $("authSub").textContent = "選擇你的名字並輸入 4-6 碼 PIN。";
+  const body = $("authBody");
+  const withPin = empCache.filter((e) => e.has_pin);
+  body.innerHTML = `
+    <div class="row"><label>員工</label>
+      <select id="authEmp">${withPin.length
+        ? withPin.map((e) => `<option value="${e.id}">${escapeHtml(e.full_name)} · ${e.role}</option>`).join("")
+        : `<option value="">（尚無員工設定 PIN — 請店長後台設定）</option>`}</select></div>
+    <div class="row"><label>PIN</label>
+      <input id="authPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" /></div>`;
+  const acts = $("authActions"); acts.innerHTML = "";
+  acts.append(mkBtn("登入", "primary", async () => {
+    const eid = $("authEmp").value, pin = $("authPin").value;
+    if (!eid || !pin) return toast("請選員工並輸入 PIN", true);
+    try {
+      const res = await api("/pos-auth/login", {
+        method: "POST", body: JSON.stringify({ employee_id: eid, pin }),
+      });
+      posToken = res.token; localStorage.setItem("pos_token", posToken);
+      await refreshMe(); hide("authModal"); toast(`歡迎，${res.full_name}`);
+    } catch (e) { toast("登入失敗：" + e.message, true); }
+  }));
+  acts.append(mkBtn("稍後", "ghost", () => hide("authModal")));
+  show("authModal");
+}
+
+// Manager-override PIN prompt for a gated action the current user can't do.
+// Resolves {employee_id, pin} or null (cancel).
+function promptOverride(actionLabel) {
+  return new Promise(async (resolve) => {
+    await loadEmployees();
+    $("authTitle").textContent = "主管覆核";
+    $("authSub").textContent = `${actionLabel}需要權限 — 請主管輸入 PIN 授權。`;
+    const mgrs = empCache.filter((e) => e.has_pin && (e.role === "owner" || e.role === "manager"));
+    $("authBody").innerHTML = `
+      <div class="row"><label>主管</label>
+        <select id="ovEmp">${mgrs.length
+          ? mgrs.map((e) => `<option value="${e.id}">${escapeHtml(e.full_name)} · ${e.role}</option>`).join("")
+          : `<option value="">（無可覆核的主管）</option>`}</select></div>
+      <div class="row"><label>PIN</label>
+        <input id="ovPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" /></div>`;
+    const acts = $("authActions"); acts.innerHTML = "";
+    const done = (v) => { hide("authModal"); resolve(v); };
+    acts.append(mkBtn("授權", "primary", () => {
+      const eid = $("ovEmp").value, pin = $("ovPin").value;
+      if (!eid || !pin) return toast("請選主管並輸入 PIN", true);
+      done({ employee_id: eid, pin });
+    }));
+    acts.append(mkBtn("取消", "ghost", () => done(null)));
+    show("authModal");
+  });
 }
 
 function show(id) { $(id).classList.add("show"); }
@@ -209,7 +309,7 @@ async function loadStores() {
     sel.appendChild(o);
   }
   sel.onchange = () => {
-    storeId = sel.value || null; menuCache = []; lastSeq = 0;
+    storeId = sel.value || null; menuCache = []; empCache = []; lastSeq = 0;
     refresh(); connectWS();
   };
 }
@@ -339,6 +439,8 @@ async function loadOrder(s) {
       <div style="display:flex;justify-content:space-between;margin:10px 2px;font-size:17px;font-weight:700">
         <span>合計</span><span class="price">$${total.toFixed(0)}</span>
       </div>
+      ${order.discounts && order.discounts.length ? `<div class="sub" style="margin:2px">
+        已套折扣 ${order.discounts.length} 筆（結帳金額以結帳畫面為準）</div>` : ""}
       <div style="font-weight:600;margin:10px 0 6px">加點</div>
       <div class="menu-list" style="max-height:34vh;overflow:auto">
         ${items.length ? items.map((m) => `<div class="menu-item"
@@ -347,8 +449,10 @@ async function loadOrder(s) {
         </div>`).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
       </div>
       <div class="actions" style="margin-top:12px">
-        <button class="primary" onclick="checkoutPrompt('${s.id}', ${total})"
-          ${order.lines.length ? "" : "disabled"}>結帳 ($${total.toFixed(0)})</button>
+        <button class="ghost" onclick="discountPrompt('${s.id}')"
+          ${order.lines.length ? "" : "disabled"}>折扣</button>
+        <button class="primary" onclick="checkoutPrompt('${s.id}')"
+          ${order.lines.length ? "" : "disabled"}>結帳</button>
       </div>`;
   } catch (e) { panel.innerHTML = `<div class="empty">載入訂單失敗: ${escapeHtml(e.message)}</div>`; }
 }
@@ -365,9 +469,15 @@ async function addLine(sessionId, itemId) {
 }
 
 async function voidLine(sessionId, lineId) {
+  const body = { reason: "POS 退菜" };
+  if (!hasPerm("void_line")) {
+    const ov = await promptOverride("退菜");
+    if (!ov) return;               // manager cancelled
+    body.override = ov;
+  }
   try {
     await api(`/tables/order-lines/${lineId}/void`, {
-      method: "POST", body: JSON.stringify({ reason: "POS 退菜" }),
+      method: "POST", body: JSON.stringify(body),
     });
     const t = floor.find((x) => x.session && x.session.id === sessionId);
     if (t) loadOrder(t.session);
@@ -375,22 +485,66 @@ async function voidLine(sessionId, lineId) {
   } catch (e) { toast(e.message, true); }
 }
 
-function checkoutPrompt(sessionId, total) {
+async function discountPrompt(sessionId) {
   const body = $("tmBody");
   body.innerHTML = `
-    <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 合計 $${total.toFixed(0)}</div>
+    <div style="font-weight:700;margin:6px 0">套用折扣</div>
+    <div class="row"><label>方式</label>
+      <select id="dcKind"><option value="percent">百分比 (%)</option>
+        <option value="amount">折抵金額 ($)</option></select></div>
+    <div class="row"><label>數值</label>
+      <input id="dcVal" type="number" step="1" min="0" placeholder="例：10 = 打9折 或 折$10" /></div>
+    <div class="sub" id="dcHint">百分比輸入 10 代表折 10%（即 9 折）。</div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("套用折扣", "primary", async () => {
+    const kind = $("dcKind").value;
+    const raw = Number($("dcVal").value || 0);
+    if (!(raw > 0)) return toast("請輸入折扣數值", true);
+    // percent: UI takes 10(%) → API wants 0.10 fraction.
+    const value = kind === "percent" ? (raw / 100).toString() : raw.toString();
+    const payload = { kind, value, reason: "POS 折扣" };
+    if (!hasPerm("apply_discount")) {
+      const ov = await promptOverride("折扣");
+      if (!ov) return;
+      payload.override = ov;
+    }
+    try {
+      await api(`/tables/sessions/${sessionId}/discount`, {
+        method: "POST", body: JSON.stringify(payload),
+      });
+      const t = floor.find((x) => x.session && x.session.id === sessionId);
+      if (t) loadOrder(t.session);
+      toast("已套用折扣");
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("取消", "ghost", () => { const t = floor.find((x) => x.session && x.session.id === sessionId); if (t) loadOrder(t.session); }));
+}
+
+async function checkoutPrompt(sessionId) {
+  const body = $("tmBody");
+  body.innerHTML = `<div class="empty">計算應收…</div>`;
+  // Ask the server for the amount due — it runs the same discount stack the
+  // till settles with, so the UI never does discount math (zero divergence).
+  let q;
+  try { q = await api(`/tables/sessions/${sessionId}/quote`); }
+  catch (e) { body.innerHTML = `<div class="empty">無法取得應收: ${escapeHtml(e.message)}</div>`; return; }
+  const net = Number(q.net);
+  const disc = Number(q.discount_total);
+  body.innerHTML = `
+    <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 應收 $${net.toFixed(0)}</div>
+    ${disc > 0 ? `<div class="sub">原價 $${Number(q.gross).toFixed(0)} − 折扣 $${disc.toFixed(0)}</div>` : ""}
     <div class="row"><label>收現</label>
-      <input id="tendered" type="number" value="${total}" min="${total}" /></div>
+      <input id="tendered" type="number" value="${net}" min="${net}" /></div>
     <div id="changeHint" class="zone" style="margin:4px 2px"></div>`;
   const inp = $("tendered");
   const hint = $("changeHint");
-  const upd = () => { const c = Number(inp.value || 0) - total;
+  const upd = () => { const c = Number(inp.value || 0) - net;
     hint.textContent = c >= 0 ? `找零 $${c.toFixed(0)}` : "收現不足"; };
   inp.oninput = upd; upd();
   const acts = $("tmActions"); acts.innerHTML = "";
   acts.append(mkBtn("確認結帳", "primary", async () => {
     const tendered = inp.value;
-    if (Number(tendered) < total) return toast("收現不足", true);
+    if (Number(tendered) < net) return toast("收現不足", true);
     try {
       const res = await api(`/tables/sessions/${sessionId}/checkout`, {
         method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
@@ -496,9 +650,14 @@ function onFloorEvent(ev) {
   if (!document.querySelector(".overlay.show")) scheduleRefresh();
 }
 
-// Boot: render once, then go live. The poll is now only a safety net for when
-// the WebSocket is unavailable/broken.
-loadStores().then(() => { refresh(); connectWS(); });
+// Boot: render once, go live, restore/prompt login. Viewing the board doesn't
+// require login; sensitive ops (退菜/折扣) do, and prompt for a manager PIN
+// override when the current user lacks the permission.
+loadStores().then(async () => {
+  refresh(); connectWS();
+  await refreshMe();
+  if (!posMe && storeId) showLogin();
+});
 setInterval(() => {
   const live = ws && ws.readyState === WebSocket.OPEN;
   if (storeId && !live && !document.querySelector(".overlay.show")) refresh();

@@ -12,9 +12,10 @@ from decimal import Decimal
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from .orders import OrderResponse
+from .pos_auth import ManagerOverride
 
 
 def _reject_float(value: Any) -> Any:
@@ -49,12 +50,40 @@ class LineUpdateRequest(BaseModel):
 
 
 class LineVoidRequest(BaseModel):
-    """退菜 — remove a line and reverse its stock consumption. Audited."""
+    """退菜 — remove a line and reverse its stock consumption. Audited.
+
+    Sensitive: the actor's role must hold VOID_LINE, or a manager authorizes
+    inline via ``override``.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     reason: str | None = Field(default=None, max_length=200)
     actor_id: UUID | None = None
+    override: ManagerOverride | None = None
+
+
+class DiscountApplyRequest(BaseModel):
+    """折扣 — apply a percent/amount discount to the session's open order.
+
+    Sensitive: the actor's role must hold APPLY_DISCOUNT, or a manager
+    authorizes inline via ``override``. The discount flows into checkout's
+    net-revenue calc automatically (same discount stack the till uses).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    kind: Literal["percent", "amount"]
+    value: StrictDecimal = Field(ge=Decimal("0"))
+    reason: str | None = Field(default=None, max_length=200)
+    override: ManagerOverride | None = None
+
+    @model_validator(mode="after")
+    def _check_range(self) -> DiscountApplyRequest:
+        # percent is a fraction (0.05 = 5%); amount is TWD off the subtotal.
+        if self.kind == "percent" and not (Decimal("0") <= self.value <= Decimal("1")):
+            raise ValueError("percent discount must be between 0 and 1")
+        return self
 
 
 class CheckoutCashRequest(BaseModel):
@@ -64,6 +93,17 @@ class CheckoutCashRequest(BaseModel):
 
     tendered: StrictDecimal = Field(ge=Decimal("0"))
     actor_id: UUID | None = None
+
+
+class CheckoutQuote(BaseModel):
+    """Amount due for the session's open order, discounts applied — the single
+    source of truth the checkout UI shows (no client-side discount math)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    gross: Decimal
+    discount_total: Decimal
+    net: Decimal
 
 
 class CheckoutResult(BaseModel):
@@ -77,7 +117,9 @@ class CheckoutResult(BaseModel):
 
 __all__ = [
     "CheckoutCashRequest",
+    "CheckoutQuote",
     "CheckoutResult",
+    "DiscountApplyRequest",
     "LineAddRequest",
     "LineUpdateRequest",
     "LineVoidRequest",

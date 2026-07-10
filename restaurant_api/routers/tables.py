@@ -14,12 +14,15 @@ import uuid
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from ..api.deps import DbSession, TenantId
+from ..api.pos_auth import PosActor
 from ..config import get_settings
 from ..database import get_sessionmaker
 from ..schemas.orders import OrderResponse
 from ..schemas.pos_orders import (
     CheckoutCashRequest,
+    CheckoutQuote,
     CheckoutResult,
+    DiscountApplyRequest,
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
@@ -244,17 +247,48 @@ async def update_line(
 @router.post(
     "/order-lines/{line_id}/void",
     response_model=OrderResponse,
-    summary="退菜 (回沖庫存 + 稽核)",
+    summary="退菜 (需權限或主管覆核 + 回沖庫存 + 稽核)",
 )
 async def void_line(
     line_id: uuid.UUID,
     payload: LineVoidRequest,
     session: DbSession,
     tenant_id: TenantId,
+    principal: PosActor,
 ) -> OrderResponse:
     return await pos_order_service.void_line(
-        session, line_id, payload, tenant_id=tenant_id
+        session, line_id, payload, tenant_id=tenant_id, principal=principal
     )
+
+
+@router.post(
+    "/sessions/{session_id}/discount",
+    response_model=OrderResponse,
+    summary="套用折扣 (需權限或主管覆核)",
+)
+async def apply_discount(
+    session_id: uuid.UUID,
+    payload: DiscountApplyRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+    principal: PosActor,
+) -> OrderResponse:
+    return await pos_order_service.apply_discount(
+        session, session_id, payload, tenant_id=tenant_id, principal=principal
+    )
+
+
+@router.get(
+    "/sessions/{session_id}/quote",
+    response_model=CheckoutQuote,
+    summary="應收金額 (折扣已計) — 結帳畫面用",
+)
+async def get_quote(
+    session_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CheckoutQuote:
+    return await pos_order_service.quote(session, session_id, tenant_id=tenant_id)
 
 
 @router.post(

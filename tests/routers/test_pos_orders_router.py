@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import date
 from decimal import Decimal
 
 import httpx
@@ -16,8 +17,9 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from restaurant_api.api.deps import get_current_tenant_id, get_db
+from restaurant_api.api.pos_auth import PosPrincipal, get_pos_principal
 from restaurant_api.main import app
-from restaurant_api.models import Store, Tenant
+from restaurant_api.models import Employee, EmployeeRole, Store, Tenant
 
 pytestmark = pytest.mark.asyncio
 
@@ -26,6 +28,7 @@ pytestmark = pytest.mark.asyncio
 async def client(
     db_session: AsyncSession,
     seed_tenant: Tenant,
+    seed_store: Store,
 ) -> AsyncIterator[httpx.AsyncClient]:
     async def _override_db() -> AsyncIterator[AsyncSession]:
         yield db_session
@@ -33,8 +36,28 @@ async def client(
     def _override_tenant() -> uuid.UUID:
         return seed_tenant.id
 
+    # A real manager employee so gated ops (退菜) audit against an existing
+    # actor_id (audit_log.actor_id FKs employees). Auth-specific deny/override
+    # paths are covered in test_pos_auth_router.
+    manager = Employee(
+        tenant_id=seed_tenant.id,
+        store_id=seed_store.id,
+        full_name="測試經理",
+        role=EmployeeRole.MANAGER,
+        hourly_wage=Decimal("200"),
+        hired_on=date(2026, 1, 1),
+    )
+    db_session.add(manager)
+    await db_session.flush()
+
+    def _override_principal() -> PosPrincipal:
+        return PosPrincipal(
+            employee_id=manager.id, store_id=seed_store.id, role=EmployeeRole.MANAGER
+        )
+
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_current_tenant_id] = _override_tenant
+    app.dependency_overrides[get_pos_principal] = _override_principal
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac

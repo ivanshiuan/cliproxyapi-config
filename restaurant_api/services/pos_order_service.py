@@ -29,12 +29,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
+from ..api.pos_auth import PosPrincipal
 from ..models import (
+    DiscountKind,
     Ingredient,
     MenuItem,
     MovementType,
     Order,
     OrderChannel,
+    OrderDiscount,
     OrderLine,
     OrderPayment,
     OrderStatus,
@@ -47,14 +50,17 @@ from ..models import (
 from ..schemas.orders import OrderLineCreate, OrderResponse
 from ..schemas.pos_orders import (
     CheckoutCashRequest,
+    CheckoutQuote,
     CheckoutResult,
+    DiscountApplyRequest,
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
 )
-from . import orders_service
+from . import orders_service, pos_auth_service
 from .audit_service import audit
 from .event_hub import record_event
+from .permissions import SensitiveAction
 
 _TPE = ZoneInfo("Asia/Taipei")
 
@@ -256,12 +262,23 @@ async def void_line(
     payload: LineVoidRequest,
     *,
     tenant_id: uuid.UUID,
+    principal: PosPrincipal | None = None,
 ) -> OrderResponse:
     stub = await _load_line(session, line_id, tenant_id)
     order = await orders_service._load_order_with_relations(
         session, stub.order_id, tenant_id
     )
     _guard_order_open(order)
+    # 退菜 is a gated action: the actor's role must hold VOID_LINE, or a manager
+    # authorizes inline. Raises 403 otherwise.
+    actor_id, via = await pos_auth_service.authorize_sensitive(
+        session,
+        tenant_id=tenant_id,
+        principal=principal,
+        action=SensitiveAction.VOID_LINE,
+        override_employee_id=payload.override.employee_id if payload.override else None,
+        override_pin=payload.override.pin if payload.override else None,
+    )
     # Grab the instance that lives in order.lines so removing it from the
     # collection triggers the delete-orphan cascade cleanly.
     line = next((ln for ln in order.lines if ln.id == line_id), None)
@@ -309,9 +326,10 @@ async def void_line(
         action="pos_order.line_voided",
         tenant_id=tenant_id,
         store_id=order.store_id,
-        actor_id=payload.actor_id,
+        actor_id=actor_id,  # who authorized (self or the override manager)
         target=("orders", order.id),
         before=snapshot,
+        after={"authorized_via": via},
         reason=payload.reason,
     )
     await record_event(
@@ -323,6 +341,85 @@ async def void_line(
         payload={"order_id": str(order.id), "line_id": str(line_id)},
     )
     return orders_service.order_to_response(order)
+
+
+async def apply_discount(
+    session: AsyncSession,
+    session_id: uuid.UUID,
+    payload: DiscountApplyRequest,
+    *,
+    tenant_id: uuid.UUID,
+    principal: PosPrincipal | None = None,
+) -> OrderResponse:
+    """折扣 — attach a percent/amount discount to the session's open order.
+
+    Gated like 退菜. The discount row flows into ``_compute_net_revenue`` at
+    checkout automatically (same stack the till uses), so no separate total math.
+    """
+    ts = await _load_open_session(session, session_id, tenant_id)
+    order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    _guard_order_open(order)
+    if not order.lines:
+        raise ValidationError("空訂單不能套用折扣")
+
+    actor_id, via = await pos_auth_service.authorize_sensitive(
+        session,
+        tenant_id=tenant_id,
+        principal=principal,
+        action=SensitiveAction.APPLY_DISCOUNT,
+        override_employee_id=payload.override.employee_id if payload.override else None,
+        override_pin=payload.override.pin if payload.override else None,
+    )
+
+    session.add(
+        OrderDiscount(
+            tenant_id=tenant_id,
+            order_id=order.id,
+            kind=DiscountKind(payload.kind),
+            value=payload.value,
+            reason=payload.reason,
+            applied_by=actor_id,
+        )
+    )
+    await session.flush()
+    await audit(
+        session,
+        action="pos_order.discount_applied",
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        actor_id=actor_id,
+        target=("orders", order.id),
+        after={"kind": payload.kind, "value": str(payload.value), "authorized_via": via},
+        reason=payload.reason,
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.discount_applied",
+        table_id=ts.table_id,
+        session_id=ts.id,
+        payload={"order_id": str(order.id)},
+    )
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    return orders_service.order_to_response(order)
+
+
+async def quote(
+    session: AsyncSession,
+    session_id: uuid.UUID,
+    *,
+    tenant_id: uuid.UUID,
+) -> CheckoutQuote:
+    """Amount due for the open order (discounts applied) — checkout UI reads this
+    instead of doing discount math client-side."""
+    ts = await _load_open_session(session, session_id, tenant_id)
+    order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    gross = sum((ln.line_total for ln in order.lines), Decimal("0"))
+    net = orders_service._compute_net_revenue(order)
+    return CheckoutQuote(gross=gross, discount_total=gross - net, net=net)
 
 
 async def checkout_cash(
@@ -440,8 +537,10 @@ def _guard_order_open(order: Order) -> None:
 
 __all__ = [
     "add_line",
+    "apply_discount",
     "checkout_cash",
     "get_session_order",
+    "quote",
     "update_line_qty",
     "void_line",
 ]
