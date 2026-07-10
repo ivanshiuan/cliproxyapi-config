@@ -12,6 +12,14 @@ import uuid
 from fastapi import APIRouter, Query, status
 
 from ..api.deps import DbSession, TenantId
+from ..schemas.orders import OrderResponse
+from ..schemas.pos_orders import (
+    CheckoutCashRequest,
+    CheckoutResult,
+    LineAddRequest,
+    LineUpdateRequest,
+    LineVoidRequest,
+)
 from ..schemas.tables import (
     DiningTableCreate,
     DiningTableResponse,
@@ -21,7 +29,7 @@ from ..schemas.tables import (
     TableSessionResponse,
     TableSessionTransfer,
 )
-from ..services import table_service
+from ..services import pos_order_service, table_service
 
 _Q_STORE_ID = Query(default=None)
 _Q_STORE_ID_REQ = Query()
@@ -165,6 +173,89 @@ async def transfer_session(
     tenant_id: TenantId,
 ) -> TableSessionResponse:
     return await table_service.transfer_session(
+        session, session_id, payload, tenant_id=tenant_id
+    )
+
+
+# ── Session ordering + cash checkout (P1.3b / P1.4) ──────────────────────────
+
+
+@router.get(
+    "/sessions/{session_id}/order",
+    response_model=OrderResponse,
+    summary="取得 (或開立) 此桌的現行訂單",
+)
+async def get_session_order(
+    session_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await pos_order_service.get_session_order(
+        session, session_id, tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/lines",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="加點一項 (價格由菜單快照)",
+)
+async def add_line(
+    session_id: uuid.UUID,
+    payload: LineAddRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await pos_order_service.add_line(
+        session, session_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.patch(
+    "/order-lines/{line_id}",
+    response_model=OrderResponse,
+    summary="改量",
+)
+async def update_line(
+    line_id: uuid.UUID,
+    payload: LineUpdateRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await pos_order_service.update_line_qty(
+        session, line_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/order-lines/{line_id}/void",
+    response_model=OrderResponse,
+    summary="退菜 (回沖庫存 + 稽核)",
+)
+async def void_line(
+    line_id: uuid.UUID,
+    payload: LineVoidRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await pos_order_service.void_line(
+        session, line_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/checkout",
+    response_model=CheckoutResult,
+    summary="現金結帳 (結單 + 結桌 + 找零)",
+)
+async def checkout_cash(
+    session_id: uuid.UUID,
+    payload: CheckoutCashRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CheckoutResult:
+    return await pos_order_service.checkout_cash(
         session, session_id, payload, tenant_id=tenant_id
     )
 
