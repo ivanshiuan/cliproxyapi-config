@@ -62,6 +62,11 @@ PM 工程師（Claude，本 session 常駐角色）
 P3 KDS 螢幕 → P4 會員+折扣+**報表與後台匯出（CSV/Excel，Ivan 圈定）** → P5 金流+電子發票 → P6 訂位（訂金）+線上點餐。
 人資（打卡/工時）後端已有，需求出現再排前端。
 
+**已提前實作（Ivan 圈定，跳出 P4 順序先做）**
+| 任務 | 驗收標準 | 狀態 |
+|---|---|---|
+| 營運報表 + 後台匯出：`/reports/sales`（日結/區間營收、付款方式明細、客單價）、`/reports/top-items`（熱銷排行）、`/reports/export/orders.csv`（BOM CSV 對帳匯出） | net_sales 與收銀台 `_compute_net_revenue` 一致（零分歧）；6 整合測 + L3 真伺服器驗過 | ✅ 2026-07-10 |
+
 ## 4. Bug 復盤 SOP（每個 bug 都要留下防再發機制）
 
 1. **記錄**：bug 現象、root cause、影響範圍，一律寫進當次 PR 描述或 `COMMANDER_HANDOFF.md`。

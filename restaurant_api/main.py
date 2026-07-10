@@ -33,6 +33,7 @@ from .routers import line_webhook as line_webhook_router
 from .routers import membership as membership_router
 from .routers import menu as menu_router
 from .routers import orders as orders_router
+from .routers import reports as reports_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
 from .routers import tables as tables_router
@@ -93,6 +94,7 @@ def _mount_router(module, prefix_hint: str) -> None:
 _mount_router(orders_router, "/orders")
 _mount_router(menu_router, "/menu")
 _mount_router(tables_router, "/tables")
+_mount_router(reports_router, "/reports")
 _mount_router(stock_router, "/stock")
 _mount_router(clock_router, "/clock")
 _mount_router(events_router, "/events")
