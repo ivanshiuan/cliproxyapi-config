@@ -16,6 +16,7 @@ from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from random import Random
+from types import SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -38,6 +39,7 @@ from restaurant_api.models import (
     Tenant,
     VoucherStatus,
 )
+from restaurant_api.routers import campaigns as campaigns_router
 from restaurant_api.schemas.campaigns import (
     CampaignCreate,
     PrizeCreate,
@@ -801,6 +803,87 @@ async def test_poster_by_slug_renders_brand(client: httpx.AsyncClient) -> None:
 async def test_poster_by_slug_unknown_slug_404(client: httpx.AsyncClient) -> None:
     resp = await client.get("/campaigns/by-slug/does-not-exist/poster")
     assert resp.status_code == 404
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Door QR target: without LINE_OA_ADD_FRIEND_URL configured, the QR points
+# straight at the wheel (anonymous guest play still works pre-setup). Once
+# configured, the physical QR should make the customer a real LINE friend
+# first — see _door_qr_target in routers/campaigns.py.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def test_qr_defaults_to_wheel_url_without_add_friend_configured(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        campaigns_router, "get_settings", lambda: SimpleNamespace(line_oa_add_friend_url="")
+    )
+    create = await client.post(
+        "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}
+    )
+    cid = create.json()["id"]
+    resp = await client.get(f"/campaigns/{cid}/qr.svg")
+    assert resp.status_code == 200
+    assert "<svg" in resp.text  # still renders — no add-friend url configured yet
+
+
+async def test_poster_uses_add_friend_url_when_configured(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        campaigns_router,
+        "get_settings",
+        lambda: SimpleNamespace(line_oa_add_friend_url="https://lin.ee/testxyz"),
+    )
+    create = await client.post(
+        "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}
+    )
+    cid = create.json()["id"]
+    resp = await client.get(f"/campaigns/{cid}/poster")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "掃我加 LINE 抽大獎" in body
+    assert "加入 LINE 好友" in body
+
+
+async def test_poster_falls_back_to_wheel_cta_without_add_friend_configured(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        campaigns_router, "get_settings", lambda: SimpleNamespace(line_oa_add_friend_url="")
+    )
+    create = await client.post(
+        "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}
+    )
+    cid = create.json()["id"]
+    resp = await client.get(f"/campaigns/{cid}/poster")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "掃我抽大獎" in body
+    assert "掃我加 LINE 抽大獎" not in body
+
+
+async def test_qr_svg_encodes_add_friend_url_not_wheel_url(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    """The generated QR must actually encode the add-friend link, not just
+    change the poster's caption text — a QR-content regression here would
+    silently defeat the whole point of switching it on."""
+    from restaurant_api.qr import make_qr_svg
+
+    monkeypatch.setattr(
+        campaigns_router,
+        "get_settings",
+        lambda: SimpleNamespace(line_oa_add_friend_url="https://lin.ee/testxyz"),
+    )
+    create = await client.post(
+        "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}
+    )
+    cid = create.json()["id"]
+    resp = await client.get(f"/campaigns/{cid}/qr.svg")
+    assert resp.status_code == 200
+    assert resp.text == make_qr_svg("https://lin.ee/testxyz").decode("utf-8")
 
 
 # ──────────────────────────────────────────────────────────────────────────

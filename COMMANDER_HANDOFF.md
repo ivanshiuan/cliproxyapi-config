@@ -11,7 +11,19 @@
 
 Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 回 200，本地端跑過 120 人份完整壓測全過）。**重大進展**：LIFF 建立跟圖文選單上架這兩件事，原本以為一定要你登入 LINE Developers Console / Official Account Manager 手動點——後來發現 LINE 這兩個功能都有對應的 API，而且你已經有的 `LINE_CHANNEL_ACCESS_TOKEN` 就能呼叫，所以我直接把它們做成兩個後端端點。**Render 的伺服器連得到 LINE 的 API（我這邊的沙盒連不到，但這不影響 Render 本身）**，所以你只要對已上線的 Render 服務打 2 個 API 就好，不用開瀏覽器登入 LINE。
 
-### 1. 印海報（現在就能做，不用等任何東西）
+### 0. 🆕 門口海報 QR 現在只有「訪客玩」——要「掃了先加好友」得補一個值
+
+檢查後發現：門口海報的 QR 目前直接連到輪盤頁本身（一般相機掃描，不經過 LINE），客人可以立刻玩，但**不會**變成你的 LINE 好友、也不是真的會員身份——只有已經是好友的人點圖文選單才會走到「真身份、免打字」的路。這跟最一開始「掃碼→加好友→玩→綁會員」的目標還差一步。
+
+已經做好開關，只差一個你才有的值：**LINE 官方帳號的加好友連結**。去 [LINE Official Account Manager](https://manager.line.biz/) → 你的帳號首頁，找到 Basic ID（`@xxxxxxx`）或 `https://lin.ee/xxxxxxx` 短網址，然後在 Render 後台（Dashboard → 你的服務 → Environment）加一個環境變數：
+
+```
+LINE_OA_ADD_FRIEND_URL=https://lin.ee/你的短碼
+```
+
+（或用 `https://line.me/R/ti/p/@你的BasicID` 格式，兩種 LINE 給的格式都吃。）存檔後 Render 會自動重新部署。設定好之後，門口海報 QR 會自動改成「掃了先加好友」，`GET /admin/line/finalize` 或 `/admin/line/status` 的回應也會反映這個狀態（`door_qr_add_friend_url` 欄位）。**這件事我這邊做不到**——LINE 沒有 API 可以查或產生這個連結，只能你登入後台看。
+
+### 1. 印海報（設定好上面那個值之後再印，或先印應急版也可以）
 
 打開瀏覽器貼這個網址，直接是排好版的 A4 海報（含 QR），`Ctrl/Cmd+P` 存 PDF 送印：
 

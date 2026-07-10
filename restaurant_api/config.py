@@ -94,6 +94,15 @@ class Settings(BaseSettings):
     line_channel_secret: str = Field(
         default="", validation_alias="LINE_CHANNEL_SECRET"
     )
+    # The OA's own "add friend" link (from LINE Official Account Manager —
+    # not retrievable via any API, must be pasted in by the operator), e.g.
+    # "https://line.me/R/ti/p/@xxxxxxx" or "https://lin.ee/xxxxxxx". When
+    # set, the door poster QR points here instead of straight at the wheel
+    # page, so scanning it makes the customer a real tracked LINE friend
+    # before they ever see the game — see routers/campaigns.py::_demo_url.
+    line_oa_add_friend_url: str = Field(
+        default="", validation_alias="LINE_OA_ADD_FRIEND_URL"
+    )
 
     # ─── Locale ─────────────────────────────────────────────────────────
     default_timezone: str = "Asia/Taipei"

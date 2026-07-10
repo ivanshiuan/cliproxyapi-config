@@ -40,6 +40,7 @@ from fastapi.responses import HTMLResponse
 
 from ..api.auth import require_admin
 from ..api.deps import DbSession, Messenger, TenantId
+from ..config import get_settings
 from ..models import CampaignStatus, VoucherStatus
 from ..qr import make_qr_svg
 from ..schemas.campaigns import (
@@ -383,8 +384,27 @@ def _demo_url(request: Request, campaign_id: uuid.UUID, base_url: str | None, br
     return f"{root}/demo/?{urlencode(params)}"
 
 
+def _door_qr_target(
+    request: Request, campaign_id: uuid.UUID, base_url: str | None, brand: dict[str, str]
+) -> tuple[str, bool]:
+    """Returns ``(url, is_add_friend)`` for the physical door QR.
+
+    ``LINE_OA_ADD_FRIEND_URL`` has no API — it's copy-pasted from LINE
+    Official Account Manager by the operator. When set, the door QR points
+    there instead of straight at the wheel: scanning makes the customer a
+    real LINE friend first, and the auto-welcome webhook + rich menu carry
+    them into the wheel with real LINE identity (zero typing). Unset falls
+    back to the wheel page directly (anonymous guest play), so the poster
+    still works before that one value is configured.
+    """
+    add_friend_url = get_settings().line_oa_add_friend_url
+    if add_friend_url:
+        return add_friend_url, True
+    return _demo_url(request, campaign_id, base_url, brand), False
+
+
 def _render_qr(campaign_id: uuid.UUID, request: Request, base_url: str | None, brand_params: dict[str, str]) -> Response:
-    url = _demo_url(request, campaign_id, base_url, brand_params)
+    url, _is_add_friend = _door_qr_target(request, campaign_id, base_url, brand_params)
     svg = make_qr_svg(url)
     return Response(content=svg, media_type="image/svg+xml")
 
@@ -451,11 +471,13 @@ def _render_poster(
     primary: str | None,
     accent: str | None,
 ) -> HTMLResponse:
-    url = _demo_url(request, campaign_id, base_url, brand_params)
+    url, is_add_friend = _door_qr_target(request, campaign_id, base_url, brand_params)
     svg = make_qr_svg(url, box_size=8).decode("utf-8")
 
     title = html.escape(brand or campaign_name)
-    sub = html.escape(tagline or "掃碼抽獎 · 加入會員 · 來店兌換")
+    default_sub = "掃碼加入 LINE 好友 · 立即抽獎" if is_add_friend else "掃碼抽獎 · 加入會員 · 來店兌換"
+    sub = html.escape(tagline or default_sub)
+    cta_text = "📱 掃我加 LINE 抽大獎" if is_add_friend else "📱 掃我抽大獎"
     primary_c = primary or "#ff5d8f"
     accent_c = accent or "#ffd34e"
     logo_html = (
@@ -490,7 +512,7 @@ def _render_poster(
   <h1>{title}</h1>
   <div class="sub">{sub}</div>
   <div class="qr">{svg}</div>
-  <div class="cta">📱 掃我抽大獎</div>
+  <div class="cta">{cta_text}</div>
   <div class="foot">最大獎 免單四人套餐 · 每日一抽 · 抽中即加入會員</div>
 </div></body></html>"""
     return HTMLResponse(content=page)

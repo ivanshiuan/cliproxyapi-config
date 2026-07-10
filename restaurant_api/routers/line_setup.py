@@ -45,6 +45,7 @@ class LineStatusResponse(BaseModel):
     webhook_endpoint_url: str | None
     webhook_endpoint_matches: bool
     webhook_active: bool
+    door_qr_add_friend_url: str | None
     ready: bool
     notes: list[str]
 
@@ -124,6 +125,13 @@ async def line_status(
             " → Messaging API 分頁手動打開"
         )
 
+    door_qr_add_friend_url = settings.line_oa_add_friend_url or None
+    if door_qr_add_friend_url is None:
+        notes.append(
+            "LINE_OA_ADD_FRIEND_URL 未設定 — 門口海報 QR 目前直接開輪盤頁"
+            " (訪客模式, 不會加好友), 設定後才會先加好友再玩"
+        )
+
     ready = bool(
         token and secret and liff_id and default_richmenu_id
         and webhook_endpoint_matches and webhook_active
@@ -142,6 +150,7 @@ async def line_status(
         webhook_endpoint_url=webhook_endpoint_url,
         webhook_endpoint_matches=webhook_endpoint_matches,
         webhook_active=webhook_active,
+        door_qr_add_friend_url=door_qr_add_friend_url,
         ready=ready,
         notes=notes,
     )

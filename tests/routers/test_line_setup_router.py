@@ -311,7 +311,9 @@ async def test_status_all_ready(client: httpx.AsyncClient, monkeypatch) -> None:
         line_setup,
         "get_settings",
         lambda: SimpleNamespace(
-            line_channel_access_token="tok", line_channel_secret="sec"
+            line_channel_access_token="tok",
+            line_channel_secret="sec",
+            line_oa_add_friend_url="https://lin.ee/testxyz",
         ),
     )
     _FakeStatusLiffClient.apps = [
@@ -335,6 +337,7 @@ async def test_status_all_ready(client: httpx.AsyncClient, monkeypatch) -> None:
     assert body["webhook_endpoint_url"] == "https://x.onrender.com/line/webhook"
     assert body["webhook_endpoint_matches"] is True
     assert body["webhook_active"] is True
+    assert body["door_qr_add_friend_url"] == "https://lin.ee/testxyz"
 
 
 async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatch) -> None:
@@ -342,7 +345,7 @@ async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatc
         line_setup,
         "get_settings",
         lambda: SimpleNamespace(
-            line_channel_access_token="tok", line_channel_secret=""
+            line_channel_access_token="tok", line_channel_secret="", line_oa_add_friend_url=""
         ),
     )
     # No LIFF app matches, no default rich menu, no webhook endpoint set.
@@ -358,11 +361,13 @@ async def test_status_not_ready_lists_gaps(client: httpx.AsyncClient, monkeypatc
     assert body["richmenu_set_as_default"] is False
     assert body["webhook_secret_configured"] is False
     assert body["webhook_endpoint_matches"] is False
+    assert body["door_qr_add_friend_url"] is None
     joined = " ".join(body["notes"])
     assert "LINE_CHANNEL_SECRET" in joined
     assert "POST /admin/line/liff" in joined
     assert "POST /admin/line/richmenu" in joined
     assert "POST /admin/line/webhook" in joined
+    assert "LINE_OA_ADD_FRIEND_URL" in joined
 
 
 async def test_status_endpoint_matches_but_toggle_off(
@@ -373,7 +378,9 @@ async def test_status_endpoint_matches_but_toggle_off(
     monkeypatch.setattr(
         line_setup,
         "get_settings",
-        lambda: SimpleNamespace(line_channel_access_token="tok", line_channel_secret="sec"),
+        lambda: SimpleNamespace(
+            line_channel_access_token="tok", line_channel_secret="sec", line_oa_add_friend_url=""
+        ),
     )
     _FakeStatusLiffClient.apps = [
         {"liffId": "L-1", "view": {"url": "https://x.onrender.com/demo/campaign/grand-open"}}
@@ -399,7 +406,9 @@ async def test_status_no_token_reports_cleanly(client: httpx.AsyncClient, monkey
     monkeypatch.setattr(
         line_setup,
         "get_settings",
-        lambda: SimpleNamespace(line_channel_access_token="", line_channel_secret=""),
+        lambda: SimpleNamespace(
+            line_channel_access_token="", line_channel_secret="", line_oa_add_friend_url=""
+        ),
     )
     resp = await client.get("/admin/line/status")
     assert resp.status_code == 200
@@ -637,7 +646,11 @@ async def test_finalize_runs_all_three_and_reports_status(
     monkeypatch.setattr(
         line_setup,
         "get_settings",
-        lambda: SimpleNamespace(line_channel_access_token="real-token", line_channel_secret="sec"),
+        lambda: SimpleNamespace(
+            line_channel_access_token="real-token",
+            line_channel_secret="sec",
+            line_oa_add_friend_url="",
+        ),
     )
     _patch_finalize_clients(monkeypatch)
 
@@ -666,7 +679,11 @@ async def test_finalize_collects_errors_without_aborting_remaining_steps(
     monkeypatch.setattr(
         line_setup,
         "get_settings",
-        lambda: SimpleNamespace(line_channel_access_token="real-token", line_channel_secret="sec"),
+        lambda: SimpleNamespace(
+            line_channel_access_token="real-token",
+            line_channel_secret="sec",
+            line_oa_add_friend_url="",
+        ),
     )
     _patch_finalize_clients(monkeypatch)
     _FakeFinalizeLiffClient.ensure_error = LiffApiError(400, "bad view url", "/apps")
