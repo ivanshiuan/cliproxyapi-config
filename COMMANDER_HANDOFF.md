@@ -27,18 +27,14 @@ https://chouhutiger.onrender.com/campaigns/by-slug/grand-open/poster
 RESTO_ADMIN_PASSCODE=你的店長密碼 ./scripts/finalize_line_setup.sh https://chouhutiger.onrender.com
 ```
 
-這支腳本會依序：登入店長後台 → 呼叫 `/admin/line/liff`（建立/重用 LIFF app）→ 呼叫 `/admin/line/richmenu`（上傳圖文選單並設為預設）→ 呼叫 `/admin/line/webhook`（**新**：直接用 LINE API 把 webhook endpoint 網址設成 `https://chouhutiger.onrender.com/line/webhook`，不用再手動貼網址）→ 印出 `/admin/line/status` 總覽。全部印出 JSON 結果，沒有 `"error"` 欄位就代表成功。
+這支腳本會：登入店長後台 → 呼叫 **一個**端點 `POST /admin/line/finalize`，它內部依序做完 LIFF 建立/重用 → 圖文選單上傳並設預設 → webhook endpoint 網址設定（**新**：直接用 LINE API 把網址設成 `https://chouhutiger.onrender.com/line/webhook`，不用再手動貼），三步中任何一步失敗都不會擋住其他兩步，最後回傳的 `status` 區塊就是完整就緒度總覽。印出的 JSON 沒有 `errors` 內容（`"errors": []`）就代表三步都成功。
 
-沒有 bash 環境的話，手動打這四個 API 也可以：
+沒有 bash 環境的話，手動打這兩支 API 也可以（登入 + finalize）：
 
 ```bash
 curl -c cookies.txt -X POST https://chouhutiger.onrender.com/admin/login \
   -H "Content-Type: application/json" -d '{"passcode":"你的店長密碼"}'
-curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/liff \
-  -H "Content-Type: application/json" -d '{}'
-curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/richmenu \
-  -H "Content-Type: application/json" -d '{}'
-curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/webhook \
+curl -b cookies.txt -X POST https://chouhutiger.onrender.com/admin/line/finalize \
   -H "Content-Type: application/json" -d '{}'
 ```
 
@@ -52,28 +48,18 @@ Invoke-RestMethod -Uri "$base/admin/login" -Method Post `
   -ContentType "application/json" -Body '{"passcode":"你的店長密碼"}' `
   -SessionVariable session | Out-Null
 
-Invoke-RestMethod -Uri "$base/admin/line/liff" -Method Post `
-  -ContentType "application/json" -Body '{}' -WebSession $session
-
-Invoke-RestMethod -Uri "$base/admin/line/richmenu" -Method Post `
-  -ContentType "application/json" -Body '{}' -WebSession $session
-
-Invoke-RestMethod -Uri "$base/admin/line/webhook" -Method Post `
-  -ContentType "application/json" -Body '{}' -WebSession $session
-
-Invoke-RestMethod -Uri "$base/admin/line/status" -Method Get -WebSession $session
+Invoke-RestMethod -Uri "$base/admin/line/finalize" -Method Post `
+  -ContentType "application/json" -Body '{}' -WebSession $session | ConvertTo-Json -Depth 10
 ```
 
-最後一行 `/admin/line/status` 的回應如果 `"ready": true`，代表 LIFF + 圖文選單 + webhook 端點網址 + 簽章金鑰全部到位，只剩下面第 3 步「flip 一個開關」。`notes` 陣列裡如果有文字，就是還缺什麼、照著做就好。
-
-**如果失敗**：四個端點都會回清楚的錯誤訊息（`error.message` + `error.details`），把錯誤內容貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
+回應裡的 `status.ready` 如果是 `true`，代表 LIFF + 圖文選單 + webhook 端點網址 + 簽章金鑰全部到位，只剩下面第 3 步「flip 一個開關」。`status.notes` 陣列裡如果有文字，就是還缺什麼、照著做就好；`errors` 陣列裡如果有內容，把它貼給我，我可以馬上判斷是 token 問題還是 LINE API 本身的問題。萬一 API 真的行不通，`docs/16_line_oa_design.md` §0-A 還留著手動點的步驟當備案。
 
 ### 3. 只剩一個開關要點（LINE 沒開放 API，這個真的只能你手動點）
 
-原本要手動做的「貼 webhook 網址」已經被上面的 `/admin/line/webhook` 自動做掉了。LINE 唯獨「Use webhook」這顆開關本身沒有公開 API 可以切——這是目前唯一還卡在 LINE Developers Console 裡的一步：
+原本要手動做的「貼 webhook 網址」已經被上面的 `/admin/line/finalize` 自動做掉了。LINE 唯獨「Use webhook」這顆開關本身沒有公開 API 可以切——這是目前唯一還卡在 LINE Developers Console 裡的一步：
 
 1. [developers.line.biz/console](https://developers.line.biz/console/) → 你的 Messaging API channel → **Messaging API** 分頁
-2. 確認 **Webhook URL** 已經是 `https://chouhutiger.onrender.com/line/webhook`（跑完第 2 步的腳本後應該已經自動填好了，這裡只是確認）
+2. 確認 **Webhook URL** 已經是 `https://chouhutiger.onrender.com/line/webhook`（跑完第 2 步後應該已經自動填好了，這裡只是確認）
 3. **Use webhook** 打開（開關切成 on）— 這是唯一要手點的動作
 4. （可選）下方「自動回應訊息」的「加入好友的歡迎訊息」可以關掉，因為改由 webhook 的 follow 事件自動送
 

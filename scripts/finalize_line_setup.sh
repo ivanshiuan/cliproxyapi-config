@@ -3,9 +3,10 @@
 #
 # Run this from YOUR OWN machine (or anywhere with normal internet access —
 # NOT from a sandboxed dev environment that blocks outbound calls to LINE).
-# It logs into the admin console, then calls the two admin endpoints that
-# register the LIFF app and upload the rich menu via LINE's own APIs —
-# replacing what used to be two manual console sessions.
+# It logs into the admin console, then calls the one admin endpoint that
+# registers the LIFF app, uploads the rich menu, and sets the webhook
+# endpoint URL — all via LINE's own APIs, replacing three manual console
+# sessions with one HTTP call.
 #
 # Usage:
 #   RESTO_ADMIN_PASSCODE=xxxx ./scripts/finalize_line_setup.sh https://chouhutiger.onrender.com
@@ -22,32 +23,15 @@ curl -sS -f -c "$COOKIE_JAR" -X POST "$BASE_URL/admin/login" \
   -d "{\"passcode\":\"$PASSCODE\"}" > /dev/null
 echo "   ok."
 
-echo "2) POST /admin/line/liff ..."
-LIFF_RESULT=$(curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/admin/line/liff" \
+echo "2) POST /admin/line/finalize (LIFF + rich menu + webhook endpoint, one call) ..."
+FINALIZE_RESULT=$(curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/admin/line/finalize" \
   -H "Content-Type: application/json" -d '{}')
-echo "$LIFF_RESULT"
+echo "$FINALIZE_RESULT"
 echo
 
-echo "3) POST /admin/line/richmenu ..."
-RICHMENU_RESULT=$(curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/admin/line/richmenu" \
-  -H "Content-Type: application/json" -d '{}')
-echo "$RICHMENU_RESULT"
-echo
-
-echo "4) POST /admin/line/webhook (sets the endpoint URL via LINE's own API) ..."
-WEBHOOK_RESULT=$(curl -sS -b "$COOKIE_JAR" -X POST "$BASE_URL/admin/line/webhook" \
-  -H "Content-Type: application/json" -d '{}')
-echo "$WEBHOOK_RESULT"
-echo
-
-echo "5) GET /admin/line/status (launch-readiness summary) ..."
-STATUS_RESULT=$(curl -sS -b "$COOKIE_JAR" "$BASE_URL/admin/line/status")
-echo "$STATUS_RESULT"
-echo
-
-echo "Done. The status block above is the single source of truth: if \"ready\":true,"
-echo "LIFF + rich menu + webhook endpoint + secret are all in place. If ready is"
-echo "false and the notes mention \"Use webhook\", the endpoint URL is already"
-echo "set correctly by this script — the only thing left is flipping the"
-echo "\"Use webhook\" toggle on in LINE Developers Console (LINE has no public"
-echo "API for that one switch) — see COMMANDER_HANDOFF.md."
+echo "Done. The \"status\" block inside the result above is the single source of"
+echo "truth: if \"ready\":true, LIFF + rich menu + webhook endpoint + secret are"
+echo "all in place. If ready is false and the notes mention \"Use webhook\", the"
+echo "endpoint URL is already set correctly by this script — the only thing left"
+echo "is flipping the \"Use webhook\" toggle on in LINE Developers Console (LINE"
+echo "has no public API for that one switch) — see COMMANDER_HANDOFF.md."

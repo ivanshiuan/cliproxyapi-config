@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from ..api.auth import Admin
-from ..api.errors import UpstreamError, ValidationError
+from ..api.errors import DomainError, UpstreamError, ValidationError
 from ..config import get_settings
 from ..integrations.line import (
     LiffAdminClient,
@@ -333,6 +333,83 @@ async def setup_webhook(
 
     return WebhookSetupResponse(
         endpoint_url=endpoint_url, changed=changed, active=active, test_result=test_result
+    )
+
+
+class FinalizeSetupRequest(BaseModel):
+    """All optional — same defaults as the individual /liff, /richmenu,
+    /webhook calls this chains together."""
+
+    slug: str = "grand-open"
+    base_url: str | None = None
+
+
+class FinalizeSetupResponse(BaseModel):
+    """Result of running all three one-time setup calls back to back, plus
+    the resulting readiness snapshot — the single call the launch script
+    needs instead of four separate round trips."""
+
+    liff: LiffSetupResponse | None
+    richmenu: RichMenuSetupResponse | None
+    webhook: WebhookSetupResponse | None
+    errors: list[str]
+    status: LineStatusResponse
+
+
+@router.post(
+    "/finalize",
+    response_model=FinalizeSetupResponse,
+    summary="一次跑完 LIFF+圖文選單+webhook 三步, 最後回傳就緒度總覽",
+)
+async def finalize_setup(
+    payload: FinalizeSetupRequest,
+    request: Request,
+    _admin: Admin,
+) -> FinalizeSetupResponse:
+    """Runs setup_liff, setup_richmenu, and setup_webhook in sequence — each
+    is independently idempotent, so a partial failure here is safe to retry
+    by just calling this again. Errors from one step don't block the others;
+    they're collected so the final status snapshot still reflects whatever
+    did succeed.
+    """
+    liff_result: LiffSetupResponse | None = None
+    richmenu_result: RichMenuSetupResponse | None = None
+    webhook_result: WebhookSetupResponse | None = None
+    errors: list[str] = []
+
+    liff_payload = LiffSetupRequest(slug=payload.slug, base_url=payload.base_url)
+    try:
+        liff_result = await setup_liff(liff_payload, request, _admin)
+    except DomainError as e:
+        detail = e.detail
+        errors.append(f"LIFF: {detail.get('message') if isinstance(detail, dict) else detail}")
+
+    richmenu_payload = RichMenuSetupRequest(slug=payload.slug, base_url=payload.base_url)
+    try:
+        richmenu_result = await setup_richmenu(richmenu_payload, request, _admin)
+    except DomainError as e:
+        detail = e.detail
+        errors.append(
+            f"圖文選單: {detail.get('message') if isinstance(detail, dict) else detail}"
+        )
+
+    webhook_payload = WebhookSetupRequest(base_url=payload.base_url)
+    try:
+        webhook_result = await setup_webhook(webhook_payload, request, _admin)
+    except DomainError as e:
+        detail = e.detail
+        errors.append(f"Webhook: {detail.get('message') if isinstance(detail, dict) else detail}")
+
+    status_result = await line_status(
+        request, _admin, slug=payload.slug, base_url=payload.base_url
+    )
+
+    return FinalizeSetupResponse(
+        liff=liff_result,
+        richmenu=richmenu_result,
+        webhook=webhook_result,
+        errors=errors,
+        status=status_result,
     )
 
 

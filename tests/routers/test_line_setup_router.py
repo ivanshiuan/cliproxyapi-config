@@ -526,3 +526,157 @@ async def test_webhook_setup_wraps_upstream_error_as_502(
     body = resp.json()
     assert body["error"]["code"] == "UPSTREAM_ERROR"
     assert body["error"]["details"]["status"] == 400
+
+
+# ── POST /admin/line/finalize ────────────────────────────────────────────
+#
+# finalize_setup calls setup_liff / setup_richmenu / setup_webhook / line_status
+# as plain function calls (not over HTTP), so it reads the same module-level
+# LiffAdminClient / RichMenuAdminClient / WebhookAdminClient names — one fake
+# per resource has to serve both the "do the ensure" call and the "read it
+# back for status" call the way the real client would.
+
+
+class _FakeFinalizeLiffClient:
+    ensure_error: ClassVar[LiffApiError | None] = None
+    registered: ClassVar[dict[str, str] | None] = None  # {"liffId": ..., "view_url": ...}
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def ensure_app(self, *, view_url: str, description: str = "") -> tuple[str, bool]:
+        if _FakeFinalizeLiffClient.ensure_error is not None:
+            raise _FakeFinalizeLiffClient.ensure_error
+        _FakeFinalizeLiffClient.registered = {"liffId": "FIN-LIFF-ID", "view_url": view_url}
+        return "FIN-LIFF-ID", True
+
+    async def list_apps(self) -> list[dict[str, object]]:
+        if _FakeFinalizeLiffClient.registered is None:
+            return []
+        r = _FakeFinalizeLiffClient.registered
+        return [{"liffId": r["liffId"], "view": {"url": r["view_url"]}}]
+
+    async def aclose(self) -> None:
+        pass
+
+
+class _FakeFinalizeRichMenuClient:
+    ensure_error: ClassVar[RichMenuApiError | None] = None
+    default_id: ClassVar[str | None] = None
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def ensure_richmenu(
+        self, body: dict[str, object], image_bytes: bytes
+    ) -> tuple[str, bool]:
+        if _FakeFinalizeRichMenuClient.ensure_error is not None:
+            raise _FakeFinalizeRichMenuClient.ensure_error
+        _FakeFinalizeRichMenuClient.default_id = "FIN-RM-ID"
+        return "FIN-RM-ID", False
+
+    async def get_default_richmenu_id(self) -> str | None:
+        return _FakeFinalizeRichMenuClient.default_id
+
+    async def aclose(self) -> None:
+        pass
+
+
+class _FakeFinalizeWebhookClient:
+    ensure_error: ClassVar[WebhookApiError | None] = None
+    endpoint: ClassVar[str | None] = None
+    active: ClassVar[bool] = False
+
+    def __init__(self, channel_access_token: str) -> None:
+        pass
+
+    async def ensure_endpoint(self, url: str) -> tuple[bool, bool]:
+        if _FakeFinalizeWebhookClient.ensure_error is not None:
+            raise _FakeFinalizeWebhookClient.ensure_error
+        _FakeFinalizeWebhookClient.endpoint = url
+        return True, _FakeFinalizeWebhookClient.active
+
+    async def test_endpoint(self) -> dict[str, object]:
+        return {"success": True, "statusCode": 200}
+
+    async def get_endpoint(self) -> tuple[str | None, bool]:
+        return _FakeFinalizeWebhookClient.endpoint, _FakeFinalizeWebhookClient.active
+
+    async def aclose(self) -> None:
+        pass
+
+
+@pytest_asyncio.fixture(autouse=True)
+def _reset_fake_finalize_clients():
+    _FakeFinalizeLiffClient.ensure_error = None
+    _FakeFinalizeLiffClient.registered = None
+    _FakeFinalizeRichMenuClient.ensure_error = None
+    _FakeFinalizeRichMenuClient.default_id = None
+    _FakeFinalizeWebhookClient.ensure_error = None
+    _FakeFinalizeWebhookClient.endpoint = None
+    _FakeFinalizeWebhookClient.active = False
+    yield
+
+
+def _patch_finalize_clients(monkeypatch) -> None:
+    monkeypatch.setattr(line_setup, "LiffAdminClient", _FakeFinalizeLiffClient)
+    monkeypatch.setattr(line_setup, "RichMenuAdminClient", _FakeFinalizeRichMenuClient)
+    monkeypatch.setattr(line_setup, "WebhookAdminClient", _FakeFinalizeWebhookClient)
+
+
+async def test_finalize_requires_admin() -> None:
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.post("/admin/line/finalize", json={})
+    assert resp.status_code in (401, 403)
+
+
+async def test_finalize_runs_all_three_and_reports_status(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token", line_channel_secret="sec"),
+    )
+    _patch_finalize_clients(monkeypatch)
+
+    resp = await client.post(
+        "/admin/line/finalize",
+        json={"slug": "grand-open", "base_url": "https://chouhutiger.onrender.com"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["errors"] == []
+    assert body["liff"]["liff_id"] == "FIN-LIFF-ID"
+    assert body["richmenu"]["richmenu_id"] == "FIN-RM-ID"
+    assert body["webhook"]["endpoint_url"] == "https://chouhutiger.onrender.com/line/webhook"
+    # webhook toggle still off (no public API for it) -> not fully ready yet,
+    # but everything this endpoint controls succeeded.
+    assert body["status"]["liff_app_registered"] is True
+    assert body["status"]["richmenu_set_as_default"] is True
+    assert body["status"]["webhook_endpoint_matches"] is True
+    assert body["status"]["webhook_active"] is False
+    assert body["status"]["ready"] is False
+
+
+async def test_finalize_collects_errors_without_aborting_remaining_steps(
+    client: httpx.AsyncClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        line_setup,
+        "get_settings",
+        lambda: SimpleNamespace(line_channel_access_token="real-token", line_channel_secret="sec"),
+    )
+    _patch_finalize_clients(monkeypatch)
+    _FakeFinalizeLiffClient.ensure_error = LiffApiError(400, "bad view url", "/apps")
+
+    resp = await client.post("/admin/line/finalize", json={})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["liff"] is None
+    assert len(body["errors"]) == 1
+    assert "LIFF" in body["errors"][0]
+    # richmenu and webhook still ran despite the LIFF failure.
+    assert body["richmenu"]["richmenu_id"] == "FIN-RM-ID"
+    assert body["webhook"]["endpoint_url"] is not None
