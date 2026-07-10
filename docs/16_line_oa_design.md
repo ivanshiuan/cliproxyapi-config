@@ -18,6 +18,8 @@
 
 連結用的是 `BASE_URL/demo/campaign/grand-open`——固定 slug，不是資料庫隨機 UUID，換部署環境／重建資料庫都不用重印 QR code。
 
+**這兩個檔案現在不用手動上傳了** — `POST /admin/line/finalize`（見 `COMMANDER_HANDOFF.md` 第 2 步）會直接呼叫 LINE API 把 `richmenu_launch.png` 設成預設圖文選單、並把 webhook endpoint 網址設好；歡迎訊息也不是靜態貼上，而是由 `restaurant_api/routers/line_webhook.py` 在 `follow` 事件觸發時即時送出 `flex_welcome_launch.final.json`。本節下面「怎麼把這些設定上去」列的手動後台步驟，只適用於 §0-B 那些還沒做的官網頁面版本。
+
 ---
 
 ## 0-B. 之後官網做好再升級（目前是佔位，先別上架）
@@ -178,6 +180,8 @@
 ---
 
 ## 8. 怎麼把這些設定上去
+
+> §0-A 現在上線用的圖文選單 + webhook 網址已經自動化（見上面 §0-A 說明 + `COMMANDER_HANDOFF.md`），不用照這節手動點。這節是給 §0-B 官網頁面做好之後、要換成 6 格滿版選單／新關鍵字時的手動備案。
 
 - **圖文選單 / 歡迎訊息 / 關鍵字** → LINE Official Account Manager 後台（`manager.line.biz`）手動貼上即可，不用寫程式。
 - **Flex 圖文訊息** → 兩種方式：
