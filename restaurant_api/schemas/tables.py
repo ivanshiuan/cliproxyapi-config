@@ -115,11 +115,36 @@ class FloorTableView(BaseModel):
     session: TableSessionResponse | None
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Real-time floor events (P1.5) — WS stream + REST cursor catch-up
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class OrderEventResponse(BaseModel):
+    """One floor event as delivered to a tablet (same shape as the WS frame).
+
+    ``seq`` is the reconnect cursor: a tablet stores the highest ``seq`` it has
+    applied and reconnects with ``?after=<seq>`` to replay exactly what it
+    missed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    seq: int
+    type: str
+    store_id: UUID
+    table_id: UUID | None
+    session_id: UUID | None
+    payload: dict
+    at: datetime
+
+
 __all__ = [
     "DiningTableCreate",
     "DiningTableResponse",
     "DiningTableUpdate",
     "FloorTableView",
+    "OrderEventResponse",
     "TableSessionOpen",
     "TableSessionResponse",
     "TableSessionTransfer",

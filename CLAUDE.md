@@ -206,6 +206,15 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 savepoint fixture 會連 seed_tenant/seed_store 一起回滾，之後的 INSERT 全撞 FK。
 要測 IntegrityError 就把它放在該測試最後一步，或拆成獨立測試。
 
+### 即時事件（WebSocket）廣播一定要在 commit 之後
+`services/event_hub.record_event()` 只做兩件事：寫 `order_events` 列（跟本次 mutation 同一 transaction，
+原子性 — 事件存在 ⟺ 交易 commit）＋ 把事件塞進 request-scoped 的 ContextVar buffer。
+**真正 `hub.publish()` 廣播是在 `api/deps.get_db` commit 成功之後才 drain buffer 執行**。
+不要在 service 裡直接 publish — 否則交易一 rollback，平板就收到幻影事件。
+斷線重連用 `?after=<seq>` 從 `order_events` 補拉（seq 是 IDENTITY 單調游標）；client 用 seq 去重，
+所以「subscribe 早於 catch-up」的重疊重送是安全的（設計如此，不是 bug）。
+測試的 `client` fixture 覆寫 `get_db`（不含 buffer 包裝）→ record_event 照樣寫列但不廣播，正好適合斷言持久層。
+
 ### L3 端到端驗證（起真 server 打真 DB）後一定要清 DB
 手動 curl/腳本 commit 進 resto_dev 的資料會殘留，讓 savepoint 測試（掃全表計數的那種，
 如 test_create_empty_order）看到多餘列而失敗。驗完跑 `make db-truncate` 清乾淨。

@@ -39,6 +39,7 @@ from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
 from .menu import MenuCategory, MenuItem
+from .order_events import OrderEvent
 from .orders import (
     DiscountKind,
     InvoiceMedia,
@@ -107,6 +108,8 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "DiningTable",
     "TableSession",
     "TableSessionStatus",
+    # floor real-time event stream (POS P1.5)
+    "OrderEvent",
     # reservations / queue
     "QueueStatus",
     "Reservation",

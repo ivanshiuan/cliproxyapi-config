@@ -97,6 +97,7 @@
 <header>
   <h1>🍜 POS 桌況</h1>
   <span class="stat" id="summary">—</span>
+  <span class="stat" id="liveDot" title="即時連線狀態" style="font-size:13px">●</span>
   <span class="spacer"></span>
   <select id="storeSel" title="門市"></select>
   <button class="ghost" id="menuBtn">菜單</button>
@@ -154,6 +155,13 @@ const API = "";
 let stores = [];
 let storeId = null;
 let floor = [];
+// ── real-time (P1.5) ──
+let ws = null;            // live floor WebSocket
+let lastSeq = 0;         // highest applied event seq (reconnect cursor)
+let wsBackoff = 1000;    // reconnect backoff, grows to a cap
+let reconnectTimer = null;
+let refreshTimer = null; // coalesces bursts of events into one board refresh
+let openSessionId = null; // session whose bill is currently on screen, if any
 
 const $ = (id) => document.getElementById(id);
 
@@ -179,7 +187,7 @@ async function api(path, opts) {
 
 function show(id) { $(id).classList.add("show"); }
 function hide(id) { $(id).classList.remove("show"); }
-function closeModal() { hide("tableModal"); }
+function closeModal() { hide("tableModal"); openSessionId = null; refresh(); }
 
 // ─── stores ───
 async function loadStores() {
@@ -200,7 +208,10 @@ async function loadStores() {
     o.value = ""; o.textContent = "以 ?store=<id> 指定門市";
     sel.appendChild(o);
   }
-  sel.onchange = () => { storeId = sel.value || null; menuCache = []; refresh(); };
+  sel.onchange = () => {
+    storeId = sel.value || null; menuCache = []; lastSeq = 0;
+    refresh(); connectWS();
+  };
 }
 
 // ─── floor plan ───
@@ -249,6 +260,7 @@ function openTableModal(t) {
 
   if (t.is_occupied) {
     const s = t.session;
+    openSessionId = s.id;  // let live events know which bill is on screen
     $("tmSub").textContent = `${s.party_size} 位 · 開桌於 ${fmt(s.opened_at)}`;
     // Order panel: current bill + add items + checkout.
     body.innerHTML = `<div id="orderPanel"><div class="empty">載入訂單…</div></div>`;
@@ -260,6 +272,7 @@ function openTableModal(t) {
     acts.append(btnTransfer, btnCancel);
   } else {
     $("tmSub").textContent = `${t.seats} 座 · 空桌`;
+    openSessionId = null;  // empty table — no live bill on screen
     body.innerHTML = `<div class="row"><label>人數</label>
       <input id="partySize" type="number" value="2" min="1" /></div>`;
     const btnOpen = mkBtn("開桌 (入座)", "primary", async () => {
@@ -435,9 +448,61 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
 $("refreshBtn").onclick = refresh;
 $("menuBtn").onclick = loadMenu;
 
-// Boot + light polling (WebSocket real-time lands in P1.5).
-loadStores().then(refresh);
-setInterval(() => { if (storeId && !document.querySelector(".overlay.show")) refresh(); }, 5000);
+// ─── real-time floor sync (P1.5) ───
+// A WebSocket pushes every table/order change to every tablet instantly. Each
+// frame carries a monotonic `seq`; we track the highest applied one so a
+// reconnect replays exactly what we missed (?after=lastSeq) — no gaps. When the
+// socket is down we fall back to the periodic poll below, so the board is never
+// stuck. The dot in the header shows live (green) vs polling (amber).
+function setLive(state) {
+  const d = $("liveDot"); if (!d) return;
+  d.style.color = state === "live" ? "#2ecc71" : state === "polling" ? "#e67e22" : "#888";
+  d.title = state === "live" ? "即時連線中" : state === "polling" ? "即時中斷 · 改用輪詢" : "未連線";
+}
+function wsUrl() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${location.host}/tables/ws`
+    + `?store_id=${encodeURIComponent(storeId)}&after=${lastSeq}`;
+}
+function connectWS() {
+  if (!storeId) return;
+  clearTimeout(reconnectTimer);
+  try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) { /* ignore */ }
+  try { ws = new WebSocket(wsUrl()); } catch (e) { setLive("polling"); scheduleReconnect(); return; }
+  ws.onopen = () => { wsBackoff = 1000; setLive("live"); };
+  ws.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch (e) { return; }
+    if (ev.type === "ping") return;
+    if (typeof ev.seq === "number" && ev.seq > lastSeq) lastSeq = ev.seq;
+    onFloorEvent(ev);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  ws.onclose = () => { setLive("polling"); scheduleReconnect(); };
+}
+function scheduleReconnect() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(connectWS, wsBackoff);
+  wsBackoff = Math.min(wsBackoff * 2, 15000);
+}
+function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 150); }
+function onFloorEvent(ev) {
+  // If the bill on screen is the one that changed, reload just that bill so the
+  // operator sees the other tablet's add/void live without a jarring board redraw.
+  if (openSessionId && ev.session_id === openSessionId && document.getElementById("orderPanel")) {
+    loadOrder({ id: openSessionId });
+  }
+  // Refresh the board underneath only when no modal is open (matches the manual
+  // poll's behaviour — closeModal() re-syncs the board on exit).
+  if (!document.querySelector(".overlay.show")) scheduleRefresh();
+}
+
+// Boot: render once, then go live. The poll is now only a safety net for when
+// the WebSocket is unavailable/broken.
+loadStores().then(() => { refresh(); connectWS(); });
+setInterval(() => {
+  const live = ws && ws.readyState === WebSocket.OPEN;
+  if (storeId && !live && !document.querySelector(".overlay.show")) refresh();
+}, 5000);
 </script>
 </body>
 </html>

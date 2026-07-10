@@ -7,11 +7,15 @@ the floor-plan board).
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 
 from ..api.deps import DbSession, TenantId
+from ..config import get_settings
+from ..database import get_sessionmaker
 from ..schemas.orders import OrderResponse
 from ..schemas.pos_orders import (
     CheckoutCashRequest,
@@ -25,15 +29,24 @@ from ..schemas.tables import (
     DiningTableResponse,
     DiningTableUpdate,
     FloorTableView,
+    OrderEventResponse,
     TableSessionOpen,
     TableSessionResponse,
     TableSessionTransfer,
 )
-from ..services import pos_order_service, table_service
+from ..services import event_hub, pos_order_service, table_service
+
+logger = logging.getLogger("restaurant_api")
 
 _Q_STORE_ID = Query(default=None)
 _Q_STORE_ID_REQ = Query()
 _Q_ACTOR_ID = Query(default=None)
+_Q_AFTER = Query(default=0, ge=0)
+
+# WS heartbeat — send a ping frame if no real event flows for this long, so
+# idle sockets stay alive through proxies/load-balancers and a dead peer is
+# detected on the next send.
+_WS_HEARTBEAT_SECONDS = 25.0
 
 router = APIRouter(prefix="/tables", tags=["tables"])
 
@@ -258,6 +271,98 @@ async def checkout_cash(
     return await pos_order_service.checkout_cash(
         session, session_id, payload, tenant_id=tenant_id
     )
+
+
+# ── Real-time floor events (P1.5) ────────────────────────────────────────────
+
+
+@router.get(
+    "/events",
+    response_model=list[OrderEventResponse],
+    summary="桌況事件游標補拉 (WS 的降級/補洞路徑)",
+)
+async def get_events(
+    session: DbSession,
+    tenant_id: TenantId,
+    store_id: uuid.UUID = _Q_STORE_ID_REQ,
+    after: int = _Q_AFTER,
+) -> list[dict]:
+    """Return every floor event for a store with ``seq > after``.
+
+    Tablets normally receive these live over ``/tables/ws``; this REST cursor is
+    the reconnect back-fill and the fallback when a WebSocket can't be held.
+    """
+    return await event_hub.fetch_events_since(
+        session, tenant_id=tenant_id, store_id=store_id, after_seq=after
+    )
+
+
+def _resolve_ws_tenant(websocket: WebSocket) -> uuid.UUID:
+    """Tenant for a WS connection.
+
+    Mirrors ``get_current_tenant_id``: Phase 1 (multi-tenant off) always uses the
+    default tenant; when enabled, the ``tenant_id`` query param or ``X-Tenant-Id``
+    header drives it. WebSocket dependencies can't use the header DI cleanly, so
+    we resolve here.
+    """
+    settings = get_settings()
+    raw = settings.default_tenant_id
+    if settings.multi_tenant_enabled:
+        raw = (
+            websocket.query_params.get("tenant_id")
+            or websocket.headers.get("x-tenant-id")
+            or settings.default_tenant_id
+        )
+    return uuid.UUID(raw)
+
+
+@router.websocket("/ws")
+async def floor_ws(
+    websocket: WebSocket,
+    store_id: uuid.UUID,
+    after: int = 0,
+) -> None:
+    """Live floor stream for one store's tablets.
+
+    Protocol:
+      1. Client connects ``/tables/ws?store_id=<uuid>&after=<last_seq>``.
+      2. Server replays every missed event (``seq > after``) from the durable
+         log, then streams new events live.
+      3. Each frame carries a monotonic ``seq``; the client stores the highest
+         it has applied and ignores anything ``<=`` it, so the subscribe-then-
+         replay overlap can double-send without the client double-applying —
+         no gaps, no duplicated effects.
+
+    Heartbeat ``{"type":"ping"}`` frames keep idle sockets alive and surface a
+    dead peer on the next send.
+    """
+    await websocket.accept()
+    tenant_id = _resolve_ws_tenant(websocket)
+    hub = event_hub.get_hub()
+    # Subscribe BEFORE the catch-up read so an event committed during replay
+    # lands in the queue rather than being missed (client dedupes by seq).
+    queue = hub.subscribe(store_id)
+    try:
+        sm = get_sessionmaker()
+        async with sm() as s:
+            missed = await event_hub.fetch_events_since(
+                s, tenant_id=tenant_id, store_id=store_id, after_seq=after
+            )
+        for ev in missed:
+            await websocket.send_json(ev)
+
+        while True:
+            try:
+                ev = await asyncio.wait_for(queue.get(), timeout=_WS_HEARTBEAT_SECONDS)
+                await websocket.send_json(ev)
+            except TimeoutError:
+                await websocket.send_json({"type": "ping"})
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:  # socket died mid-send; just clean up
+        logger.info("floor_ws.closed", extra={"store_id": str(store_id), "reason": str(exc)})
+    finally:
+        hub.unsubscribe(store_id, queue)
 
 
 __all__ = ["router"]

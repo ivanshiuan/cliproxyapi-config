@@ -54,6 +54,7 @@ from ..schemas.pos_orders import (
 )
 from . import orders_service
 from .audit_service import audit
+from .event_hub import record_event
 
 _TPE = ZoneInfo("Asia/Taipei")
 
@@ -197,6 +198,15 @@ async def add_line(
             "unit_price": str(item.price),
         },
     )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=ts.store_id,
+        event_type="order.line_added",
+        table_id=ts.table_id,
+        session_id=ts.id,
+        payload={"order_id": str(order.id), "menu_item_id": str(payload.menu_item_id)},
+    )
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
     return orders_service.order_to_response(order)
 
@@ -227,6 +237,14 @@ async def update_line_qty(
         target=("order_lines", line.id),
         before={"qty": str(before_qty)},
         after={"qty": str(payload.qty)},
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.line_updated",
+        session_id=order.table_session_id,
+        payload={"order_id": str(order.id), "line_id": str(line.id)},
     )
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
     return orders_service.order_to_response(order)
@@ -296,6 +314,14 @@ async def void_line(
         before=snapshot,
         reason=payload.reason,
     )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.line_voided",
+        session_id=order.table_session_id,
+        payload={"order_id": str(order.id), "line_id": str(line_id)},
+    )
     return orders_service.order_to_response(order)
 
 
@@ -361,6 +387,15 @@ async def checkout_cash(
             "tendered": str(payload.tendered),
             "change": str(change),
         },
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.checkout",
+        table_id=ts.table_id,
+        session_id=ts.id,
+        payload={"order_id": str(order.id), "total": str(total)},
     )
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
     return CheckoutResult(

@@ -27,6 +27,7 @@ from ..schemas.tables import (
     TableSessionTransfer,
 )
 from .audit_service import audit
+from .event_hub import record_event
 
 # ──────────────────────────────────────────────────────────────────────────
 # Dining tables (CRUD)
@@ -227,6 +228,15 @@ async def open_session(
         target=("table_sessions", row.id),
         after={"table_id": str(table.id), "party_size": payload.party_size},
     )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=table.store_id,
+        event_type="session.opened",
+        table_id=table.id,
+        session_id=row.id,
+        payload={"party_size": payload.party_size},
+    )
     return TableSessionResponse.model_validate(row)
 
 
@@ -256,6 +266,14 @@ async def close_session(
         target=("table_sessions", row.id),
         before={"status": "OPEN"},
         after={"status": "CLOSED"},
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        event_type="session.closed",
+        table_id=row.table_id,
+        session_id=row.id,
     )
     return TableSessionResponse.model_validate(row)
 
@@ -288,6 +306,14 @@ async def cancel_session(
         before={"status": "OPEN"},
         after={"status": "CANCELLED"},
         reason=reason,
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        event_type="session.cancelled",
+        table_id=row.table_id,
+        session_id=row.id,
     )
     return TableSessionResponse.model_validate(row)
 
@@ -335,6 +361,15 @@ async def transfer_session(
         before={"table_id": str(from_table_id)},
         after={"table_id": str(target.id)},
         reason=payload.reason,
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        event_type="session.transferred",
+        table_id=target.id,
+        session_id=row.id,
+        payload={"from_table_id": str(from_table_id), "to_table_id": str(target.id)},
     )
     return TableSessionResponse.model_validate(row)
 
