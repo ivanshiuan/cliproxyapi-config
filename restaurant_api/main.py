@@ -37,6 +37,7 @@ from .routers import pos_auth as pos_auth_router
 from .routers import reports as reports_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
+from .routers import table_order as table_order_router
 from .routers import tables as tables_router
 from .routers import ugc as ugc_router
 from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
@@ -97,6 +98,7 @@ _mount_router(menu_router, "/menu")
 _mount_router(tables_router, "/tables")
 _mount_router(reports_router, "/reports")
 _mount_router(pos_auth_router, "/pos-auth")
+_mount_router(table_order_router, "/t")
 _mount_router(stock_router, "/stock")
 _mount_router(clock_router, "/clock")
 _mount_router(events_router, "/events")
@@ -127,6 +129,12 @@ if _STATIC_DIR.is_dir():
 _POS_DIR = Path(__file__).parent / "pos_static"
 if _POS_DIR.is_dir():
     app.mount("/pos", StaticFiles(directory=str(_POS_DIR), html=True), name="pos")
+
+# Customer table-QR ordering page (P2) — the URL a table card's QR encodes is
+# /order/?t=<qr_token>. Mobile-first, same-origin with the /t API.
+_ORDER_DIR = Path(__file__).parent / "order_static"
+if _ORDER_DIR.is_dir():
+    app.mount("/order", StaticFiles(directory=str(_ORDER_DIR), html=True), name="order")
 
 
 @app.get("/version", tags=["meta"])

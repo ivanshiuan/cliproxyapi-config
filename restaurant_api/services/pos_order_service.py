@@ -95,9 +95,18 @@ async def _load_open_session(
 
 
 async def _get_or_create_session_order(
-    session: AsyncSession, ts: TableSession, *, tenant_id: uuid.UUID
+    session: AsyncSession,
+    ts: TableSession,
+    *,
+    tenant_id: uuid.UUID,
+    channel: OrderChannel = OrderChannel.POS,
 ) -> Order:
-    """Return the open order bound to this session, creating one if absent."""
+    """Return the open order bound to this session, creating one if absent.
+
+    ``channel`` marks who *opened* the order (POS clerk vs table-QR customer);
+    a session only ever has one open order, so later adds from the other side
+    join the same bill.
+    """
     existing = (
         await session.execute(
             select(Order).where(
@@ -118,7 +127,7 @@ async def _get_or_create_session_order(
         business_date=business_date,
         status=OrderStatus.OPEN,
         order_type=OrderType.DINE_IN,
-        channel=OrderChannel.POS,
+        channel=channel,
         table_session_id=ts.id,
     )
     session.add(order)
@@ -146,9 +155,12 @@ async def add_line(
     payload: LineAddRequest,
     *,
     tenant_id: uuid.UUID,
+    channel: OrderChannel = OrderChannel.POS,
 ) -> OrderResponse:
     ts = await _load_open_session(session, session_id, tenant_id)
-    order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
+    order = await _get_or_create_session_order(
+        session, ts, tenant_id=tenant_id, channel=channel
+    )
 
     item = (
         await session.execute(

@@ -248,6 +248,9 @@ def order_to_response(order: Order) -> OrderResponse:
         opened_at=opened_at,
         closed_at=_to_tpe(order.closed_at),
         status=order.status.value,  # type: ignore[arg-type]
+        order_type=order.order_type.value,  # type: ignore[arg-type]
+        channel=order.channel.value,  # type: ignore[arg-type]
+        table_session_id=order.table_session_id,
         invoice_number=order.invoice_number,
         carrier_type=order.carrier_type,
         carrier_id=order.carrier_id,
