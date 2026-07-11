@@ -100,6 +100,7 @@
   <span class="stat" id="liveDot" title="即時連線狀態" style="font-size:13px">●</span>
   <span class="spacer"></span>
   <span class="stat" id="whoami" style="cursor:pointer" title="點擊登出/切換員工"></span>
+  <button class="ghost" id="clockBtn" style="display:none">打卡</button>
   <select id="storeSel" title="門市"></select>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
@@ -207,6 +208,42 @@ function renderWhoami() {
   const el = $("whoami");
   if (posMe) { el.textContent = `👤 ${posMe.full_name} (${posMe.role})`; el.onclick = logout; }
   else { el.textContent = "未登入"; el.onclick = () => showLogin(); }
+  refreshClockBtn();
+}
+
+// ─── 打卡 (HR clock in/out, uses the logged-in PIN identity) ───
+async function amIOnShift() {
+  if (!posMe || !storeId) return null;
+  try {
+    const open = await api(`/clock/today?store_id=${encodeURIComponent(storeId)}`);
+    return open.find((c) => c.employee_id === posMe.employee_id) || null;
+  } catch (e) { return null; }
+}
+
+async function refreshClockBtn() {
+  const btn = $("clockBtn"); if (!btn) return;
+  if (!posMe) { btn.style.display = "none"; return; }
+  btn.style.display = "";
+  const on = await amIOnShift();
+  btn.textContent = on ? `下班打卡 (${Number(on.elapsed_hours).toFixed(1)}h)` : "上班打卡";
+  btn.onclick = async () => {
+    try {
+      if (on) {
+        const out = await api("/clock/out", {
+          method: "POST", body: JSON.stringify({ employee_id: posMe.employee_id }),
+        });
+        toast(`已下班 · 正常 ${out.regular_hours}h` +
+          (Number(out.overtime_tier1_hours) > 0 ? ` + 加班 ${out.overtime_tier1_hours}h` : ""));
+      } else {
+        await api("/clock/in", {
+          method: "POST",
+          body: JSON.stringify({ employee_id: posMe.employee_id, store_id: storeId }),
+        });
+        toast("已上班打卡，開工！");
+      }
+      refreshClockBtn();
+    } catch (e) { toast(e.message, true); }
+  };
 }
 
 async function refreshMe() {
