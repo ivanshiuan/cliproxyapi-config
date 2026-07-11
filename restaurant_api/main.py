@@ -142,6 +142,12 @@ _KDS_DIR = Path(__file__).parent / "kds_static"
 if _KDS_DIR.is_dir():
     app.mount("/kds", StaticFiles(directory=str(_KDS_DIR), html=True), name="kds")
 
+# Consumer online-booking page (P6) — /book/?store=<uuid>, posts /reservations
+# with source=online; staff seats the party from the POS reservation panel.
+_BOOK_DIR = Path(__file__).parent / "book_static"
+if _BOOK_DIR.is_dir():
+    app.mount("/book", StaticFiles(directory=str(_BOOK_DIR), html=True), name="book")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:

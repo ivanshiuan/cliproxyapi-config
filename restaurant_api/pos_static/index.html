@@ -102,6 +102,7 @@
   <span class="stat" id="whoami" style="cursor:pointer" title="點擊登出/切換員工"></span>
   <button class="ghost" id="clockBtn" style="display:none">打卡</button>
   <select id="storeSel" title="門市"></select>
+  <button class="ghost" id="resvBtn">訂位</button>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
 </header>
@@ -638,6 +639,56 @@ function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
 
 $("refreshBtn").onclick = refresh;
 $("menuBtn").onclick = loadMenu;
+
+// ─── 訂位面板 (今日訂位 → 帶位開桌) ───
+async function showReservations() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "今日訂位";
+  $("tmSub").textContent = "點「帶位」選桌入座（自動連結訂位與開桌）。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入訂位…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  try {
+    // Today's window in local (TW) time.
+    const d = new Date(); const day = d.toISOString().slice(0, 10);
+    const from = `${day}T00:00:00+08:00`, to = `${day}T23:59:59+08:00`;
+    const qs = `store_id=${encodeURIComponent(storeId)}&from_dt=${encodeURIComponent(from)}&to_dt=${encodeURIComponent(to)}&limit=100`;
+    const rows = (await api(`/reservations?${qs}`))
+      .filter((r) => r.status === "booked" || r.status === "confirmed")
+      .sort((a, b) => new Date(a.reserved_for) - new Date(b.reserved_for));
+    if (!rows.length) { body.innerHTML = `<div class="empty">今天沒有待帶位的訂位</div>`; return; }
+    body.innerHTML = `<div class="menu-list">` + rows.map((r) => `
+      <div class="menu-item">
+        <span>${fmt(r.reserved_for)} · ${escapeHtml(r.contact_name)} · ${r.party_size} 位
+          ${r.notes ? `<br><small style="color:#888">${escapeHtml(r.notes)}</small>` : ""}</span>
+        <button class="ghost" style="padding:4px 10px" onclick="seatReservation('${r.id}', ${r.party_size})">帶位</button>
+      </div>`).join("") + `</div>`;
+  } catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; }
+}
+
+async function seatReservation(resvId, partySize) {
+  const free = floor.filter((t) => !t.is_occupied);
+  if (!free.length) return toast("目前沒有空桌", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>入座桌位</label>
+    <select id="seatTable">${free.map((t) =>
+      `<option value="${t.id}">${escapeHtml(t.name)} (${t.seats} 座)</option>`).join("")}</select></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認帶位", "primary", async () => {
+    try {
+      await api(`/tables/${$("seatTable").value}/open`, {
+        method: "POST",
+        body: JSON.stringify({ party_size: partySize, reservation_id: resvId }),
+      });
+      await api(`/reservations/${resvId}/status`, {
+        method: "PATCH", body: JSON.stringify({ status: "seated" }),
+      });
+      closeModal(); toast("已帶位入座"); refresh();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showReservations));
+}
+$("resvBtn").onclick = showReservations;
 
 // ─── real-time floor sync (P1.5) ───
 // A WebSocket pushes every table/order change to every tablet instantly. Each

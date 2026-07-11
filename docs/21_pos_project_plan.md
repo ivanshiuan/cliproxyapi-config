@@ -72,6 +72,7 @@ P3 KDS 螢幕 → P4 會員+折扣+**報表與後台匯出（CSV/Excel，Ivan �
 |---|---|---|
 | P3 KDS 廚房出餐螢幕：`/kds/?store=<uuid>` 三欄看板（待製作/製作中/可出餐，卡片含桌名/品名/數量/備註/等待分鐘、逾 15 分紅字）；POS/掃碼加點自動上板（kitchen_station 預設 kitchen）；每次狀態變更發 `kitchen.status_changed` 進 P1.5 事件流（KDS 多螢幕 + POS 同步）；`/kitchen` 佇列補 item_name/table_name（免前端二次查詢） | 3 整合測 + L3 全鏈（QR 點餐→上板→cooking 即時事件→ready→served 離板） | ✅ 2026-07-10 |
 | 人資前台（打卡）：POS 表頭「上班/下班打卡」鈕 — 用 PIN 登入身分打卡，下班即顯示工時分桶（正常/加班），走既有 `/clock` 後端 | L3 全鏈（登入→上班→在班名單→下班工時）驗過 | ✅ 2026-07-10 |
+| 訂位前台（P6 前段）：`/book/?store=<uuid>` 顧客線上訂位頁（姓名/電話/人數/日期時間/備註，source=online）＋ POS「訂位」面板（今日待帶位清單 → 選桌帶位：開桌自動連結 reservation_id + 標記 seated），走既有 `/reservations` 後端零新端點 | L3 全鏈（線上訂→今日清單→帶位開桌連結→入座→桌況佔用）驗過 | ✅ 2026-07-10 |
 
 **已提前實作（Ivan 圈定，跳出 P4 順序先做）**
 | 任務 | 驗收標準 | 狀態 |
