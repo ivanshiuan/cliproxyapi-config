@@ -182,7 +182,9 @@ async def add_line(
         qty=payload.qty,
         unit_price=item.price,  # server-side price snapshot
         notes=payload.notes,
-        kitchen_station=payload.kitchen_station,
+        # POS/table-QR lines default onto the KDS board (station "kitchen");
+        # the bulk /orders ingest path keeps its explicit opt-in behaviour.
+        kitchen_station=payload.kitchen_station or "kitchen",
     )
     now = datetime.now(UTC)
     placeholder: dict[str, Ingredient] = {}

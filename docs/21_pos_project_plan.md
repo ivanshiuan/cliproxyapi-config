@@ -68,6 +68,10 @@ PM 工程師（Claude，本 session 常駐角色）
 P3 KDS 螢幕 → P4 會員+折扣+**報表與後台匯出（CSV/Excel，Ivan 圈定）** → P5 金流+電子發票 → P6 訂位（訂金）+線上點餐。
 人資（打卡/工時）後端已有，需求出現再排前端。
 
+| 任務 | 驗收標準 | 狀態 |
+|---|---|---|
+| P3 KDS 廚房出餐螢幕：`/kds/?store=<uuid>` 三欄看板（待製作/製作中/可出餐，卡片含桌名/品名/數量/備註/等待分鐘、逾 15 分紅字）；POS/掃碼加點自動上板（kitchen_station 預設 kitchen）；每次狀態變更發 `kitchen.status_changed` 進 P1.5 事件流（KDS 多螢幕 + POS 同步）；`/kitchen` 佇列補 item_name/table_name（免前端二次查詢） | 3 整合測 + L3 全鏈（QR 點餐→上板→cooking 即時事件→ready→served 離板） | ✅ 2026-07-10 |
+
 **已提前實作（Ivan 圈定，跳出 P4 順序先做）**
 | 任務 | 驗收標準 | 狀態 |
 |---|---|---|

@@ -136,6 +136,12 @@ _ORDER_DIR = Path(__file__).parent / "order_static"
 if _ORDER_DIR.is_dir():
     app.mount("/order", StaticFiles(directory=str(_ORDER_DIR), html=True), name="order")
 
+# KDS kitchen display (P3) — /kds/?store=<uuid> on the kitchen screen. Rides the
+# same /tables/ws live stream as the POS floor board.
+_KDS_DIR = Path(__file__).parent / "kds_static"
+if _KDS_DIR.is_dir():
+    app.mount("/kds", StaticFiles(directory=str(_KDS_DIR), html=True), name="kds")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:
