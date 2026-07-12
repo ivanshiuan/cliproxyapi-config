@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>會員中心 — car16</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main>
+  <h2>會員中心</h2>
+
+  <div class="card" id="plan-card">
+    <h3>目前方案</h3>
+    <div id="plan-info" class="muted">載入中…</div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>追蹤清單 <span class="muted" id="wl-count"></span></h3>
+    <div class="field-row" style="align-items:flex-end">
+      <div style="flex:2"><label>新增追蹤樣式</label><input id="wl-pattern" placeholder="例：*-8888" maxlength="10"></div>
+      <div><button class="btn" id="wl-add">加入追蹤</button></div>
+    </div>
+    <div class="error-box" id="wl-err"></div>
+    <div class="table-scroll">
+      <table class="data"><tbody id="wl-rows"></tbody></table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>我的代辦委託</h3>
+    <div class="table-scroll">
+      <table class="data">
+        <thead><tr><th>類型</th><th>號碼</th><th>狀態</th><th>建立時間</th></tr></thead>
+        <tbody id="ag-rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px">
+    <h3>付款紀錄</h3>
+    <div class="table-scroll">
+      <table class="data">
+        <thead><tr><th>訂單</th><th>方案</th><th>金額</th><th>方式</th><th>狀態</th><th>時間</th></tr></thead>
+        <tbody id="pay-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>
