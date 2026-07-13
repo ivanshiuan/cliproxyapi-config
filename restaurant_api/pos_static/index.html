@@ -489,6 +489,8 @@ async function loadOrder(s) {
         </div>`).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
       </div>
       <div class="actions" style="margin-top:12px">
+        <button class="ghost" onclick="serviceChargePrompt('${s.id}')"
+          ${order.lines.length ? "" : "disabled"}>服務費</button>
         <button class="ghost" onclick="discountPrompt('${s.id}')"
           ${order.lines.length ? "" : "disabled"}>折扣</button>
         <button class="primary" onclick="checkoutPrompt('${s.id}')"
@@ -531,7 +533,8 @@ async function discountPrompt(sessionId) {
     <div style="font-weight:700;margin:6px 0">套用折扣</div>
     <div class="row"><label>方式</label>
       <select id="dcKind"><option value="percent">百分比 (%)</option>
-        <option value="amount">折抵金額 ($)</option></select></div>
+        <option value="amount">折抵金額 ($)</option>
+        <option value="comp">招待 (整單免收)</option></select></div>
     <div class="row"><label>數值</label>
       <input id="dcVal" type="number" step="1" min="0" placeholder="例：10 = 打9折 或 折$10" /></div>
     <div class="sub" id="dcHint">百分比輸入 10 代表折 10%（即 9 折）。</div>`;
@@ -539,9 +542,10 @@ async function discountPrompt(sessionId) {
   acts.append(mkBtn("套用折扣", "primary", async () => {
     const kind = $("dcKind").value;
     const raw = Number($("dcVal").value || 0);
-    if (!(raw > 0)) return toast("請輸入折扣數值", true);
-    // percent: UI takes 10(%) → API wants 0.10 fraction.
-    const value = kind === "percent" ? (raw / 100).toString() : raw.toString();
+    if (kind !== "comp" && !(raw > 0)) return toast("請輸入折扣數值", true);
+    // percent: UI takes 10(%) → API wants 0.10 fraction. comp ignores value.
+    const value = kind === "comp" ? "0"
+      : kind === "percent" ? (raw / 100).toString() : raw.toString();
     const payload = { kind, value, reason: "POS 折扣" };
     if (!hasPerm("apply_discount")) {
       const ov = await promptOverride("折扣");
@@ -560,36 +564,76 @@ async function discountPrompt(sessionId) {
   acts.append(mkBtn("取消", "ghost", () => { const t = floor.find((x) => x.session && x.session.id === sessionId); if (t) loadOrder(t.session); }));
 }
 
+async function serviceChargePrompt(sessionId) {
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">服務費</div>
+    <div class="sub">加收一成服務費，或移除已設定的服務費。</div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  const setRate = async (rate, msg) => {
+    try {
+      await api(`/tables/sessions/${sessionId}/service-charge`, {
+        method: "POST", body: JSON.stringify({ rate }),
+      });
+      toast(msg);
+      const t = floor.find((x) => x.session && x.session.id === sessionId);
+      if (t) loadOrder(t.session);
+    } catch (e) { toast(e.message, true); }
+  };
+  acts.append(mkBtn("加收 10%", "primary", () => setRate("0.1", "已加收 10% 服務費")));
+  acts.append(mkBtn("移除服務費", "ghost", () => setRate("0", "已移除服務費")));
+}
+
 async function checkoutPrompt(sessionId) {
   const body = $("tmBody");
   body.innerHTML = `<div class="empty">計算應收…</div>`;
-  // Ask the server for the amount due — it runs the same discount stack the
-  // till settles with, so the UI never does discount math (zero divergence).
+  // Ask the server for the amount due — it runs the same money math the till
+  // settles with (discount stack + 服務費 − 已收款), zero divergence.
   let q;
   try { q = await api(`/tables/sessions/${sessionId}/quote`); }
   catch (e) { body.innerHTML = `<div class="empty">無法取得應收: ${escapeHtml(e.message)}</div>`; return; }
-  const net = Number(q.net);
+  const remaining = Number(q.remaining);
   const disc = Number(q.discount_total);
+  const charge = Number(q.service_charge);
+  const paid = Number(q.paid);
   body.innerHTML = `
-    <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 應收 $${net.toFixed(0)}</div>
-    ${disc > 0 ? `<div class="sub">原價 $${Number(q.gross).toFixed(0)} − 折扣 $${disc.toFixed(0)}</div>` : ""}
+    <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 應收 $${remaining.toFixed(0)}</div>
+    <div class="sub">原價 $${Number(q.gross).toFixed(0)}${disc > 0 ? ` − 折扣 $${disc.toFixed(0)}` : ""}${charge > 0 ? ` ＋ 服務費 $${charge.toFixed(0)}` : ""}${paid > 0 ? ` − 已收 $${paid.toFixed(0)}` : ""}</div>
     <div class="row"><label>收現</label>
-      <input id="tendered" type="number" value="${net}" min="${net}" /></div>
+      <input id="tendered" type="number" value="${remaining}" min="0" /></div>
+    <div class="row"><label>本次結清</label>
+      <input id="payPortion" type="number" value="${remaining}" min="1" max="${remaining}" /></div>
+    <div class="sub">拆單: 把「本次結清」改成這位客人要付的金額即可。</div>
     <div id="changeHint" class="zone" style="margin:4px 2px"></div>`;
   const inp = $("tendered");
+  const portion = $("payPortion");
   const hint = $("changeHint");
-  const upd = () => { const c = Number(inp.value || 0) - net;
-    hint.textContent = c >= 0 ? `找零 $${c.toFixed(0)}` : "收現不足"; };
-  inp.oninput = upd; upd();
+  const upd = () => {
+    const c = Number(inp.value || 0) - Number(portion.value || 0);
+    hint.textContent = c >= 0 ? `找零 $${c.toFixed(0)}` : "收現不足";
+  };
+  inp.oninput = upd; portion.oninput = upd; upd();
   const acts = $("tmActions"); acts.innerHTML = "";
-  acts.append(mkBtn("確認結帳", "primary", async () => {
-    const tendered = inp.value;
-    if (Number(tendered) < net) return toast("收現不足", true);
+  acts.append(mkBtn("確認收款", "primary", async () => {
+    const amt = Number(portion.value || 0);
+    const tendered = Number(inp.value || 0);
+    if (!(amt > 0)) return toast("請輸入本次結清金額", true);
+    if (tendered < amt) return toast("收現不足", true);
     try {
-      const res = await api(`/tables/sessions/${sessionId}/checkout`, {
-        method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
-      });
-      closeModal(); toast(`結帳完成 · 找零 $${Number(res.change).toFixed(0)}`); refresh();
+      if (amt >= remaining) {
+        // Full settle → classic checkout (server recomputes remaining itself).
+        const res = await api(`/tables/sessions/${sessionId}/checkout`, {
+          method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
+        });
+        closeModal(); toast(`結帳完成 · 找零 $${Number(res.change).toFixed(0)}`); refresh();
+      } else {
+        // 拆單: partial payment; bill stays open until settled.
+        const res = await api(`/tables/sessions/${sessionId}/pay`, {
+          method: "POST",
+          body: JSON.stringify({ amount: String(amt), tendered: String(tendered) }),
+        });
+        if (res.closed) { closeModal(); toast("已收齊 · 結單結桌"); refresh(); }
+        else { toast(`已收 $${amt.toFixed(0)} · 找零 $${Number(res.change).toFixed(0)} · 尚欠 $${Number(res.remaining).toFixed(0)}`); checkoutPrompt(sessionId); }
+      }
     } catch (e) { toast(e.message, true); }
   }));
 }

@@ -26,6 +26,9 @@ from ..schemas.pos_orders import (
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
+    PartialPayRequest,
+    PartialPayResult,
+    ServiceChargeRequest,
     TakeoutSaleRequest,
 )
 from ..schemas.tables import (
@@ -304,6 +307,38 @@ async def get_quote(
     tenant_id: TenantId,
 ) -> CheckoutQuote:
     return await pos_order_service.quote(session, session_id, tenant_id=tenant_id)
+
+
+@router.post(
+    "/sessions/{session_id}/service-charge",
+    response_model=CheckoutQuote,
+    summary="設定服務費率 (0.1=10%; 0=移除)",
+)
+async def set_service_charge(
+    session_id: uuid.UUID,
+    payload: ServiceChargeRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CheckoutQuote:
+    return await pos_order_service.set_service_charge(
+        session, session_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/pay",
+    response_model=PartialPayResult,
+    summary="拆單/分開結帳 — 收部分款項, 收齊自動結單結桌",
+)
+async def pay_partial(
+    session_id: uuid.UUID,
+    payload: PartialPayRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> PartialPayResult:
+    return await pos_order_service.pay_partial(
+        session, session_id, payload, tenant_id=tenant_id
+    )
 
 
 @router.post(

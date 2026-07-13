@@ -57,6 +57,9 @@ from ..schemas.pos_orders import (
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
+    PartialPayRequest,
+    PartialPayResult,
+    ServiceChargeRequest,
     TakeoutSaleRequest,
 )
 from . import orders_service, pos_auth_service
@@ -422,20 +425,170 @@ async def apply_discount(
     return orders_service.order_to_response(order)
 
 
+_MONEY_Q = Decimal("0.01")
+
+
+def amount_due(order: Order) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Single source of the till math: (gross, discount_total, service_charge, due).
+
+    due = discount-stacked net + 服務費 (rate x gross). Quote, checkout,
+    partial payments, and the sales report all call THIS — one number,
+    zero divergence.
+    """
+    gross = sum((ln.line_total for ln in order.lines), Decimal("0"))
+    discounted = orders_service._compute_net_revenue(order)
+    charge = (gross * (order.service_charge_rate or Decimal("0"))).quantize(_MONEY_Q)
+    return gross, gross - discounted, charge, discounted + charge
+
+
+def _paid_so_far(order: Order) -> Decimal:
+    return sum((p.amount for p in order.payments), Decimal("0"))
+
+
+def _build_quote(order: Order) -> CheckoutQuote:
+    gross, discount_total, charge, due = amount_due(order)
+    paid = _paid_so_far(order)
+    return CheckoutQuote(
+        gross=gross,
+        discount_total=discount_total,
+        service_charge=charge,
+        net=due,
+        paid=paid,
+        remaining=due - paid,
+    )
+
+
 async def quote(
     session: AsyncSession,
     session_id: uuid.UUID,
     *,
     tenant_id: uuid.UUID,
 ) -> CheckoutQuote:
-    """Amount due for the open order (discounts applied) — checkout UI reads this
-    instead of doing discount math client-side."""
+    """Amount due for the open order (discounts + 服務費 + partial payments
+    applied) — checkout UI reads this instead of doing money math client-side."""
     ts = await _load_open_session(session, session_id, tenant_id)
     order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
-    gross = sum((ln.line_total for ln in order.lines), Decimal("0"))
-    net = orders_service._compute_net_revenue(order)
-    return CheckoutQuote(gross=gross, discount_total=gross - net, net=net)
+    return _build_quote(order)
+
+
+async def set_service_charge(
+    session: AsyncSession,
+    session_id: uuid.UUID,
+    payload: ServiceChargeRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> CheckoutQuote:
+    """Set/clear the 服務費 rate on the session's open order (0.1 = 10%)."""
+    ts = await _load_open_session(session, session_id, tenant_id)
+    order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    _guard_order_open(order)
+    before = order.service_charge_rate
+    order.service_charge_rate = payload.rate
+    await session.flush()
+    await audit(
+        session,
+        action="pos_order.service_charge_set",
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        actor_id=payload.actor_id,
+        target=("orders", order.id),
+        before={"rate": str(before)},
+        after={"rate": str(payload.rate)},
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.service_charge_set",
+        table_id=ts.table_id,
+        session_id=ts.id,
+        payload={"order_id": str(order.id), "rate": str(payload.rate)},
+    )
+    return _build_quote(order)
+
+
+async def pay_partial(
+    session: AsyncSession,
+    session_id: uuid.UUID,
+    payload: PartialPayRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> PartialPayResult:
+    """拆單/分開結帳 — record a cash payment for part of the bill.
+
+    When the running payments cover the amount due, the order and the seating
+    close automatically (same as a full checkout).
+    """
+    ts = await _load_open_session(session, session_id, tenant_id)
+    order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    _guard_order_open(order)
+    if not order.lines:
+        raise ValidationError("空訂單不能收款")
+
+    _gross, _disc, _charge, due = amount_due(order)
+    remaining = due - _paid_so_far(order)
+    if payload.amount > remaining:
+        raise ValidationError(
+            f"收款金額 {payload.amount} 超過剩餘應收 {remaining}",
+            details={"remaining": str(remaining)},
+        )
+    if payload.tendered < payload.amount:
+        raise ValidationError(
+            f"insufficient cash: tendered {payload.tendered} < amount {payload.amount}"
+        )
+    change = payload.tendered - payload.amount
+
+    now = datetime.now(UTC)
+    session.add(
+        OrderPayment(
+            tenant_id=tenant_id,
+            order_id=order.id,
+            method=PaymentMethod.CASH,
+            amount=payload.amount,
+            fee_amount=Decimal("0"),
+            paid_at=now,
+        )
+    )
+    remaining_after = remaining - payload.amount
+    closed = remaining_after <= Decimal("0")
+    if closed:
+        order.status = OrderStatus.CLOSED
+        order.closed_at = now
+        ts.status = TableSessionStatus.CLOSED
+        ts.closed_at = now
+    await session.flush()
+
+    await audit(
+        session,
+        action="pos_order.partial_payment",
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        actor_id=payload.actor_id,
+        target=("orders", order.id),
+        after={
+            "amount": str(payload.amount),
+            "remaining": str(remaining_after),
+            "closed": closed,
+        },
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.checkout" if closed else "order.partial_payment",
+        table_id=ts.table_id,
+        session_id=ts.id,
+        payload={"order_id": str(order.id), "remaining": str(remaining_after)},
+    )
+    return PartialPayResult(
+        paid_amount=payload.amount,
+        change=change,
+        remaining=remaining_after,
+        closed=closed,
+    )
 
 
 async def takeout_sale(
@@ -582,7 +735,9 @@ async def checkout_cash(
     if not order.lines:
         raise ValidationError("cannot check out an empty order")
 
-    total = orders_service._compute_net_revenue(order)
+    # Settle whatever is still owed: discount stack + 服務費 minus partial payments.
+    _gross, _disc, _charge, due = amount_due(order)
+    total = due - _paid_so_far(order)
     if payload.tendered < total:
         raise ValidationError(
             f"insufficient cash: tendered {payload.tendered} < total {total}"
@@ -671,10 +826,13 @@ def _guard_order_open(order: Order) -> None:
 
 __all__ = [
     "add_line",
+    "amount_due",
     "apply_discount",
     "checkout_cash",
     "get_session_order",
+    "pay_partial",
     "quote",
+    "set_service_charge",
     "takeout_sale",
     "update_line_qty",
     "void_line",

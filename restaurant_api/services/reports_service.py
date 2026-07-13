@@ -32,7 +32,7 @@ from sqlalchemy.orm import selectinload
 from ..api.errors import ValidationError
 from ..models import MenuItem, Order, OrderLine, OrderStatus
 from ..schemas.reports import PaymentBreakdown, SalesReport, TopItem
-from . import orders_service
+from . import pos_order_service
 
 _TPE = ZoneInfo("Asia/Taipei")
 _MONEY = Decimal("0.01")
@@ -71,12 +71,15 @@ def _closed_orders_stmt(
     )
 
 
-def _order_gross_net(order: Order) -> tuple[Decimal, Decimal, Decimal]:
-    """Return (gross, net, item_qty) for one order."""
-    gross = sum((ln.line_total for ln in order.lines), Decimal("0"))
-    net = orders_service._compute_net_revenue(order)
+def _order_gross_net(order: Order) -> tuple[Decimal, Decimal, Decimal, Decimal]:
+    """Return (gross, net, service_charge, item_qty) for one order.
+
+    ``net`` is what the till actually charged: discount stack + 服務費 —
+    computed by the same ``pos_order_service.amount_due`` the checkout uses.
+    """
+    gross, _discount, charge, due = pos_order_service.amount_due(order)
     qty = sum((ln.qty for ln in order.lines), Decimal("0"))
-    return gross, net, qty
+    return gross, due, charge, qty
 
 
 async def sales_report(
@@ -98,12 +101,14 @@ async def sales_report(
 
     gross_total = Decimal("0")
     net_total = Decimal("0")
+    charge_total = Decimal("0")
     item_total = Decimal("0")
     pay: dict[str, list] = {}  # method -> [count, amount]
     for o in orders:
-        gross, net, qty = _order_gross_net(o)
+        gross, net, charge, qty = _order_gross_net(o)
         gross_total += gross
         net_total += net
+        charge_total += charge
         item_total += qty
         for p in o.payments:
             slot = pay.setdefault(p.method.value, [0, Decimal("0")])
@@ -125,7 +130,8 @@ async def sales_report(
         order_count=order_count,
         item_count=item_total,
         gross_sales=gross_total,
-        discount_total=gross_total - net_total,
+        discount_total=gross_total + charge_total - net_total,
+        service_charge_total=charge_total,
         net_sales=net_total,
         avg_ticket=avg_ticket,
         payments=payments,
@@ -216,12 +222,13 @@ async def orders_csv(
             "item_qty",
             "gross",
             "discount",
+            "service_charge",
             "net",
             "payments",
         ]
     )
     for o in orders:
-        gross, net, qty = _order_gross_net(o)
+        gross, net, charge, qty = _order_gross_net(o)
         closed = o.closed_at.astimezone(_TPE).isoformat() if o.closed_at else ""
         payments = ";".join(
             f"{p.method.value}:{p.amount}" for p in sorted(o.payments, key=lambda x: x.method.value)
@@ -235,7 +242,8 @@ async def orders_csv(
                 o.channel.value,
                 str(qty),
                 str(gross),
-                str(gross - net),
+                str(gross + charge - net),
+                str(charge),
                 str(net),
                 payments,
             ]

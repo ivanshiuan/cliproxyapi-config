@@ -212,6 +212,15 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         default=OrderChannel.EXTERNAL,
         server_default=OrderChannel.EXTERNAL.name,
     )
+    # 服務費 rate as a fraction (0.10 = 10%), applied on the line subtotal
+    # (gross) and added AFTER the discount stack: due = discounted + gross*rate.
+    # Persisted per order so quote / checkout / reports all read one number.
+    service_charge_rate: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
     # SET NULL: an order must survive its seating record (financial ledger
     # outlives floor-plan history).
     table_session_id: Mapped[uuid.UUID | None] = mapped_column(

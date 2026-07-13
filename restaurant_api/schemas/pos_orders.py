@@ -73,7 +73,7 @@ class DiscountApplyRequest(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    kind: Literal["percent", "amount"]
+    kind: Literal["percent", "amount", "comp"]
     value: StrictDecimal = Field(ge=Decimal("0"))
     reason: str | None = Field(default=None, max_length=200)
     override: ManagerOverride | None = None
@@ -115,14 +115,47 @@ class TakeoutSaleRequest(BaseModel):
 
 
 class CheckoutQuote(BaseModel):
-    """Amount due for the session's open order, discounts applied — the single
-    source of truth the checkout UI shows (no client-side discount math)."""
+    """Amount due for the session's open order — the single source of truth the
+    checkout UI shows (no client-side money math). ``net`` includes the service
+    charge; ``remaining`` accounts for partial payments already taken (拆單)."""
 
     model_config = ConfigDict(frozen=True)
 
     gross: Decimal
     discount_total: Decimal
+    service_charge: Decimal
     net: Decimal
+    paid: Decimal
+    remaining: Decimal
+
+
+class ServiceChargeRequest(BaseModel):
+    """Set the order's 服務費 rate (0 removes it; 0.1 = 10%)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    rate: StrictDecimal = Field(ge=Decimal("0"), le=Decimal("0.5"))
+    actor_id: UUID | None = None
+
+
+class PartialPayRequest(BaseModel):
+    """拆單/分開結帳 — settle part of the bill in cash. ``amount`` is the share
+    being paid now; ``tendered`` is the cash handed over (change returned)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    amount: StrictDecimal = Field(gt=Decimal("0"))
+    tendered: StrictDecimal = Field(gt=Decimal("0"))
+    actor_id: UUID | None = None
+
+
+class PartialPayResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    paid_amount: Decimal
+    change: Decimal
+    remaining: Decimal
+    closed: bool  # True when the bill is settled → order + seating closed
 
 
 class CheckoutResult(BaseModel):
@@ -142,6 +175,9 @@ __all__ = [
     "LineAddRequest",
     "LineUpdateRequest",
     "LineVoidRequest",
+    "PartialPayRequest",
+    "PartialPayResult",
+    "ServiceChargeRequest",
     "StrictDecimal",
     "TakeoutItem",
     "TakeoutSaleRequest",

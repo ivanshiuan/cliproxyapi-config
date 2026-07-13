@@ -43,6 +43,7 @@ class SalesReport(BaseModel):
     item_count: Decimal
     gross_sales: Decimal
     discount_total: Decimal
+    service_charge_total: Decimal = Decimal("0")
     net_sales: Decimal
     avg_ticket: Decimal
     payments: list[PaymentBreakdown]
