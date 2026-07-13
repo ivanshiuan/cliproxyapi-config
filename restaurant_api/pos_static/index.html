@@ -103,6 +103,7 @@
   <button class="ghost" id="clockBtn" style="display:none">打卡</button>
   <select id="storeSel" title="門市"></select>
   <button class="ghost" id="takeoutBtn">外帶</button>
+  <button class="ghost" id="queueBtn">候位</button>
   <button class="ghost" id="resvBtn">訂位</button>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
@@ -752,6 +753,102 @@ function toBump(id, d) {
   renderTakeout();
 }
 $("takeoutBtn").onclick = showTakeout;
+
+// ─── 候位面板 (現場排隊: 取號 → 叫號 → 帶位/棄號) ───
+async function showQueue() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "現場候位";
+  $("tmSub").textContent = "取號 → 叫號 → 帶位入座；離開按棄號。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入候位…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let rows = [];
+  try {
+    rows = (await api(`/queue?store_id=${encodeURIComponent(storeId)}&limit=100`))
+      .filter((q) => q.status === "waiting" || q.status === "called")
+      .sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
+  } catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  const waitMin = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  body.innerHTML = (rows.length ? `<div class="menu-list">` + rows.map((q) => `
+    <div class="menu-item">
+      <span>${q.queue_no ? `<b>${escapeHtml(q.queue_no)}</b> · ` : ""}${escapeHtml(q.contact_name)} · ${q.party_size} 位
+        <br><small style="color:#888">${q.status === "called" ? "🔔 已叫號" : "等待"} ${waitMin(q.joined_at)} 分</small></span>
+      <span>
+        ${q.status === "waiting" ? `<button class="ghost" style="padding:4px 10px"
+          onclick="queueAct('${q.id}','called','已叫號')">叫號</button>` : ""}
+        <button class="ghost" style="padding:4px 10px"
+          onclick="seatQueueEntry('${q.id}', ${q.party_size}, '${q.status}')">帶位</button>
+        <button class="ghost" style="padding:4px 10px"
+          onclick="queueAct('${q.id}','abandoned','已棄號')">棄號</button>
+      </span>
+    </div>`).join("") + `</div>` : `<div class="empty">目前沒有人在候位</div>`);
+  acts.append(mkBtn("＋ 取號", "primary", queueJoinPrompt));
+}
+
+function queueJoinPrompt() {
+  const body = $("tmBody");
+  body.innerHTML = `
+    <div class="row"><label>稱呼</label><input id="qName" placeholder="王先生" maxlength="80" /></div>
+    <div class="row"><label>電話</label><input id="qPhone" placeholder="(可空)" maxlength="32" /></div>
+    <div class="row"><label>人數</label><input id="qParty" type="number" value="2" min="1" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("取號", "primary", async () => {
+    const name = $("qName").value.trim();
+    if (!name) return toast("請填稱呼", true);
+    try {
+      const q = await api("/queue", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: storeId, contact_name: name,
+          contact_phone: $("qPhone").value.trim() || null,
+          party_size: parseInt($("qParty").value || "1", 10),
+        }),
+      });
+      toast(`已取號${q.queue_no ? ` ${q.queue_no}` : ""}`);
+      showQueue();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showQueue));
+}
+
+async function queueAct(queueId, status, okMsg) {
+  try {
+    await api(`/queue/${queueId}/status`, {
+      method: "PATCH", body: JSON.stringify({ status }),
+    });
+    toast(okMsg); showQueue();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function seatQueueEntry(queueId, partySize, curStatus) {
+  const free = floor.filter((t) => !t.is_occupied);
+  if (!free.length) return toast("目前沒有空桌", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>入座桌位</label>
+    <select id="qSeatTable">${free.map((t) =>
+      `<option value="${t.id}">${escapeHtml(t.name)} (${t.seats} 座)</option>`).join("")}</select></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認帶位", "primary", async () => {
+    try {
+      await api(`/tables/${$("qSeatTable").value}/open`, {
+        method: "POST", body: JSON.stringify({ party_size: partySize }),
+      });
+      // State machine requires waiting → called → seated; auto-call inline
+      // when the operator seats straight from the waiting list.
+      if (curStatus === "waiting") {
+        await api(`/queue/${queueId}/status`, {
+          method: "PATCH", body: JSON.stringify({ status: "called" }),
+        });
+      }
+      await api(`/queue/${queueId}/status`, {
+        method: "PATCH", body: JSON.stringify({ status: "seated" }),
+      });
+      closeModal(); toast("已帶位入座"); refresh();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showQueue));
+}
+$("queueBtn").onclick = showQueue;
 
 // ─── real-time floor sync (P1.5) ───
 // A WebSocket pushes every table/order change to every tablet instantly. Each
