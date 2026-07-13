@@ -215,6 +215,19 @@ savepoint fixture 會連 seed_tenant/seed_store 一起回滾，之後的 INSERT 
 所以「subscribe 早於 catch-up」的重疊重送是安全的（設計如此，不是 bug）。
 測試的 `client` fixture 覆寫 `get_db`（不含 buffer 包裝）→ record_event 照樣寫列但不廣播，正好適合斷言持久層。
 
+### 已收款帳單不得再降價（拆單後退菜/招待的錢流洞）
+拆單先收部分款後，改量/退菜/招待/移除服務費都可能把應收壓到低於已收 →
+結帳算出負數叫店員「找零」。`pos_order_service._guard_not_below_paid` 在
+每個會降價的 mutation 後擋 409。新增會影響金額的操作時**必須**掛這個守衛。
+回歸測試在 test_p7_billing（每情境獨立開桌 — 見下一條）。
+
+### 同 session 重新 select 不會刷新已載入的 collection
+service 內 `session.add(子列)` 後再 `_load_order_with_relations` 重查，
+identity map 會回傳**同一個物件、collection 還是舊的**（selectinload 不會
+重跑）。要讓記憶體與 DB 同步：**append 到 relationship**（如
+`order.discounts.append(row)`），不要 bare `session.add`。
+apply_discount 的招待守衛曾因此漏擋。
+
 ### L3 端到端驗證（起真 server 打真 DB）後一定要清 DB
 手動 curl/腳本 commit 進 resto_dev 的資料會殘留，讓 savepoint 測試（掃全表計數的那種，
 如 test_create_empty_order）看到多餘列而失敗。驗完跑 `make db-truncate` 清乾淨。

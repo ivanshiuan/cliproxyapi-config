@@ -253,6 +253,7 @@ async def update_line_qty(
     line.qty = payload.qty
     line.line_total = payload.qty * line.unit_price
     await session.flush()
+    _guard_not_below_paid(order)
     await audit(
         session,
         action="pos_order.line_qty_changed",
@@ -340,6 +341,7 @@ async def void_line(
     }
     order.lines.remove(line)  # delete-orphan cascade removes the row on flush
     await session.flush()
+    _guard_not_below_paid(order)
     await audit(
         session,
         action="pos_order.line_voided",
@@ -391,7 +393,10 @@ async def apply_discount(
         override_pin=payload.override.pin if payload.override else None,
     )
 
-    session.add(
+    # Append through the relationship (not bare session.add) so the loaded
+    # ``order.discounts`` collection stays current — the below-paid guard and
+    # the response are computed from this in-memory order.
+    order.discounts.append(
         OrderDiscount(
             tenant_id=tenant_id,
             order_id=order.id,
@@ -402,6 +407,7 @@ async def apply_discount(
         )
     )
     await session.flush()
+    _guard_not_below_paid(order)
     await audit(
         session,
         action="pos_order.discount_applied",
@@ -458,6 +464,20 @@ def _build_quote(order: Order) -> CheckoutQuote:
     )
 
 
+def _guard_not_below_paid(order: Order) -> None:
+    """A bill that has taken partial payments must never drop below what was
+    already collected — otherwise checkout would compute a negative total and
+    instruct the till to pay money out. Void the payment first (refund flow),
+    then reduce the bill."""
+    _g, _d, _c, due = amount_due(order)
+    paid = _paid_so_far(order)
+    if due < paid:
+        raise ConflictError(
+            message=f"應收 {due} 低於已收 {paid} — 已收款的帳單不能再降價, 請先處理退款",
+            details={"due": str(due), "paid": str(paid)},
+        )
+
+
 async def quote(
     session: AsyncSession,
     session_id: uuid.UUID,
@@ -487,6 +507,7 @@ async def set_service_charge(
     before = order.service_charge_rate
     order.service_charge_rate = payload.rate
     await session.flush()
+    _guard_not_below_paid(order)
     await audit(
         session,
         action="pos_order.service_charge_set",
@@ -738,6 +759,11 @@ async def checkout_cash(
     # Settle whatever is still owed: discount stack + 服務費 minus partial payments.
     _gross, _disc, _charge, due = amount_due(order)
     total = due - _paid_so_far(order)
+    if total < Decimal("0"):
+        raise ConflictError(
+            message="已收款超過應收, 請先處理退款再結帳",
+            details={"due": str(due), "paid": str(_paid_so_far(order))},
+        )
     if payload.tendered < total:
         raise ValidationError(
             f"insufficient cash: tendered {payload.tendered} < total {total}"

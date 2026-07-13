@@ -216,3 +216,69 @@ async def test_overpay_partial_rejected_422(
         f"/tables/sessions/{sess}/pay", json={"amount": "150", "tendered": "150"}
     )
     assert r.status_code == 422
+
+
+# ── 防守: 已收款帳單不得降到低於已收 (再檢查抓到的洞) ─────────────────────────
+# NB: 每個情境獨立開桌 — 正式環境靠 DI 層 rollback-on-error 保證原子性,
+# 測試共用 session 沒這層, 連續在同一桌上打被擋的請求會殘留半套變更。
+
+
+async def _paid_300_of_400(client: httpx.AsyncClient, store: str) -> tuple[str, str]:
+    sess = await _open_with_lines(client, store, "100", "4")  # due 400
+    order = (await client.get(f"/tables/sessions/{sess}/order")).json()
+    line_id = order["lines"][0]["id"]
+    p = await client.post(
+        f"/tables/sessions/{sess}/pay", json={"amount": "300", "tendered": "300"}
+    )
+    assert p.status_code == 200, p.text
+    return sess, line_id
+
+
+async def test_qty_cut_below_paid_409(
+    client: httpx.AsyncClient, seed_store: Store
+) -> None:
+    _sess, line_id = await _paid_300_of_400(client, str(seed_store.id))
+    r = await client.patch(f"/tables/order-lines/{line_id}", json={"qty": "1"})
+    assert r.status_code == 409, r.text
+
+
+async def test_void_below_paid_409(
+    client: httpx.AsyncClient, seed_store: Store
+) -> None:
+    _sess, line_id = await _paid_300_of_400(client, str(seed_store.id))
+    r = await client.post(f"/tables/order-lines/{line_id}/void", json={"reason": "x"})
+    assert r.status_code == 409, r.text
+
+
+async def test_comp_below_paid_409(
+    client: httpx.AsyncClient, seed_store: Store
+) -> None:
+    sess, _line_id = await _paid_300_of_400(client, str(seed_store.id))
+    r = await client.post(
+        f"/tables/sessions/{sess}/discount", json={"kind": "comp", "value": "0"}
+    )
+    assert r.status_code == 409, r.text
+
+
+async def test_qty_cut_to_exactly_paid_ok_then_zero_checkout(
+    client: httpx.AsyncClient, seed_store: Store
+) -> None:
+    sess, line_id = await _paid_300_of_400(client, str(seed_store.id))
+    r = await client.patch(f"/tables/order-lines/{line_id}", json={"qty": "3"})
+    assert r.status_code == 200, r.text  # 應收 300 = 已收 300, 合法
+    co = await client.post(f"/tables/sessions/{sess}/checkout", json={"tendered": "0"})
+    assert co.status_code == 200, co.text
+    assert Decimal(co.json()["total"]) == Decimal("0")
+
+
+async def test_cannot_remove_service_charge_below_paid(
+    client: httpx.AsyncClient, seed_store: Store
+) -> None:
+    store = str(seed_store.id)
+    sess = await _open_with_lines(client, store, "100", "2")  # gross 200
+    await client.post(f"/tables/sessions/{sess}/service-charge", json={"rate": "0.1"})  # due 220
+    await client.post(
+        f"/tables/sessions/{sess}/pay", json={"amount": "210", "tendered": "210"}
+    )
+    r = await client.post(f"/tables/sessions/{sess}/service-charge", json={"rate": "0"})
+    assert r.status_code == 409, r.text
