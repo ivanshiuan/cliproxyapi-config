@@ -102,6 +102,7 @@
   <span class="stat" id="whoami" style="cursor:pointer" title="點擊登出/切換員工"></span>
   <button class="ghost" id="clockBtn" style="display:none">打卡</button>
   <select id="storeSel" title="門市"></select>
+  <button class="ghost" id="takeoutBtn">外帶</button>
   <button class="ghost" id="resvBtn">訂位</button>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
@@ -689,6 +690,68 @@ async function seatReservation(resvId, partySize) {
   acts.append(mkBtn("返回", "ghost", showReservations));
 }
 $("resvBtn").onclick = showReservations;
+
+// ─── 外帶快速單 (點餐 + 現金結帳一步完成，不綁桌) ───
+const toCart = new Map(); // menu_item_id -> qty
+async function showTakeout() {
+  if (!storeId) return toast("先指定門市", true);
+  toCart.clear();
+  $("tmTitle").textContent = "外帶快速單";
+  $("tmSub").textContent = "點品項加入，輸入收現一次完成結帳。";
+  await loadMenuCache();
+  renderTakeout();
+  show("tableModal");
+}
+function renderTakeout() {
+  const items = menuCache;
+  let sum = 0, count = 0;
+  for (const [id, q] of toCart) {
+    const m = items.find((x) => x.id === id);
+    if (m) { sum += q * Number(m.price); count += q; }
+  }
+  const body = $("tmBody");
+  body.innerHTML = `
+    <div class="menu-list" style="max-height:38vh;overflow:auto">
+      ${items.length ? items.map((m) => {
+        const q = toCart.get(m.id) || 0;
+        return `<div class="menu-item" style="cursor:pointer" onclick="toBump('${m.id}',1)">
+          <span>${escapeHtml(m.name)}${q ? ` <b>× ${q}</b>` : ""}</span>
+          <span><span class="price">$${Number(m.price).toFixed(0)}</span>
+          ${q ? `<button class="ghost" style="padding:2px 8px;margin-left:8px"
+            onclick="event.stopPropagation();toBump('${m.id}',-1)">−</button>` : ""}</span>
+        </div>`;
+      }).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
+    </div>
+    <div style="display:flex;justify-content:space-between;margin:10px 2px;font-weight:700">
+      <span>合計 ${count} 件</span><span class="price">$${sum.toFixed(0)}</span>
+    </div>
+    <div class="row"><label>收現</label>
+      <input id="toTendered" type="number" value="${sum}" min="${sum}" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn(`結帳 ($${sum.toFixed(0)})`, "primary", async () => {
+    if (!count) return toast("請先點餐", true);
+    const tendered = $("toTendered").value;
+    if (Number(tendered) < sum) return toast("收現不足", true);
+    try {
+      const res = await api("/tables/takeout", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: storeId,
+          items: [...toCart.entries()].map(([menu_item_id, qty]) => ({ menu_item_id, qty: String(qty) })),
+          tendered: String(tendered),
+        }),
+      });
+      closeModal();
+      toast(`外帶完成 · 單號 ${res.order.order_no.slice(-6)} · 找零 $${Number(res.change).toFixed(0)}`);
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+function toBump(id, d) {
+  const q = (toCart.get(id) || 0) + d;
+  if (q <= 0) toCart.delete(id); else toCart.set(id, q);
+  renderTakeout();
+}
+$("takeoutBtn").onclick = showTakeout;
 
 // ─── real-time floor sync (P1.5) ───
 // A WebSocket pushes every table/order change to every tablet instantly. Each

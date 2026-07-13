@@ -26,6 +26,7 @@ from ..schemas.pos_orders import (
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
+    TakeoutSaleRequest,
 )
 from ..schemas.tables import (
     DiningTableCreate,
@@ -276,6 +277,20 @@ async def apply_discount(
     return await pos_order_service.apply_discount(
         session, session_id, payload, tenant_id=tenant_id, principal=principal
     )
+
+
+@router.post(
+    "/takeout",
+    response_model=CheckoutResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="外帶快速單 (點餐+現金結帳一步完成, 不綁桌)",
+)
+async def takeout_sale(
+    payload: TakeoutSaleRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> CheckoutResult:
+    return await pos_order_service.takeout_sale(session, payload, tenant_id=tenant_id)
 
 
 @router.get(

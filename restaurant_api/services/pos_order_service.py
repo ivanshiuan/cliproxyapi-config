@@ -47,6 +47,7 @@ from ..models import (
     TableSession,
     TableSessionStatus,
 )
+from ..models.base import uuid7
 from ..schemas.orders import OrderLineCreate, OrderResponse
 from ..schemas.pos_orders import (
     CheckoutCashRequest,
@@ -56,6 +57,7 @@ from ..schemas.pos_orders import (
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
+    TakeoutSaleRequest,
 )
 from . import orders_service, pos_auth_service
 from .audit_service import audit
@@ -436,6 +438,124 @@ async def quote(
     return CheckoutQuote(gross=gross, discount_total=gross - net, net=net)
 
 
+async def takeout_sale(
+    session: AsyncSession,
+    payload: TakeoutSaleRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> CheckoutResult:
+    """外帶快速單 (iCHEF 快速結帳): build + pay + close in one transaction.
+
+    No table session — the order stands alone as TAKEOUT/POS. Lines take the
+    server-side menu price snapshot and run the same BOM/KDS path as dine-in;
+    cash settles immediately and the receipt (with change) comes back in one
+    round trip. Insufficient cash rolls the whole thing back (single txn).
+    """
+    ts_now = datetime.now(UTC)
+    order = Order(
+        tenant_id=tenant_id,
+        store_id=payload.store_id,
+        order_no=f"TO-{uuid7().hex[:12]}",
+        business_date=datetime.now(_TPE).date(),
+        status=OrderStatus.OPEN,
+        order_type=OrderType.TAKEOUT,
+        channel=OrderChannel.POS,
+    )
+    session.add(order)
+    await session.flush()
+
+    placeholder: dict[str, Ingredient] = {}
+
+    async def _get_placeholder() -> Ingredient:
+        if "ing" not in placeholder:
+            placeholder["ing"] = await orders_service._placeholder_ingredient(
+                session, tenant_id, payload.store_id
+            )
+        return placeholder["ing"]
+
+    for item_req in payload.items:
+        item = (
+            await session.execute(
+                select(MenuItem).where(
+                    MenuItem.id == item_req.menu_item_id,
+                    MenuItem.tenant_id == tenant_id,
+                    MenuItem.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if item is None:
+            raise NotFoundError(
+                message=f"menu item {item_req.menu_item_id} not found",
+                details={"menu_item_id": str(item_req.menu_item_id)},
+            )
+        await orders_service._add_line_with_movement(
+            session=session,
+            order=order,
+            tenant_id=tenant_id,
+            store_id=payload.store_id,
+            line_payload=OrderLineCreate(
+                menu_item_id=item_req.menu_item_id,
+                qty=item_req.qty,
+                unit_price=item.price,  # server-side snapshot
+                notes=item_req.notes,
+                kitchen_station="kitchen",  # takeout still cooks
+            ),
+            get_placeholder=_get_placeholder,
+            occurred_at=ts_now,
+        )
+
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    total = orders_service._compute_net_revenue(order)
+    if payload.tendered < total:
+        raise ValidationError(
+            f"insufficient cash: tendered {payload.tendered} < total {total}"
+        )
+    change = payload.tendered - total
+
+    session.add(
+        OrderPayment(
+            tenant_id=tenant_id,
+            order_id=order.id,
+            method=PaymentMethod.CASH,
+            amount=total,
+            fee_amount=Decimal("0"),
+            paid_at=ts_now,
+        )
+    )
+    order.status = OrderStatus.CLOSED
+    order.closed_at = ts_now
+    await session.flush()
+
+    await audit(
+        session,
+        action="pos_order.takeout_sale",
+        tenant_id=tenant_id,
+        store_id=payload.store_id,
+        actor_id=payload.actor_id,
+        target=("orders", order.id),
+        after={
+            "total": str(total),
+            "tendered": str(payload.tendered),
+            "change": str(change),
+            "items": len(payload.items),
+        },
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=payload.store_id,
+        event_type="order.takeout_sale",
+        payload={"order_id": str(order.id), "total": str(total)},
+    )
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    return CheckoutResult(
+        order=orders_service.order_to_response(order),
+        total=total,
+        tendered=payload.tendered,
+        change=change,
+    )
+
+
 async def checkout_cash(
     session: AsyncSession,
     session_id: uuid.UUID,
@@ -555,6 +675,7 @@ __all__ = [
     "checkout_cash",
     "get_session_order",
     "quote",
+    "takeout_sale",
     "update_line_qty",
     "void_line",
 ]

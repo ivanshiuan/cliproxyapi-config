@@ -95,6 +95,25 @@ class CheckoutCashRequest(BaseModel):
     actor_id: UUID | None = None
 
 
+class TakeoutItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    menu_item_id: UUID
+    qty: StrictDecimal = Field(default=Decimal("1"), gt=Decimal("0"), le=Decimal("99"))
+    notes: str | None = Field(default=None, max_length=200)
+
+
+class TakeoutSaleRequest(BaseModel):
+    """外帶快速單 — one shot: build the order, take cash, close it. No table."""
+
+    model_config = ConfigDict(frozen=True)
+
+    store_id: UUID
+    items: list[TakeoutItem] = Field(min_length=1, max_length=50)
+    tendered: StrictDecimal = Field(ge=Decimal("0"))
+    actor_id: UUID | None = None
+
+
 class CheckoutQuote(BaseModel):
     """Amount due for the session's open order, discounts applied — the single
     source of truth the checkout UI shows (no client-side discount math)."""
@@ -124,4 +143,6 @@ __all__ = [
     "LineUpdateRequest",
     "LineVoidRequest",
     "StrictDecimal",
+    "TakeoutItem",
+    "TakeoutSaleRequest",
 ]
