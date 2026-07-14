@@ -83,6 +83,21 @@ class TableSessionTransfer(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class TableSessionMerge(BaseModel):
+    """併桌 — fold another open session's bill into this one.
+
+    The *other* session's order lines move onto this session's order; the
+    other session is cancelled (its table frees up) and its now-empty order
+    is voided (kept for audit — orders are financial ledger, never deleted).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    source_session_id: UUID
+    actor_id: UUID | None = None
+    reason: str | None = Field(default=None, max_length=500)
+
+
 class TableSessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -145,6 +160,7 @@ __all__ = [
     "DiningTableUpdate",
     "FloorTableView",
     "OrderEventResponse",
+    "TableSessionMerge",
     "TableSessionOpen",
     "TableSessionResponse",
     "TableSessionTransfer",

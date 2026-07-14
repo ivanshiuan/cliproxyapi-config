@@ -37,6 +37,7 @@ from ..schemas.tables import (
     DiningTableUpdate,
     FloorTableView,
     OrderEventResponse,
+    TableSessionMerge,
     TableSessionOpen,
     TableSessionResponse,
     TableSessionTransfer,
@@ -178,6 +179,22 @@ async def cancel_session(
 ) -> TableSessionResponse:
     return await table_service.cancel_session(
         session, session_id, tenant_id=tenant_id, actor_id=actor_id
+    )
+
+
+@router.post(
+    "/sessions/{session_id}/merge",
+    response_model=OrderResponse,
+    summary="併桌 — 把另一桌的帳單併入這一桌 (來源桌釋出)",
+)
+async def merge_sessions(
+    session_id: uuid.UUID,
+    payload: TableSessionMerge,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await pos_order_service.merge_sessions(
+        session, session_id, payload, tenant_id=tenant_id
     )
 
 

@@ -62,6 +62,7 @@ from ..schemas.pos_orders import (
     ServiceChargeRequest,
     TakeoutSaleRequest,
 )
+from ..schemas.tables import TableSessionMerge
 from . import orders_service, pos_auth_service
 from .audit_service import audit
 from .event_hub import record_event
@@ -478,6 +479,111 @@ def _guard_not_below_paid(order: Order) -> None:
         )
 
 
+async def merge_sessions(
+    session: AsyncSession,
+    target_session_id: uuid.UUID,
+    payload: TableSessionMerge,
+    *,
+    tenant_id: uuid.UUID,
+) -> OrderResponse:
+    """併桌 — fold ``source_session_id``'s bill into ``target_session_id``'s.
+
+    Guards (all 409, all before any mutation):
+      - both sessions open, same store
+      - not merging a session into itself
+      - source order carries no payments yet (拆單 already in progress on the
+        source bill is a distinct, unsupported case — split it fully or not
+        at all, never straddle two live bills)
+      - target order isn't already below-paid-guarded territory (merging more
+        lines in can only raise the total, so this can't actually trip, but
+        we still route through the shared amount_due path for one code path)
+
+    Source lines move onto the target order (server-kept price snapshots,
+    kitchen state, everything); the source order is marked VOIDED (never
+    deleted — orders are financial ledger) and the source table session is
+    cancelled, freeing that physical table.
+    """
+    if target_session_id == payload.source_session_id:
+        raise ConflictError(message="cannot merge a session into itself", details={})
+
+    target_ts = await _load_open_session(session, target_session_id, tenant_id)
+    source_ts = await _load_open_session(session, payload.source_session_id, tenant_id)
+    if source_ts.store_id != target_ts.store_id:
+        raise ConflictError(
+            message="cannot merge sessions across stores",
+            details={"source_store": str(source_ts.store_id), "target_store": str(target_ts.store_id)},
+        )
+
+    target_order = await _get_or_create_session_order(session, target_ts, tenant_id=tenant_id)
+
+    source_order = (
+        await session.execute(
+            select(Order).where(
+                Order.table_session_id == source_ts.id,
+                Order.status == OrderStatus.OPEN,
+                Order.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+
+    if source_order is not None:
+        source_order = await orders_service._load_order_with_relations(
+            session, source_order.id, tenant_id
+        )
+        if source_order.payments:
+            raise ConflictError(
+                message="來源訂單已收部分款項, 無法併桌 — 請先結清或改用轉桌",
+                details={"source_session_id": str(source_ts.id)},
+            )
+        target_order = await orders_service._load_order_with_relations(
+            session, target_order.id, tenant_id
+        )
+        # Re-home every line onto the target order. Iterate over a snapshot —
+        # mutating .lines while iterating it would skip entries.
+        moved = list(source_order.lines)
+        for line in moved:
+            source_order.lines.remove(line)
+            line.order_id = target_order.id
+            target_order.lines.append(line)
+        source_order.status = OrderStatus.VOIDED
+        await session.flush()
+    else:
+        moved = []
+
+    source_ts.status = TableSessionStatus.CANCELLED
+    source_ts.closed_at = datetime.now(UTC)
+    await session.flush()
+
+    await audit(
+        session,
+        action="table_session.merged",
+        tenant_id=tenant_id,
+        store_id=target_ts.store_id,
+        actor_id=payload.actor_id,
+        target=("table_sessions", target_ts.id),
+        before={"source_session_id": str(source_ts.id), "lines_moved": len(moved)},
+        after={"target_session_id": str(target_ts.id)},
+        reason=payload.reason,
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=target_ts.store_id,
+        event_type="session.merged",
+        table_id=target_ts.table_id,
+        session_id=target_ts.id,
+        payload={
+            "source_session_id": str(source_ts.id),
+            "source_table_id": str(source_ts.table_id),
+            "lines_moved": len(moved),
+        },
+    )
+    target_order = await orders_service._load_order_with_relations(
+        session, target_order.id, tenant_id
+    )
+    return orders_service.order_to_response(target_order)
+
+
 async def quote(
     session: AsyncSession,
     session_id: uuid.UUID,
@@ -856,6 +962,7 @@ __all__ = [
     "apply_discount",
     "checkout_cash",
     "get_session_order",
+    "merge_sessions",
     "pay_partial",
     "quote",
     "set_service_charge",

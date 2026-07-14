@@ -105,6 +105,7 @@
   <button class="ghost" id="takeoutBtn">外帶</button>
   <button class="ghost" id="queueBtn">候位</button>
   <button class="ghost" id="resvBtn">訂位</button>
+  <button class="ghost" id="shiftBtn">交班</button>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
 </header>
@@ -409,7 +410,8 @@ function openTableModal(t) {
       await guard(() => api(`/tables/sessions/${s.id}/cancel`, { method: "POST" }), "已取消");
     });
     const btnTransfer = mkBtn("轉桌", "ghost", () => transferPrompt(s, t));
-    acts.append(btnTransfer, btnCancel);
+    const btnMerge = mkBtn("併桌", "ghost", () => mergePrompt(s, t));
+    acts.append(btnTransfer, btnMerge, btnCancel);
   } else {
     $("tmSub").textContent = `${t.seats} 座 · 空桌`;
     openSessionId = null;  // empty table — no live bill on screen
@@ -444,6 +446,25 @@ function transferPrompt(s, from) {
       method: "POST", body: JSON.stringify({ target_table_id: target }),
     }), "已轉桌");
   }));
+}
+
+function mergePrompt(target, targetTable) {
+  const others = floor.filter((t) => t.is_occupied && t.id !== targetTable.id);
+  if (!others.length) return toast("沒有其他佔用中的桌可併", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="sub">選擇要併入本桌帳單的來源桌 (來源桌釋出)。</div>
+    <div class="row"><label>來源桌</label>
+      <select id="mergeSource">${others.map((t) =>
+        `<option value="${t.session.id}">${escapeHtml(t.name)} (${t.session.party_size} 位)</option>`).join("")}</select></div>`;
+  const acts = $("tmActions");
+  acts.innerHTML = "";
+  acts.append(mkBtn("確認併桌", "primary", async () => {
+    const sourceId = $("mergeSource").value;
+    await guard(() => api(`/tables/sessions/${target.id}/merge`, {
+      method: "POST", body: JSON.stringify({ source_session_id: sourceId }),
+    }), "已併桌");
+  }));
+  acts.append(mkBtn("返回", "ghost", () => openTableModal(targetTable)));
 }
 
 // ─── order panel (add items + checkout) ───
@@ -941,6 +962,79 @@ function onFloorEvent(ev) {
   // poll's behaviour — closeModal() re-syncs the board on exit).
   if (!document.querySelector(".overlay.show")) scheduleRefresh();
 }
+
+// ─── 交班/關帳 (guided cash-drawer open/close) ───
+async function showShift() {
+  if (!storeId) return toast("先指定門市", true);
+  if (!posMe) { toast("請先登入才能交班", true); return showLogin(); }
+  $("tmTitle").textContent = "交班/關帳";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入中…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let cur;
+  try { cur = await api(`/cash-drawer/current?store_id=${encodeURIComponent(storeId)}`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  if (!cur) return shiftOpenPrompt();
+  return shiftClosePrompt(cur);
+}
+
+function shiftOpenPrompt() {
+  $("tmSub").textContent = "尚未開班 — 輸入備用金開始這一班。";
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>備用金</label>
+    <input id="openFloat" type="number" value="5000" min="0" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("開班", "primary", async () => {
+    try {
+      await api("/cash-drawer/open", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: storeId, opened_by: posMe.employee_id,
+          opening_float: $("openFloat").value,
+        }),
+      });
+      closeModal(); toast("已開班");
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+
+async function shiftClosePrompt(drawer) {
+  $("tmSub").textContent = `開班於 ${fmt(drawer.opened_at)} · 備用金 $${Number(drawer.opening_float).toFixed(0)}`;
+  const body = $("tmBody");
+  body.innerHTML = `<div class="empty">計算應有現金…</div>`;
+  let exp;
+  try { exp = await api(`/cash-drawer/${drawer.id}/expected`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  body.innerHTML = `
+    <div class="menu-list">
+      <div class="menu-item"><span>備用金</span><span class="price">$${Number(exp.opening_float).toFixed(0)}</span></div>
+      <div class="menu-item"><span>現金銷售 (${exp.order_count} 筆)</span><span class="price">$${Number(exp.cash_sales).toFixed(0)}</span></div>
+      <div class="menu-item" style="font-weight:700"><span>應有現金</span><span class="price">$${Number(exp.expected_close).toFixed(0)}</span></div>
+    </div>
+    <div class="row" style="margin-top:10px"><label>實際清點</label>
+      <input id="closeActual" type="number" value="${exp.expected_close}" min="0" /></div>
+    <div id="varianceHint" class="sub"></div>`;
+  const inp = $("closeActual");
+  const hint = $("varianceHint");
+  const upd = () => {
+    const v = Number(inp.value || 0) - Number(exp.expected_close);
+    hint.textContent = v === 0 ? "剛好對帳" : v > 0 ? `多 $${v.toFixed(0)}` : `少 $${Math.abs(v).toFixed(0)}`;
+  };
+  inp.oninput = upd; upd();
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認關帳", "primary", async () => {
+    try {
+      const res = await api(`/cash-drawer/${drawer.id}/close`, {
+        method: "POST",
+        body: JSON.stringify({ closed_by: posMe.employee_id, closing_actual: inp.value }),
+      });
+      closeModal();
+      const v = Number(res.variance);
+      toast(`關帳完成 · 淨營收 $${Number(res.net_sales).toFixed(0)} · 差異 ${v === 0 ? "$0" : (v > 0 ? "+" : "") + v.toFixed(0)}`);
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+$("shiftBtn").onclick = showShift;
 
 // Boot: render once, go live, restore/prompt login. Viewing the board doesn't
 // require login; sensitive ops (退菜/折扣) do, and prompt for a manager PIN

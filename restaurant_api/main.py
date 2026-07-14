@@ -25,6 +25,7 @@ from .config import get_settings
 from .database import dispose_engine
 from .middleware import RequestContextMiddleware, configure_logging
 from .routers import campaigns as campaigns_router
+from .routers import cash_drawer as cash_drawer_router
 from .routers import clock as clock_router
 from .routers import customers as customers_router
 from .routers import events as events_router
@@ -98,6 +99,7 @@ _mount_router(menu_router, "/menu")
 _mount_router(tables_router, "/tables")
 _mount_router(reports_router, "/reports")
 _mount_router(pos_auth_router, "/pos-auth")
+_mount_router(cash_drawer_router, "/cash-drawer")
 _mount_router(table_order_router, "/t")
 _mount_router(stock_router, "/stock")
 _mount_router(clock_router, "/clock")
