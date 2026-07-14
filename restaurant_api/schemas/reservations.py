@@ -14,12 +14,24 @@ raise ``ConflictError``; the rules are the source of truth.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from decimal import Decimal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from ..models import QueueStatus, ReservationStatus
+from .tables import TableSessionResponse
+
+
+def _reject_float(value: Any) -> Any:
+    """Pre-validator: reject bare ``float`` on money/qty fields (see orders.py)."""
+    if isinstance(value, float):
+        raise ValueError("float literals are not accepted; use a string")
+    return value
+
+
+StrictDecimal = Annotated[Decimal, BeforeValidator(_reject_float)]
 
 # ──────────────────────────────────────────────────────────────────────────
 # Transition graphs — single source of truth shared between router + tests.
@@ -177,8 +189,45 @@ class QueueEntryResponse(BaseModel):
     called_at: datetime | None
     seated_at: datetime | None
     notes: str | None
+    # 候位先點餐: set once the party has added at least one pre-order line.
+    order_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class QueuePreorderLineRequest(BaseModel):
+    """候位先點餐 — add one item to a waiting party's pre-order.
+
+    Creates the party's order on first call (stays unattached to any table
+    until they're seated). Deliberately simpler than the POS ``LineAddRequest``
+    — no modifier/combo support while waiting, matching the existing
+    ``TakeoutSaleRequest`` precedent for the same reason (keep the no-table
+    ordering paths lean).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    menu_item_id: UUID
+    qty: StrictDecimal = Field(default=Decimal("1"), gt=Decimal("0"), le=Decimal("99"))
+    notes: str | None = Field(default=None, max_length=200)
+    actor_id: UUID | None = None
+
+
+class QueueSeatRequest(BaseModel):
+    """帶位入座 — atomically open the table and (if pre-ordered) reparent the
+    party's pending order onto it, then mark the queue entry seated."""
+
+    model_config = ConfigDict(frozen=True)
+
+    table_id: UUID
+    actor_id: UUID | None = None
+
+
+class QueueSeatResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    queue_entry: QueueEntryResponse
+    table_session: TableSessionResponse
 
 
 # Re-export status literals so router signatures stay readable.
@@ -193,6 +242,9 @@ __all__ = [
     "RESERVATION_TRANSITIONS",
     "QueueEntryResponse",
     "QueueJoinRequest",
+    "QueuePreorderLineRequest",
+    "QueueSeatRequest",
+    "QueueSeatResult",
     "QueueStatusLiteral",
     "QueueStatusPatch",
     "ReservationCreate",
@@ -200,4 +252,5 @@ __all__ = [
     "ReservationSource",
     "ReservationStatusLiteral",
     "ReservationStatusPatch",
+    "StrictDecimal",
 ]

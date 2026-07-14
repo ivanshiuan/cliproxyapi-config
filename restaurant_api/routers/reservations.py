@@ -20,9 +20,13 @@ from fastapi import APIRouter, Query, status
 
 from ..api.deps import DbSession, Messenger, TenantId
 from ..models import QueueStatus, ReservationStatus
+from ..schemas.orders import OrderResponse
 from ..schemas.reservations import (
     QueueEntryResponse,
     QueueJoinRequest,
+    QueuePreorderLineRequest,
+    QueueSeatRequest,
+    QueueSeatResult,
     QueueStatusPatch,
     ReservationCreate,
     ReservationResponse,
@@ -177,6 +181,39 @@ async def patch_queue_status(
 ) -> QueueEntryResponse:
     return await reservation_service.patch_queue_status(
         session, queue_id, payload, tenant_id=tenant_id, messenger=messenger
+    )
+
+
+@queue_router.post(
+    "/{queue_id}/lines",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="候位先點餐 — 等待時先加點, 帶位時自動帶上桌",
+)
+async def add_preorder_line(
+    queue_id: uuid.UUID,
+    payload: QueuePreorderLineRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await reservation_service.add_queue_preorder_line(
+        session, queue_id, payload, tenant_id=tenant_id
+    )
+
+
+@queue_router.post(
+    "/{queue_id}/seat",
+    response_model=QueueSeatResult,
+    summary="帶位入座 — 開桌 + 帶上候位先點的餐 + 標記已入座 (一次完成)",
+)
+async def seat_queue_entry(
+    queue_id: uuid.UUID,
+    payload: QueueSeatRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> QueueSeatResult:
+    return await reservation_service.seat_queue_entry(
+        session, queue_id, payload, tenant_id=tenant_id
     )
 
 

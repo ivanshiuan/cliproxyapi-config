@@ -183,6 +183,15 @@ class WalkInQueueEntry(TenantScopedMixin, TimestampedMixin, Base):
         nullable=True,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 候位先點餐: an OPEN order the party built while waiting (table_session_id
+    # NULL). On seating, the service reparents this order onto the newly
+    # opened session (see reservation_service.seat_queue_entry) — no lines to
+    # move, just one FK flip. SET NULL so the order (financial ledger) always
+    # outlives the queue ticket.
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     __table_args__ = (
         Index("ix_queue_store_status", "store_id", "status", "joined_at"),

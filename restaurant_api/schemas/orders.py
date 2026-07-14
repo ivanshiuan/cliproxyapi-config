@@ -256,6 +256,7 @@ class OrderResponse(BaseModel):
     order_type: Literal["dine_in", "takeout", "delivery"] | None = None
     channel: Literal["pos", "table_qr", "tablet", "online", "external"] | None = None
     table_session_id: UUID | None = None
+    pickup_at: datetime | None = None
     invoice_number: str | None = None
     carrier_type: str | None = None
     carrier_id: str | None = None

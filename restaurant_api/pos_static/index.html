@@ -104,6 +104,7 @@
   <button class="ghost" id="clockBtn" style="display:none">打卡</button>
   <select id="storeSel" title="門市"></select>
   <button class="ghost" id="takeoutBtn">外帶</button>
+  <button class="ghost" id="onlineTakeoutBtn">外帶待取</button>
   <button class="ghost" id="queueBtn">候位</button>
   <button class="ghost" id="resvBtn">訂位</button>
   <button class="ghost" id="shiftBtn">交班</button>
@@ -885,6 +886,51 @@ function toBump(id, d) {
 }
 $("takeoutBtn").onclick = showTakeout;
 
+// ─── 外帶待取 (線上外帶, P7.5) — customer ordered from their phone, staff
+// collects cash + closes the order when they arrive to pick up. ───
+async function showOnlineTakeout() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "外帶待取";
+  $("tmSub").textContent = "顧客線上下單、尚未取件的外帶單，依下單時間排序。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入中…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let orders = [];
+  try { orders = await api(`/online-takeout/pending?store_id=${encodeURIComponent(storeId)}`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  body.innerHTML = orders.length ? `<div class="menu-list">` + orders.map((o) => {
+    const total = o.lines.reduce((a, l) => a + Number(l.line_total), 0);
+    const pickup = o.pickup_at ? fmt(o.pickup_at) : "盡快";
+    return `<div class="menu-item" style="cursor:pointer" onclick="collectOnlineTakeoutPrompt('${o.id}', ${total})">
+      <span>${escapeHtml(o.order_no)} · ${escapeHtml(o.notes || "")}<br>
+        <small style="color:#888">取餐 ${pickup} · ${o.lines.length} 項</small></span>
+      <span class="price">$${total.toFixed(0)}</span>
+    </div>`;
+  }).join("") + `</div>` : `<div class="empty">目前沒有待取的外帶單</div>`;
+  acts.append(mkBtn("關閉", "ghost", closeModal));
+}
+
+function collectOnlineTakeoutPrompt(orderId, total) {
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">收款並交付</div>
+    <div class="row"><label>應收</label><span class="price" style="align-self:center">$${total.toFixed(0)}</span></div>
+    <div class="row"><label>收現</label><input id="otTendered" type="number" value="${total}" min="${total}" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認收款", "primary", async () => {
+    const tendered = $("otTendered").value;
+    if (Number(tendered) < total) return toast("收現不足", true);
+    try {
+      const res = await api(`/online-takeout/${orderId}/collect`, {
+        method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
+      });
+      toast(`已收款交付 · 找零 $${Number(res.change).toFixed(0)}`);
+      showOnlineTakeout();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showOnlineTakeout));
+}
+$("onlineTakeoutBtn").onclick = showOnlineTakeout;
+
 // ─── 候位面板 (現場排隊: 取號 → 叫號 → 帶位/棄號) ───
 async function showQueue() {
   if (!storeId) return toast("先指定門市", true);
@@ -908,7 +954,9 @@ async function showQueue() {
         ${q.status === "waiting" ? `<button class="ghost" style="padding:4px 10px"
           onclick="queueAct('${q.id}','called','已叫號')">叫號</button>` : ""}
         <button class="ghost" style="padding:4px 10px"
-          onclick="seatQueueEntry('${q.id}', ${q.party_size}, '${q.status}')">帶位</button>
+          onclick="queuePreorderPrompt('${q.id}')">先點餐${q.order_id ? " ✓" : ""}</button>
+        <button class="ghost" style="padding:4px 10px"
+          onclick="seatQueueEntry('${q.id}', ${q.party_size})">帶位</button>
         <button class="ghost" style="padding:4px 10px"
           onclick="queueAct('${q.id}','abandoned','已棄號')">棄號</button>
       </span>
@@ -951,33 +999,49 @@ async function queueAct(queueId, status, okMsg) {
   } catch (e) { toast(e.message, true); }
 }
 
-async function seatQueueEntry(queueId, partySize, curStatus) {
+async function seatQueueEntry(queueId, partySize) {
   const free = floor.filter((t) => !t.is_occupied);
   if (!free.length) return toast("目前沒有空桌", true);
   const body = $("tmBody");
   body.innerHTML = `<div class="row"><label>入座桌位</label>
     <select id="qSeatTable">${free.map((t) =>
-      `<option value="${t.id}">${escapeHtml(t.name)} (${t.seats} 座)</option>`).join("")}</select></div>`;
+      `<option value="${t.id}">${escapeHtml(t.name)} (${t.seats} 座)</option>`).join("")}</select></div>
+    <div class="sub">若候位時已先點餐，帶位後會自動帶上這桌的帳單。</div>`;
   const acts = $("tmActions"); acts.innerHTML = "";
   acts.append(mkBtn("確認帶位", "primary", async () => {
     try {
-      await api(`/tables/${$("qSeatTable").value}/open`, {
-        method: "POST", body: JSON.stringify({ party_size: partySize }),
-      });
-      // State machine requires waiting → called → seated; auto-call inline
-      // when the operator seats straight from the waiting list.
-      if (curStatus === "waiting") {
-        await api(`/queue/${queueId}/status`, {
-          method: "PATCH", body: JSON.stringify({ status: "called" }),
-        });
-      }
-      await api(`/queue/${queueId}/status`, {
-        method: "PATCH", body: JSON.stringify({ status: "seated" }),
+      // One atomic call: open the table, reparent any pre-order, mark seated.
+      await api(`/queue/${queueId}/seat`, {
+        method: "POST", body: JSON.stringify({ table_id: $("qSeatTable").value }),
       });
       closeModal(); toast("已帶位入座"); refresh();
     } catch (e) { toast(e.message, true); }
   }));
   acts.append(mkBtn("返回", "ghost", showQueue));
+}
+
+async function queuePreorderPrompt(queueId) {
+  const items = await loadMenuCache();
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">候位先點餐</div>
+    <div class="sub">先幫這組客人點好，帶位入座時會自動帶上桌帳單。</div>
+    <div class="menu-list" style="max-height:40vh;overflow:auto">
+      ${items.length ? items.map((m) => `<div class="menu-item"
+        style="cursor:pointer" onclick="queuePreorderAdd('${queueId}','${m.id}')">
+        <span>${escapeHtml(m.name)}</span><span class="price">$${Number(m.price).toFixed(0)}</span>
+      </div>`).join("") : `<div class="empty">尚無菜單品項</div>`}
+    </div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("完成", "primary", showQueue));
+}
+
+async function queuePreorderAdd(queueId, itemId) {
+  try {
+    await api(`/queue/${queueId}/lines`, {
+      method: "POST", body: JSON.stringify({ menu_item_id: itemId, qty: "1" }),
+    });
+    toast("已加點");
+  } catch (e) { toast(e.message, true); }
 }
 $("queueBtn").onclick = showQueue;
 

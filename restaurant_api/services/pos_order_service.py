@@ -59,9 +59,12 @@ from ..schemas.pos_orders import (
     CheckoutQuote,
     CheckoutResult,
     DiscountApplyRequest,
+    InvoiceInfoFields,
     LineAddRequest,
     LineUpdateRequest,
     LineVoidRequest,
+    OnlineTakeoutRequest,
+    OnlineTakeoutResult,
     PartialPayRequest,
     PartialPayResult,
     ServiceChargeRequest,
@@ -278,6 +281,19 @@ _STATION_LITERALS: dict[str, Literal["kitchen", "bar", "dessert", "counter"]] = 
     "dessert": "dessert",
     "counter": "counter",
 }
+
+
+def _apply_invoice_info(order: Order, payload: InvoiceInfoFields) -> None:
+    """發票資訊登錄 (🟡): stash 統編/載具 onto the order at checkout time.
+
+    Not a real 統一發票 issuance (no MoF API yet) — just records what the
+    customer asked for so the invoice module can pick it up later.
+    """
+    if payload.buyer_tax_id is not None:
+        order.buyer_tax_id = payload.buyer_tax_id
+    if payload.carrier_type is not None:
+        order.carrier_type = payload.carrier_type
+        order.carrier_id = payload.carrier_id
 
 
 def _guard_available_now(item: MenuItem) -> None:
@@ -977,6 +993,7 @@ async def takeout_sale(
             paid_at=ts_now,
         )
     )
+    _apply_invoice_info(order, payload)
     order.status = OrderStatus.CLOSED
     order.closed_at = ts_now
     await session.flush()
@@ -1008,6 +1025,193 @@ async def takeout_sale(
         total=total,
         tendered=payload.tendered,
         change=change,
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 線上外帶 (order-ahead pickup — no table, pay at counter)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def create_online_takeout(
+    session: AsyncSession,
+    payload: OnlineTakeoutRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> OnlineTakeoutResult:
+    """線上外帶: customer builds + submits their own order from their phone.
+
+    Stays ``OPEN`` — no payment gateway yet (🔴 in docs/22), so this is
+    order-ahead / pay-at-counter. Staff sees it land on their 外帶待取 panel
+    and settles it via ``collect_online_takeout`` when the customer arrives.
+    """
+    now = datetime.now(UTC)
+    order = Order(
+        tenant_id=tenant_id,
+        store_id=payload.store_id,
+        order_no=f"OT-{uuid7().hex[:12]}",
+        business_date=datetime.now(_TPE).date(),
+        status=OrderStatus.OPEN,
+        order_type=OrderType.TAKEOUT,
+        channel=OrderChannel.ONLINE,
+        pickup_at=payload.pickup_at,
+        notes=(
+            f"{payload.contact_name} / {payload.contact_phone}"
+            + (f" — {payload.notes}" if payload.notes else "")
+        ),
+    )
+    session.add(order)
+    await session.flush()
+
+    placeholder: dict[str, Ingredient] = {}
+
+    async def _get_placeholder() -> Ingredient:
+        if "ing" not in placeholder:
+            placeholder["ing"] = await orders_service._placeholder_ingredient(
+                session, tenant_id, payload.store_id
+            )
+        return placeholder["ing"]
+
+    for item_req in payload.items:
+        item = (
+            await session.execute(
+                select(MenuItem).where(
+                    MenuItem.id == item_req.menu_item_id,
+                    MenuItem.tenant_id == tenant_id,
+                    MenuItem.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if item is None:
+            raise NotFoundError(
+                message=f"menu item {item_req.menu_item_id} not found",
+                details={"menu_item_id": str(item_req.menu_item_id)},
+            )
+        _guard_available_now(item)
+        await orders_service._add_line_with_movement(
+            session=session,
+            order=order,
+            tenant_id=tenant_id,
+            store_id=payload.store_id,
+            line_payload=OrderLineCreate(
+                menu_item_id=item_req.menu_item_id,
+                qty=item_req.qty,
+                unit_price=item.price,
+                notes=item_req.notes,
+                kitchen_station=_resolve_kitchen_station(item),
+            ),
+            get_placeholder=_get_placeholder,
+            occurred_at=now,
+        )
+
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    _gross, _disc, _charge, due = amount_due(order)
+    await audit(
+        session,
+        action="pos_order.online_takeout_created",
+        tenant_id=tenant_id,
+        store_id=payload.store_id,
+        target=("orders", order.id),
+        after={
+            "contact_name": payload.contact_name,
+            "pickup_at": payload.pickup_at.isoformat() if payload.pickup_at else None,
+            "estimated_total": str(due),
+        },
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=payload.store_id,
+        event_type="order.online_takeout_created",
+        payload={"order_id": str(order.id), "estimated_total": str(due)},
+    )
+    return OnlineTakeoutResult(order=orders_service.order_to_response(order), estimated_total=due)
+
+
+async def list_pending_online_takeout(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+) -> list[OrderResponse]:
+    """外帶待取面板: OPEN 線上外帶單, oldest first (FIFO pickup queue)."""
+    stmt = (
+        select(Order)
+        .where(
+            Order.tenant_id == tenant_id,
+            Order.store_id == store_id,
+            Order.status == OrderStatus.OPEN,
+            Order.order_type == OrderType.TAKEOUT,
+            Order.channel == OrderChannel.ONLINE,
+            Order.deleted_at.is_(None),
+        )
+        .order_by(Order.opened_at)
+    )
+    orders = (await session.execute(stmt)).scalars().all()
+    loaded = [
+        await orders_service._load_order_with_relations(session, o.id, tenant_id) for o in orders
+    ]
+    return [orders_service.order_to_response(o) for o in loaded]
+
+
+async def collect_online_takeout(
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    payload: CheckoutCashRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> CheckoutResult:
+    """顧客到店取件付款 — settle a pending 線上外帶單 in cash and close it."""
+    order = await orders_service._load_order_with_relations(session, order_id, tenant_id)
+    if order.channel != OrderChannel.ONLINE or order.order_type != OrderType.TAKEOUT:
+        raise NotFoundError(
+            message=f"order {order_id} is not a pending online-takeout order",
+            details={"order_id": str(order_id)},
+        )
+    _guard_order_open(order)
+
+    _gross, _disc, _charge, due = amount_due(order)
+    if due < Decimal("0"):  # pragma: no cover - defensive, see _guard_not_below_paid elsewhere
+        raise ConflictError(message="due is negative", details={"due": str(due)})
+    if payload.tendered < due:
+        raise ValidationError(f"insufficient cash: tendered {payload.tendered} < total {due}")
+    change = payload.tendered - due
+
+    now = datetime.now(UTC)
+    session.add(
+        OrderPayment(
+            tenant_id=tenant_id,
+            order_id=order.id,
+            method=PaymentMethod.CASH,
+            amount=due,
+            fee_amount=Decimal("0"),
+            paid_at=now,
+        )
+    )
+    _apply_invoice_info(order, payload)
+    order.status = OrderStatus.CLOSED
+    order.closed_at = now
+    await session.flush()
+
+    await audit(
+        session,
+        action="pos_order.online_takeout_collected",
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        actor_id=payload.actor_id,
+        target=("orders", order.id),
+        after={"total": str(due), "tendered": str(payload.tendered), "change": str(change)},
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.online_takeout_collected",
+        payload={"order_id": str(order.id)},
+    )
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    return CheckoutResult(
+        order=orders_service.order_to_response(order), total=due, tendered=payload.tendered, change=change
     )
 
 
@@ -1062,6 +1266,7 @@ async def checkout_cash(
             paid_at=now,
         )
     )
+    _apply_invoice_info(order, payload)
     order.status = OrderStatus.CLOSED
     order.closed_at = now
     ts.status = TableSessionStatus.CLOSED
@@ -1166,7 +1371,10 @@ __all__ = [
     "amount_due",
     "apply_discount",
     "checkout_cash",
+    "collect_online_takeout",
+    "create_online_takeout",
     "get_session_order",
+    "list_pending_online_takeout",
     "merge_sessions",
     "pay_partial",
     "quote",

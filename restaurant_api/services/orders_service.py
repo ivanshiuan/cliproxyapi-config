@@ -251,6 +251,7 @@ def order_to_response(order: Order) -> OrderResponse:
         order_type=order.order_type.value,  # type: ignore[arg-type]
         channel=order.channel.value,  # type: ignore[arg-type]
         table_session_id=order.table_session_id,
+        pickup_at=_to_tpe(order.pickup_at),
         invoice_number=order.invoice_number,
         carrier_type=order.carrier_type,
         carrier_id=order.carrier_id,

@@ -33,6 +33,7 @@ from .routers import kitchen as kitchen_router
 from .routers import line_webhook as line_webhook_router
 from .routers import membership as membership_router
 from .routers import menu as menu_router
+from .routers import online_takeout as online_takeout_router
 from .routers import orders as orders_router
 from .routers import pos_auth as pos_auth_router
 from .routers import reports as reports_router
@@ -100,6 +101,7 @@ _mount_router(tables_router, "/tables")
 _mount_router(reports_router, "/reports")
 _mount_router(pos_auth_router, "/pos-auth")
 _mount_router(cash_drawer_router, "/cash-drawer")
+_mount_router(online_takeout_router, "/online-takeout")
 _mount_router(table_order_router, "/t")
 _mount_router(stock_router, "/stock")
 _mount_router(clock_router, "/clock")
@@ -149,6 +151,12 @@ if _KDS_DIR.is_dir():
 _BOOK_DIR = Path(__file__).parent / "book_static"
 if _BOOK_DIR.is_dir():
     app.mount("/book", StaticFiles(directory=str(_BOOK_DIR), html=True), name="book")
+
+# Consumer online-takeout page (P7.5) — /takeout/?store=<uuid>, posts
+# /online-takeout; staff collect cash at pickup from the POS panel.
+_TAKEOUT_DIR = Path(__file__).parent / "takeout_static"
+if _TAKEOUT_DIR.is_dir():
+    app.mount("/takeout", StaticFiles(directory=str(_TAKEOUT_DIR), html=True), name="takeout")
 
 
 @app.get("/version", tags=["meta"])

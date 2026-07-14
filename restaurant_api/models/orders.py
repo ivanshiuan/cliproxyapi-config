@@ -228,6 +228,12 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         nullable=True,
         index=True,
     )
+    # 線上外帶: when the customer wants to pick up (NULL = 盡快/ASAP). Only
+    # meaningful for order_type=TAKEOUT + channel=ONLINE.
+    pickup_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # 統一發票 fields — Taiwan-specific.
     invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)

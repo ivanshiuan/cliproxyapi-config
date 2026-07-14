@@ -8,6 +8,7 @@ server-side from the menu item, and checkout settles the bill in cash.
 
 from __future__ import annotations
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -87,10 +88,34 @@ class DiscountApplyRequest(BaseModel):
         return self
 
 
-class CheckoutCashRequest(BaseModel):
-    """Settle the session's bill in cash. ``tendered`` must cover the total."""
+class InvoiceInfoFields(BaseModel):
+    """發票資訊登錄 (🟡 partial) — 統編/載具 captured at checkout time.
+
+    This does NOT issue a real 統一發票 (no MoF integration yet — see
+    ``docs/22`` #20); it just records what the customer asked for onto the
+    order so the real invoice module can pick it up later without a second
+    round-trip. Same validation as the bulk-ingest ``OrderCreateRequest``.
+    """
 
     model_config = ConfigDict(frozen=True)
+
+    buyer_tax_id: str | None = Field(default=None, pattern=r"^\d{8}$")
+    carrier_type: Literal["mobile", "citizen", "member", "paper"] | None = None
+    carrier_id: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def _check_mobile_carrier(self) -> InvoiceInfoFields:
+        if self.carrier_type == "mobile":
+            cid = self.carrier_id
+            if cid is None or not cid.startswith("/") or len(cid) != 8:
+                raise ValueError(
+                    "mobile carrier_id must start with '/' and be exactly 8 chars"
+                )
+        return self
+
+
+class CheckoutCashRequest(InvoiceInfoFields):
+    """Settle the session's bill in cash. ``tendered`` must cover the total."""
 
     tendered: StrictDecimal = Field(ge=Decimal("0"))
     actor_id: UUID | None = None
@@ -104,15 +129,38 @@ class TakeoutItem(BaseModel):
     notes: str | None = Field(default=None, max_length=200)
 
 
-class TakeoutSaleRequest(BaseModel):
+class TakeoutSaleRequest(InvoiceInfoFields):
     """外帶快速單 — one shot: build the order, take cash, close it. No table."""
-
-    model_config = ConfigDict(frozen=True)
 
     store_id: UUID
     items: list[TakeoutItem] = Field(min_length=1, max_length=50)
     tendered: StrictDecimal = Field(ge=Decimal("0"))
     actor_id: UUID | None = None
+
+
+class OnlineTakeoutRequest(BaseModel):
+    """線上外帶 — customer submits from their phone, no table, no login.
+
+    Stays ``OPEN`` (no payment) until staff collects cash at pickup via
+    ``collect_online_takeout`` — there's no payment gateway yet (🔴 in
+    docs/22), so this is order-ahead, pay-at-counter.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    store_id: UUID
+    contact_name: str = Field(min_length=1, max_length=80)
+    contact_phone: str = Field(min_length=1, max_length=32)
+    items: list[TakeoutItem] = Field(min_length=1, max_length=50)
+    pickup_at: datetime | None = None  # None = 盡快 (ASAP)
+    notes: str | None = Field(default=None, max_length=200)
+
+
+class OnlineTakeoutResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    order: OrderResponse
+    estimated_total: Decimal
 
 
 class CheckoutQuote(BaseModel):
@@ -173,9 +221,12 @@ __all__ = [
     "CheckoutQuote",
     "CheckoutResult",
     "DiscountApplyRequest",
+    "InvoiceInfoFields",
     "LineAddRequest",
     "LineUpdateRequest",
     "LineVoidRequest",
+    "OnlineTakeoutRequest",
+    "OnlineTakeoutResult",
     "PartialPayRequest",
     "PartialPayResult",
     "ServiceChargeRequest",
