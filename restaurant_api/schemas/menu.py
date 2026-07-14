@@ -11,7 +11,7 @@ listings but its historical order lines still resolve.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -87,6 +87,11 @@ class MenuItemCreate(BaseModel):
     allergens: list[str] = Field(default_factory=list)
     is_available: bool = True
     default_kitchen_station: _KitchenStationLiteral | None = None
+    # 時段菜單: both None = always available whenever is_available. Set both to
+    # restrict to a daily window (Asia/Taipei wall clock); start > end wraps
+    # past midnight (e.g. 宵夜 21:00-02:00).
+    available_start_time: time | None = None
+    available_end_time: time | None = None
 
 
 class MenuItemUpdate(BaseModel):
@@ -108,6 +113,8 @@ class MenuItemUpdate(BaseModel):
     allergens: list[str] | None = None
     is_available: bool | None = None
     default_kitchen_station: _KitchenStationLiteral | None = None
+    available_start_time: time | None = None
+    available_end_time: time | None = None
 
 
 class MenuItemResponse(BaseModel):
@@ -125,6 +132,8 @@ class MenuItemResponse(BaseModel):
     allergens: list[str]
     is_available: bool
     default_kitchen_station: str | None = None
+    available_start_time: time | None = None
+    available_end_time: time | None = None
     created_at: datetime
     updated_at: datetime
 

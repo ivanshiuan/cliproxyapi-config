@@ -31,7 +31,15 @@ from sqlalchemy.orm import selectinload
 
 from ..api.errors import ValidationError
 from ..models import MenuItem, Order, OrderLine, OrderStatus
-from ..schemas.reports import PaymentBreakdown, SalesReport, TopItem
+from ..schemas.reports import (
+    ChannelReport,
+    ChannelSlice,
+    HourlyReport,
+    HourlySlice,
+    PaymentBreakdown,
+    SalesReport,
+    TopItem,
+)
 from . import pos_order_service
 
 _TPE = ZoneInfo("Asia/Taipei")
@@ -251,4 +259,83 @@ async def orders_csv(
     return buf.getvalue()
 
 
-__all__ = ["orders_csv", "sales_report", "top_items"]
+async def hourly_report(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    date_from: date,
+    date_to: date | None = None,
+) -> HourlyReport:
+    """時段分析 — 24 hour-of-day buckets (Asia/Taipei wall clock), from
+    ``closed_at`` (the instant the till actually charged the customer)."""
+    end = _validate_range(date_from, date_to)
+    orders = (
+        await session.execute(
+            _closed_orders_stmt(
+                tenant_id=tenant_id, store_id=store_id, date_from=date_from, date_to=end
+            )
+        )
+    ).scalars().all()
+
+    buckets: dict[int, list] = {h: [0, Decimal("0")] for h in range(24)}
+    for o in orders:
+        if o.closed_at is None:  # pragma: no cover - CLOSED orders always have one
+            continue
+        hour = o.closed_at.astimezone(_TPE).hour
+        _gross, net, _charge, _qty = _order_gross_net(o)
+        slot = buckets[hour]
+        slot[0] += 1
+        slot[1] += net
+
+    return HourlyReport(
+        store_id=store_id,
+        date_from=date_from,
+        date_to=end,
+        slices=[
+            HourlySlice(hour=h, order_count=c, net_sales=amt)
+            for h, (c, amt) in sorted(buckets.items())
+        ],
+    )
+
+
+async def channel_report(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    date_from: date,
+    date_to: date | None = None,
+) -> ChannelReport:
+    """通路分佈 — 內用/外帶/外送 (``Order.order_type``) revenue share."""
+    end = _validate_range(date_from, date_to)
+    orders = (
+        await session.execute(
+            _closed_orders_stmt(
+                tenant_id=tenant_id, store_id=store_id, date_from=date_from, date_to=end
+            )
+        )
+    ).scalars().all()
+
+    buckets: dict[str, list] = {}
+    total = Decimal("0")
+    for o in orders:
+        _gross, net, _charge, _qty = _order_gross_net(o)
+        slot = buckets.setdefault(o.order_type.value, [0, Decimal("0")])
+        slot[0] += 1
+        slot[1] += net
+        total += net
+
+    slices = [
+        ChannelSlice(
+            order_type=t,
+            order_count=c,
+            net_sales=amt,
+            share=(amt / total).quantize(Decimal("0.0001")) if total else Decimal("0"),
+        )
+        for t, (c, amt) in sorted(buckets.items())
+    ]
+    return ChannelReport(store_id=store_id, date_from=date_from, date_to=end, net_sales=total, slices=slices)
+
+
+__all__ = ["channel_report", "hourly_report", "orders_csv", "sales_report", "top_items"]

@@ -481,7 +481,7 @@ let menuCache = [];
 async function loadMenuCache() {
   if (menuCache.length || !storeId) return menuCache;
   try {
-    menuCache = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true`);
+    menuCache = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true&available_now=true`);
   } catch { menuCache = []; }
   return menuCache;
 }

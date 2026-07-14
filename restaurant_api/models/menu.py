@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
+from datetime import time
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String, Text, text
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, Numeric, String, Text, Time, text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -117,6 +118,11 @@ class MenuItem(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         SQLEnum(KitchenStation, name="kitchen_station", native_enum=False, length=16),
         nullable=True,
     )
+    # 時段菜單: local (Asia/Taipei) wall-clock window this item is orderable in.
+    # Both NULL = always available. available_start_time > available_end_time
+    # means the window wraps past midnight (e.g. 宵夜 21:00-02:00).
+    available_start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    available_end_time: Mapped[time | None] = mapped_column(Time, nullable=True)
 
     category: Mapped[MenuCategory | None] = relationship(back_populates="items")
     modifier_groups: Mapped[list[ModifierGroup]] = relationship(

@@ -12,7 +12,7 @@ from datetime import date
 from fastapi import APIRouter, Query, Response
 
 from ..api.deps import DbSession, TenantId
-from ..schemas.reports import SalesReport, TopItem
+from ..schemas.reports import ChannelReport, HourlyReport, SalesReport, TopItem
 from ..services import reports_service
 
 _Q_STORE_ID_REQ = Query()
@@ -56,6 +56,40 @@ async def top_items(
         date_from=date_from,
         date_to=date_to,
         limit=limit,
+    )
+
+
+@router.get("/hourly", response_model=HourlyReport, summary="時段分析 — 哪個時段賺錢")
+async def hourly(
+    session: DbSession,
+    tenant_id: TenantId,
+    store_id: uuid.UUID = _Q_STORE_ID_REQ,
+    date_from: date = _Q_DATE_FROM,
+    date_to: date | None = _Q_DATE_TO,
+) -> HourlyReport:
+    return await reports_service.hourly_report(
+        session,
+        tenant_id=tenant_id,
+        store_id=store_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get("/channels", response_model=ChannelReport, summary="通路分佈 — 內用/外帶/外送營收占比")
+async def channels(
+    session: DbSession,
+    tenant_id: TenantId,
+    store_id: uuid.UUID = _Q_STORE_ID_REQ,
+    date_from: date = _Q_DATE_FROM,
+    date_to: date | None = _Q_DATE_TO,
+) -> ChannelReport:
+    return await reports_service.channel_report(
+        session,
+        tenant_id=tenant_id,
+        store_id=store_id,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 

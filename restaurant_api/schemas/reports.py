@@ -60,4 +60,61 @@ class TopItem(BaseModel):
     revenue: Decimal
 
 
-__all__ = ["PaymentBreakdown", "SalesReport", "TopItem"]
+class HourlySlice(BaseModel):
+    """One hour-of-day's slice of the range (Asia/Taipei wall clock)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    hour: int  # 0-23, bucketed on order.closed_at converted to TPE
+    order_count: int
+    net_sales: Decimal
+
+
+class HourlyReport(BaseModel):
+    """時段分析 — which hour of the day actually makes money.
+
+    Always 24 rows (hour 0..23), zero-filled for hours with no sales, so the
+    caller can chart it directly without gap-filling client-side.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    store_id: UUID
+    date_from: date
+    date_to: date
+    slices: list[HourlySlice]
+
+
+class ChannelSlice(BaseModel):
+    """One order_type's (內用/外帶/外送) slice of the range."""
+
+    model_config = ConfigDict(frozen=True)
+
+    order_type: str
+    order_count: int
+    net_sales: Decimal
+    # net_sales / total net_sales for the range, 0 when the range had no sales.
+    share: Decimal
+
+
+class ChannelReport(BaseModel):
+    """通路分佈 — dine-in vs takeout vs delivery revenue share."""
+
+    model_config = ConfigDict(frozen=True)
+
+    store_id: UUID
+    date_from: date
+    date_to: date
+    net_sales: Decimal
+    slices: list[ChannelSlice]
+
+
+__all__ = [
+    "ChannelReport",
+    "ChannelSlice",
+    "HourlyReport",
+    "HourlySlice",
+    "PaymentBreakdown",
+    "SalesReport",
+    "TopItem",
+]

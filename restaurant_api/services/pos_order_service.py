@@ -68,7 +68,7 @@ from ..schemas.pos_orders import (
     TakeoutSaleRequest,
 )
 from ..schemas.tables import TableSessionMerge
-from . import orders_service, pos_auth_service
+from . import menu_service, orders_service, pos_auth_service
 from .audit_service import audit
 from .event_hub import record_event
 from .permissions import SensitiveAction
@@ -187,6 +187,7 @@ async def add_line(
             message=f"menu item {payload.menu_item_id} not found",
             details={"menu_item_id": str(payload.menu_item_id)},
         )
+    _guard_available_now(item)
 
     unit_price, selected_options = await _resolve_modifiers(
         session, item, payload.modifier_option_ids, tenant_id=tenant_id
@@ -277,6 +278,21 @@ _STATION_LITERALS: dict[str, Literal["kitchen", "bar", "dessert", "counter"]] = 
     "dessert": "dessert",
     "counter": "counter",
 }
+
+
+def _guard_available_now(item: MenuItem) -> None:
+    """時段菜單: reject adding a line for an item outside its configured
+    availability window (e.g. ordering 宵夜-only items at lunch)."""
+    if not menu_service.is_item_available_now(item):
+        raise ConflictError(
+            message=f"「{item.name}」目前不在供應時段"
+            f" ({item.available_start_time} - {item.available_end_time})",
+            details={
+                "menu_item_id": str(item.id),
+                "available_start_time": str(item.available_start_time),
+                "available_end_time": str(item.available_end_time),
+            },
+        )
 
 
 def _resolve_kitchen_station(item: MenuItem) -> Literal["kitchen", "bar", "dessert", "counter"]:
@@ -926,6 +942,7 @@ async def takeout_sale(
                 message=f"menu item {item_req.menu_item_id} not found",
                 details={"menu_item_id": str(item_req.menu_item_id)},
             )
+        _guard_available_now(item)
         await orders_service._add_line_with_movement(
             session=session,
             order=order,

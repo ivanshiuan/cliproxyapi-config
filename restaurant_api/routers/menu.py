@@ -29,6 +29,7 @@ _Q_STORE_ID = Query(default=None)
 _Q_CATEGORY_ID = Query(default=None)
 _Q_INCLUDE_INACTIVE = Query(default=False)
 _Q_AVAILABLE_ONLY = Query(default=False)
+_Q_AVAILABLE_NOW = Query(default=False, description="時段菜單: 只列現在時段供應的品項")
 _Q_LIMIT = Query(default=500, ge=1, le=1000)
 
 router = APIRouter(prefix="/menu", tags=["menu"])
@@ -124,6 +125,7 @@ async def list_items(
     store_id: uuid.UUID | None = _Q_STORE_ID,
     category_id: uuid.UUID | None = _Q_CATEGORY_ID,
     available_only: bool = _Q_AVAILABLE_ONLY,
+    available_now: bool = _Q_AVAILABLE_NOW,
     limit: int = _Q_LIMIT,
 ) -> list[MenuItemResponse]:
     return await menu_service.list_items(
@@ -132,6 +134,7 @@ async def list_items(
         store_id=store_id,
         category_id=category_id,
         available_only=available_only,
+        available_now=available_now,
         limit=limit,
     )
 

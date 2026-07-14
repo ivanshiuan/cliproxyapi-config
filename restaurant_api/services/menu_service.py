@@ -9,11 +9,13 @@ return a clean 409 instead of leaking an IntegrityError.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..api.errors import ConflictError, NotFoundError
+from ..api.errors import ConflictError, NotFoundError, ValidationError
 from ..models import ComboComponent, MenuCategory, MenuItem, ModifierGroup, ModifierOption
 from ..schemas.menu import (
     ComboComponentCreate,
@@ -28,6 +30,31 @@ from ..schemas.menu import (
     ModifierGroupResponse,
 )
 from .audit_service import audit
+
+_TPE = ZoneInfo("Asia/Taipei")
+
+
+def is_item_available_now(item: MenuItem, now: time | None = None) -> bool:
+    """時段菜單: is ``item`` orderable at ``now`` (Asia/Taipei wall clock)?
+
+    Both window fields NULL = always available. ``start > end`` wraps past
+    midnight (e.g. 宵夜 21:00-02:00 is available at 23:00 and at 01:00).
+    """
+    start, end = item.available_start_time, item.available_end_time
+    if start is None or end is None:
+        return True
+    if now is None:
+        now = datetime.now(_TPE).time()
+    if start <= end:
+        return start <= now < end
+    return now >= start or now < end
+
+
+def _guard_availability_window(start: time | None, end: time | None) -> None:
+    if (start is None) != (end is None):
+        raise ValidationError("available_start_time 與 available_end_time 必須同時設定或同時留空")
+    if start is not None and end is not None and start == end:
+        raise ValidationError("available_start_time 不能等於 available_end_time (區間長度為零)")
 
 # ──────────────────────────────────────────────────────────────────────────
 # Categories
@@ -139,6 +166,7 @@ async def create_item(
     await _guard_sku_unique(session, tenant_id=tenant_id, sku=payload.sku)
     if payload.category_id is not None:
         await _load_category(session, payload.category_id, tenant_id)
+    _guard_availability_window(payload.available_start_time, payload.available_end_time)
     row = MenuItem(
         tenant_id=tenant_id,
         store_id=payload.store_id,
@@ -151,6 +179,8 @@ async def create_item(
         allergens=payload.allergens,
         is_available=payload.is_available,
         default_kitchen_station=payload.default_kitchen_station,
+        available_start_time=payload.available_start_time,
+        available_end_time=payload.available_end_time,
     )
     session.add(row)
     await session.flush()
@@ -182,6 +212,7 @@ async def list_items(
     store_id: uuid.UUID | None = None,
     category_id: uuid.UUID | None = None,
     available_only: bool = False,
+    available_now: bool = False,
     limit: int = 500,
 ) -> list[MenuItemResponse]:
     stmt = select(MenuItem).where(
@@ -196,6 +227,11 @@ async def list_items(
         stmt = stmt.where(MenuItem.is_available.is_(True))
     stmt = stmt.order_by(MenuItem.name).limit(limit)
     rows = (await session.execute(stmt)).scalars().all()
+    # 時段菜單: the wrap-around window (start > end) isn't a plain SQL BETWEEN,
+    # so filter in Python — menu lists are small, this is cheap.
+    if available_now:
+        now = datetime.now(_TPE).time()
+        rows = [r for r in rows if is_item_available_now(r, now)]
     return [MenuItemResponse.model_validate(r) for r in rows]
 
 
@@ -214,6 +250,8 @@ async def update_item(
         await _load_category(session, fields["category_id"], tenant_id)
     for key, value in fields.items():
         setattr(row, key, value)
+    if "available_start_time" in fields or "available_end_time" in fields:
+        _guard_availability_window(row.available_start_time, row.available_end_time)
     await session.flush()
     await session.refresh(row)
     await audit(
@@ -513,6 +551,7 @@ __all__ = [
     "delete_item",
     "delete_modifier_group",
     "get_item",
+    "is_item_available_now",
     "list_categories",
     "list_combo_components",
     "list_items",
