@@ -163,6 +163,16 @@ class OnlineTakeoutResult(BaseModel):
     estimated_total: Decimal
 
 
+class PickupBoardEntry(BaseModel):
+    """One row on the public 取餐叫號 display — deliberately minimal (no
+    prices/contact info) since this screen faces the dining room."""
+
+    model_config = ConfigDict(frozen=True)
+
+    order_no: str
+    called_at: datetime
+
+
 class CheckoutQuote(BaseModel):
     """Amount due for the session's open order — the single source of truth the
     checkout UI shows (no client-side money math). ``net`` includes the service
@@ -229,6 +239,7 @@ __all__ = [
     "OnlineTakeoutResult",
     "PartialPayRequest",
     "PartialPayResult",
+    "PickupBoardEntry",
     "ServiceChargeRequest",
     "StrictDecimal",
     "TakeoutItem",

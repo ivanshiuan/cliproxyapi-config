@@ -67,6 +67,7 @@ from ..schemas.pos_orders import (
     OnlineTakeoutResult,
     PartialPayRequest,
     PartialPayResult,
+    PickupBoardEntry,
     ServiceChargeRequest,
     TakeoutSaleRequest,
 )
@@ -1154,6 +1155,80 @@ async def list_pending_online_takeout(
     return [orders_service.order_to_response(o) for o in loaded]
 
 
+async def call_for_pickup(
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    *,
+    tenant_id: uuid.UUID,
+    actor_id: uuid.UUID | None = None,
+) -> OrderResponse:
+    """取餐叫號: mark a ready 線上外帶單 as called — it appears on the public
+    pickup board until collected. Doesn't touch payment/status; staff still
+    calls ``collect_online_takeout`` separately when the customer arrives."""
+    order = await orders_service._load_order_with_relations(session, order_id, tenant_id)
+    if order.channel != OrderChannel.ONLINE or order.order_type != OrderType.TAKEOUT:
+        raise NotFoundError(
+            message=f"order {order_id} is not a pending online-takeout order",
+            details={"order_id": str(order_id)},
+        )
+    _guard_order_open(order)
+
+    order.pickup_called_at = datetime.now(UTC)
+    await session.flush()
+    await audit(
+        session,
+        action="pos_order.pickup_called",
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        actor_id=actor_id,
+        target=("orders", order.id),
+        after={"order_no": order.order_no},
+    )
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="order.pickup_called",
+        payload={"order_id": str(order.id)},
+    )
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    return orders_service.order_to_response(order)
+
+
+async def list_pickup_board(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    limit: int = 20,
+) -> list[PickupBoardEntry]:
+    """取餐叫號看板: recently-called, still-uncollected orders, newest first.
+
+    Source of truth is ``orders`` itself (``pickup_called_at IS NOT NULL`` +
+    ``status = OPEN``) — an order drops off the moment it's collected/closed.
+    The WS event is only a wake-up-and-refetch signal for the display, per
+    the ``order_events`` design (never trust the event payload for display).
+    """
+    stmt = (
+        select(Order)
+        .where(
+            Order.tenant_id == tenant_id,
+            Order.store_id == store_id,
+            Order.status == OrderStatus.OPEN,
+            Order.pickup_called_at.is_not(None),
+            Order.deleted_at.is_(None),
+        )
+        .order_by(Order.pickup_called_at.desc())
+        .limit(limit)
+    )
+    orders = (await session.execute(stmt)).scalars().all()
+    return [
+        PickupBoardEntry(order_no=o.order_no, called_at=o.pickup_called_at)
+        for o in orders
+        if o.pickup_called_at is not None
+    ]
+
+
 async def collect_online_takeout(
     session: AsyncSession,
     order_id: uuid.UUID,
@@ -1370,11 +1445,13 @@ __all__ = [
     "add_line",
     "amount_due",
     "apply_discount",
+    "call_for_pickup",
     "checkout_cash",
     "collect_online_takeout",
     "create_online_takeout",
     "get_session_order",
     "list_pending_online_takeout",
+    "list_pickup_board",
     "merge_sessions",
     "pay_partial",
     "quote",

@@ -57,6 +57,16 @@
 <header>
   <h1 id="tname">掃碼點餐</h1>
   <span class="sub" id="tzone"></span>
+  <span style="flex:1"></span>
+  <select id="langSel" style="padding:6px 8px;border-radius:8px;border:1px solid var(--line);font-size:14px">
+    <option value="">中文</option>
+    <option value="en">EN</option>
+    <option value="ja">日本語</option>
+    <option value="ko">한국어</option>
+    <option value="zh-Hans">简体</option>
+    <option value="vi">Tiếng Việt</option>
+    <option value="th">ไทย</option>
+  </select>
 </header>
 
 <main>
@@ -170,6 +180,8 @@ async function submit() {
   } catch (e) { toast(e.message, true); $("submitBtn").disabled = false; }
 }
 
+let lang = localStorage.getItem("order_lang") || "";
+
 async function boot() {
   if (!token) {
     $("notice").style.display = "block";
@@ -177,7 +189,8 @@ async function boot() {
     $("menu").innerHTML = "";
     return;
   }
-  try { ctx = await api(`/t/${encodeURIComponent(token)}/context`); }
+  const q = lang ? `?lang=${encodeURIComponent(lang)}` : "";
+  try { ctx = await api(`/t/${encodeURIComponent(token)}/context${q}`); }
   catch (e) {
     $("notice").style.display = "block";
     $("notice").textContent = "找不到這張桌子 — 請重新掃描桌上的 QR Code，或請店員協助。";
@@ -196,6 +209,12 @@ async function boot() {
   setInterval(refreshBill, 8000);
 }
 
+$("langSel").value = lang;
+$("langSel").onchange = () => {
+  lang = $("langSel").value;
+  localStorage.setItem("order_lang", lang);
+  boot();
+};
 $("submitBtn").onclick = submit;
 boot();
 </script>

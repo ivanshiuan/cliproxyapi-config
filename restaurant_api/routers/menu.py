@@ -19,6 +19,7 @@ from ..schemas.menu import (
     MenuCategoryUpdate,
     MenuItemCreate,
     MenuItemResponse,
+    MenuItemTranslationUpdate,
     MenuItemUpdate,
     ModifierGroupCreate,
     ModifierGroupResponse,
@@ -30,6 +31,7 @@ _Q_CATEGORY_ID = Query(default=None)
 _Q_INCLUDE_INACTIVE = Query(default=False)
 _Q_AVAILABLE_ONLY = Query(default=False)
 _Q_AVAILABLE_NOW = Query(default=False, description="時段菜單: 只列現在時段供應的品項")
+_Q_LANG = Query(default=None, description="多語系菜單: 回傳這個語言的翻譯 (缺翻譯時退回中文)")
 _Q_LIMIT = Query(default=500, ge=1, le=1000)
 
 router = APIRouter(prefix="/menu", tags=["menu"])
@@ -126,6 +128,7 @@ async def list_items(
     category_id: uuid.UUID | None = _Q_CATEGORY_ID,
     available_only: bool = _Q_AVAILABLE_ONLY,
     available_now: bool = _Q_AVAILABLE_NOW,
+    lang: str | None = _Q_LANG,
     limit: int = _Q_LIMIT,
 ) -> list[MenuItemResponse]:
     return await menu_service.list_items(
@@ -135,6 +138,7 @@ async def list_items(
         category_id=category_id,
         available_only=available_only,
         available_now=available_now,
+        lang=lang,
         limit=limit,
     )
 
@@ -148,8 +152,9 @@ async def get_item(
     item_id: uuid.UUID,
     session: DbSession,
     tenant_id: TenantId,
+    lang: str | None = _Q_LANG,
 ) -> MenuItemResponse:
-    return await menu_service.get_item(session, item_id, tenant_id=tenant_id)
+    return await menu_service.get_item(session, item_id, tenant_id=tenant_id, lang=lang)
 
 
 @router.patch(
@@ -177,6 +182,20 @@ async def delete_item(
     tenant_id: TenantId,
 ) -> None:
     await menu_service.delete_item(session, item_id, tenant_id=tenant_id)
+
+
+@router.put(
+    "/items/{item_id}/translations",
+    response_model=MenuItemResponse,
+    summary="多語系菜單 — 設定/覆寫單一語言的翻譯",
+)
+async def set_translation(
+    item_id: uuid.UUID,
+    payload: MenuItemTranslationUpdate,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> MenuItemResponse:
+    return await menu_service.set_translation(session, item_id, payload, tenant_id=tenant_id)
 
 
 # ── 口味選項組/加價購 (modifier groups) ────────────────────────────────────

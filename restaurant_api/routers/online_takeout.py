@@ -19,10 +19,12 @@ from ..schemas.pos_orders import (
     CheckoutResult,
     OnlineTakeoutRequest,
     OnlineTakeoutResult,
+    PickupBoardEntry,
 )
 from ..services import pos_order_service
 
 _Q_STORE_ID_REQ = Query()
+_Q_LIMIT = Query(default=20, ge=1, le=100)
 
 router = APIRouter(prefix="/online-takeout", tags=["online-takeout"])
 
@@ -69,6 +71,35 @@ async def collect(
 ) -> CheckoutResult:
     return await pos_order_service.collect_online_takeout(
         session, order_id, payload, tenant_id=tenant_id
+    )
+
+
+@router.post(
+    "/{order_id}/call",
+    response_model=OrderResponse,
+    summary="取餐叫號 — 標記已備好, 出現在公用取餐看板",
+)
+async def call_for_pickup(
+    order_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await pos_order_service.call_for_pickup(session, order_id, tenant_id=tenant_id)
+
+
+@router.get(
+    "/board",
+    response_model=list[PickupBoardEntry],
+    summary="取餐叫號看板 — 公用顯示螢幕用, 最新叫號在前",
+)
+async def pickup_board(
+    session: DbSession,
+    tenant_id: TenantId,
+    store_id: uuid.UUID = _Q_STORE_ID_REQ,
+    limit: int = _Q_LIMIT,
+) -> list[PickupBoardEntry]:
+    return await pos_order_service.list_pickup_board(
+        session, tenant_id=tenant_id, store_id=store_id, limit=limit
     )
 
 

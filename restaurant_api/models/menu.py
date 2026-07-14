@@ -123,6 +123,16 @@ class MenuItem(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
     # means the window wraps past midnight (e.g. 宵夜 21:00-02:00).
     available_start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     available_end_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    # 多語系菜單: {"en": {"name": "...", "description": "..."}, "ja": {...}}.
+    # Structured (staff-entered) rather than live AI translation — see
+    # docs/22 #29: same "rule-based first" precedent as #21's recommendations.
+    # Missing language/field falls back to the zh-Hant name/description.
+    translations: Mapped[dict[str, dict[str, str]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default="{}",
+    )
 
     category: Mapped[MenuCategory | None] = relationship(back_populates="items")
     modifier_groups: Mapped[list[ModifierGroup]] = relationship(

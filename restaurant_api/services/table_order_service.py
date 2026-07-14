@@ -52,7 +52,23 @@ async def _resolve_table(session: AsyncSession, qr_token: str) -> DiningTable:
     return row
 
 
-async def get_context(session: AsyncSession, qr_token: str) -> TableContext:
+def _localize_public_item(m: MenuItem, lang: str | None) -> PublicMenuItem:
+    """多語系菜單: same fallback rule as menu_service._localize, applied to
+    the guest-facing DTO (no cost/SKU fields to leak)."""
+    resp = PublicMenuItem.model_validate(m)
+    if not lang:
+        return resp
+    tr = m.translations.get(lang)
+    if not tr:
+        return resp
+    if tr.get("name"):
+        resp.name = tr["name"]
+    if tr.get("description"):
+        resp.description = tr["description"]
+    return resp
+
+
+async def get_context(session: AsyncSession, qr_token: str, *, lang: str | None = None) -> TableContext:
     table = await _resolve_table(session, qr_token)
     open_session = await _open_session_for_table(session, table.id)
     items = (
@@ -72,7 +88,7 @@ async def get_context(session: AsyncSession, qr_token: str) -> TableContext:
         zone=table.zone,
         store_id=table.store_id,
         is_open=open_session is not None,
-        menu=[PublicMenuItem.model_validate(m) for m in items],
+        menu=[_localize_public_item(m, lang) for m in items],
     )
 
 

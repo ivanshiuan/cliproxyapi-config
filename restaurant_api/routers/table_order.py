@@ -6,13 +6,14 @@ the credential and scopes everything to that one table's live seating.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Path, Query
 
 from ..api.deps import DbSession
 from ..schemas.table_order import CartSubmit, GuestBill, TableContext
 from ..services import table_order_service
 
 _P_TOKEN = Path(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+_Q_LANG = Query(default=None, description="多語系菜單: 回傳這個語言的翻譯 (缺翻譯時退回中文)")
 
 router = APIRouter(prefix="/t", tags=["table-order"])
 
@@ -25,8 +26,9 @@ router = APIRouter(prefix="/t", tags=["table-order"])
 async def get_context(
     session: DbSession,
     qr_token: str = _P_TOKEN,
+    lang: str | None = _Q_LANG,
 ) -> TableContext:
-    return await table_order_service.get_context(session, qr_token)
+    return await table_order_service.get_context(session, qr_token, lang=lang)
 
 
 @router.post(

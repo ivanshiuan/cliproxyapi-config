@@ -56,7 +56,18 @@
 </head>
 <body>
 <header>
-  <h1>🥡 線上外帶</h1>
+  <div style="display:flex;align-items:center;gap:10px">
+    <h1 style="flex:1">🥡 線上外帶</h1>
+    <select id="langSel" style="padding:6px 8px;border-radius:8px;border:1px solid var(--line);font-size:14px">
+      <option value="">中文</option>
+      <option value="en">EN</option>
+      <option value="ja">日本語</option>
+      <option value="ko">한국어</option>
+      <option value="zh-Hans">简体</option>
+      <option value="vi">Tiếng Việt</option>
+      <option value="th">ไทย</option>
+    </select>
+  </div>
   <div class="sub">選好餐點、留下聯絡方式，到店直接取餐付款。</div>
 </header>
 
@@ -192,6 +203,8 @@ async function submit() {
   } catch (e) { toast(e.message, true); $("submitBtn").disabled = false; }
 }
 
+let lang = localStorage.getItem("order_lang") || "";
+
 async function boot() {
   if (!storeId) {
     $("notice").style.display = "block";
@@ -200,13 +213,21 @@ async function boot() {
     $("cartbar").style.display = "none";
     return;
   }
+  const langQ = lang ? `&lang=${encodeURIComponent(lang)}` : "";
   try {
-    menu = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true&available_now=true`);
+    menu = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true&available_now=true${langQ}`);
   } catch (e) {
     menu = [];
   }
   renderMenu();
 }
+
+$("langSel").value = lang;
+$("langSel").onchange = () => {
+  lang = $("langSel").value;
+  localStorage.setItem("order_lang", lang);
+  boot();
+};
 
 $("submitBtn").onclick = submit;
 boot();

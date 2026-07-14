@@ -134,8 +134,29 @@ class MenuItemResponse(BaseModel):
     default_kitchen_station: str | None = None
     available_start_time: time | None = None
     available_end_time: time | None = None
+    # 多語系菜單: {"en": {"name": "...", "description": "..."}}. The customer
+    # pages request ?lang=en and the server overlays name/description from
+    # here — this raw dict is mainly useful for a future back-office editor.
+    translations: dict[str, dict[str, str]] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
+
+
+# 多語系菜單 (P8.1, docs/22 #29) — staff-entered structured translations.
+# Closed set so the customer-facing language switcher can hardcode its
+# button list; adding a language is a one-line change here.
+SupportedLang = Literal["en", "ja", "ko", "zh-Hans", "vi", "th"]
+SUPPORTED_LANGS: tuple[str, ...] = ("en", "ja", "ko", "zh-Hans", "vi", "th")
+
+
+class MenuItemTranslationUpdate(BaseModel):
+    """Set (or overwrite) one language's translation for a menu item."""
+
+    model_config = ConfigDict(frozen=True)
+
+    lang: SupportedLang
+    name: str = Field(min_length=1, max_length=120)
+    description: str | None = Field(default=None, max_length=1000)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -211,6 +232,7 @@ class ComboComponentResponse(BaseModel):
 
 
 __all__ = [
+    "SUPPORTED_LANGS",
     "ComboComponentCreate",
     "ComboComponentResponse",
     "MenuCategoryCreate",
@@ -218,10 +240,12 @@ __all__ = [
     "MenuCategoryUpdate",
     "MenuItemCreate",
     "MenuItemResponse",
+    "MenuItemTranslationUpdate",
     "MenuItemUpdate",
     "ModifierGroupCreate",
     "ModifierGroupResponse",
     "ModifierOptionCreate",
     "ModifierOptionResponse",
     "StrictDecimal",
+    "SupportedLang",
 ]

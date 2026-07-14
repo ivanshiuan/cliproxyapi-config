@@ -234,6 +234,14 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         DateTime(timezone=True),
         nullable=True,
     )
+    # 取餐叫號: set when staff presses 叫號 for a ready 線上外帶 order. The
+    # public pickup-call board is a plain query for "OPEN orders with this
+    # set", ordered by it — the WS event is only a wake-up-and-refetch signal
+    # (see order_events.py), never the source of truth for what's displayed.
+    pickup_called_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # 統一發票 fields — Taiwan-specific.
     invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)

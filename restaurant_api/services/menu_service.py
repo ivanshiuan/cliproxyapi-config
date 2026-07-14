@@ -25,6 +25,7 @@ from ..schemas.menu import (
     MenuCategoryUpdate,
     MenuItemCreate,
     MenuItemResponse,
+    MenuItemTranslationUpdate,
     MenuItemUpdate,
     ModifierGroupCreate,
     ModifierGroupResponse,
@@ -195,14 +196,34 @@ async def create_item(
     return MenuItemResponse.model_validate(row)
 
 
+def _localize(resp: MenuItemResponse, translations: dict[str, dict[str, str]], lang: str | None) -> MenuItemResponse:
+    """多語系菜單: overlay name/description from ``translations[lang]``.
+
+    Missing language or missing field silently falls back to the zh-Hant
+    original — a customer never sees a blank name because a translator
+    hasn't gotten to a field yet.
+    """
+    if not lang:
+        return resp
+    tr = translations.get(lang)
+    if not tr:
+        return resp
+    if tr.get("name"):
+        resp.name = tr["name"]
+    if tr.get("description"):
+        resp.description = tr["description"]
+    return resp
+
+
 async def get_item(
     session: AsyncSession,
     item_id: uuid.UUID,
     *,
     tenant_id: uuid.UUID,
+    lang: str | None = None,
 ) -> MenuItemResponse:
     row = await _load_item(session, item_id, tenant_id)
-    return MenuItemResponse.model_validate(row)
+    return _localize(MenuItemResponse.model_validate(row), row.translations, lang)
 
 
 async def list_items(
@@ -213,6 +234,7 @@ async def list_items(
     category_id: uuid.UUID | None = None,
     available_only: bool = False,
     available_now: bool = False,
+    lang: str | None = None,
     limit: int = 500,
 ) -> list[MenuItemResponse]:
     stmt = select(MenuItem).where(
@@ -232,7 +254,35 @@ async def list_items(
     if available_now:
         now = datetime.now(_TPE).time()
         rows = [r for r in rows if is_item_available_now(r, now)]
-    return [MenuItemResponse.model_validate(r) for r in rows]
+    return [_localize(MenuItemResponse.model_validate(r), r.translations, lang) for r in rows]
+
+
+async def set_translation(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    payload: MenuItemTranslationUpdate,
+    *,
+    tenant_id: uuid.UUID,
+) -> MenuItemResponse:
+    """多語系菜單: set (or overwrite) one language's translation."""
+    row = await _load_item(session, item_id, tenant_id)
+    updated = dict(row.translations)
+    entry: dict[str, str] = {"name": payload.name}
+    if payload.description:
+        entry["description"] = payload.description
+    updated[payload.lang] = entry
+    row.translations = updated  # reassign (not mutate in place) so the ORM sees the change
+    await session.flush()
+    await session.refresh(row)
+    await audit(
+        session,
+        action="menu_item.translation_set",
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        target=("menu_items", row.id),
+        after={"lang": payload.lang, "name": payload.name},
+    )
+    return MenuItemResponse.model_validate(row)
 
 
 async def update_item(
@@ -557,6 +607,7 @@ __all__ = [
     "list_items",
     "list_modifier_groups",
     "remove_combo_component",
+    "set_translation",
     "update_category",
     "update_item",
 ]

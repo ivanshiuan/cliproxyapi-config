@@ -158,6 +158,14 @@ _TAKEOUT_DIR = Path(__file__).parent / "takeout_static"
 if _TAKEOUT_DIR.is_dir():
     app.mount("/takeout", StaticFiles(directory=str(_TAKEOUT_DIR), html=True), name="takeout")
 
+# Public 取餐叫號 display (P8.1) — /pickup-board/?store=<uuid>, rides the
+# same /tables/ws floor stream; front-of-house TV points here.
+_PICKUP_BOARD_DIR = Path(__file__).parent / "pickup_board_static"
+if _PICKUP_BOARD_DIR.is_dir():
+    app.mount(
+        "/pickup-board", StaticFiles(directory=str(_PICKUP_BOARD_DIR), html=True), name="pickup-board"
+    )
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:
