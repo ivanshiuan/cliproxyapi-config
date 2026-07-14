@@ -14,14 +14,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError
-from ..models import MenuCategory, MenuItem
+from ..models import ComboComponent, MenuCategory, MenuItem, ModifierGroup, ModifierOption
 from ..schemas.menu import (
+    ComboComponentCreate,
+    ComboComponentResponse,
     MenuCategoryCreate,
     MenuCategoryResponse,
     MenuCategoryUpdate,
     MenuItemCreate,
     MenuItemResponse,
     MenuItemUpdate,
+    ModifierGroupCreate,
+    ModifierGroupResponse,
 )
 from .audit_service import audit
 
@@ -146,6 +150,7 @@ async def create_item(
         cost_estimate=payload.cost_estimate,
         allergens=payload.allergens,
         is_available=payload.is_available,
+        default_kitchen_station=payload.default_kitchen_station,
     )
     session.add(row)
     await session.flush()
@@ -244,6 +249,198 @@ async def delete_item(
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# 口味選項組/加價購 (modifier groups)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def create_modifier_group(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    payload: ModifierGroupCreate,
+    *,
+    tenant_id: uuid.UUID,
+) -> ModifierGroupResponse:
+    item = await _load_item(session, item_id, tenant_id)
+    if payload.max_select < payload.min_select:
+        raise ConflictError(
+            message="max_select 不能小於 min_select",
+            details={"min_select": payload.min_select, "max_select": payload.max_select},
+        )
+    group = ModifierGroup(
+        tenant_id=tenant_id,
+        menu_item_id=item.id,
+        name=payload.name,
+        min_select=payload.min_select,
+        max_select=payload.max_select,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    session.add(group)
+    await session.flush()
+    for opt in payload.options:
+        session.add(
+            ModifierOption(
+                tenant_id=tenant_id,
+                group_id=group.id,
+                name=opt.name,
+                price_delta=opt.price_delta,
+                sort_order=opt.sort_order,
+                is_active=opt.is_active,
+            )
+        )
+    await session.flush()
+    await session.refresh(group, attribute_names=["options"])
+    await audit(
+        session,
+        action="modifier_group.created",
+        tenant_id=tenant_id,
+        store_id=item.store_id,
+        target=("modifier_groups", group.id),
+        after={"menu_item_id": str(item.id), "name": payload.name, "option_count": len(payload.options)},
+    )
+    return ModifierGroupResponse.model_validate(group)
+
+
+async def list_modifier_groups(
+    session: AsyncSession,
+    item_id: uuid.UUID,
+    *,
+    tenant_id: uuid.UUID,
+) -> list[ModifierGroupResponse]:
+    stmt = (
+        select(ModifierGroup)
+        .where(
+            ModifierGroup.menu_item_id == item_id,
+            ModifierGroup.tenant_id == tenant_id,
+            ModifierGroup.deleted_at.is_(None),
+            ModifierGroup.is_active.is_(True),
+        )
+        .order_by(ModifierGroup.sort_order)
+    )
+    groups = (await session.execute(stmt)).scalars().all()
+    for g in groups:
+        await session.refresh(g, attribute_names=["options"])
+    return [ModifierGroupResponse.model_validate(g) for g in groups]
+
+
+async def delete_modifier_group(
+    session: AsyncSession,
+    group_id: uuid.UUID,
+    *,
+    tenant_id: uuid.UUID,
+) -> None:
+    row = (
+        await session.execute(
+            select(ModifierGroup).where(
+                ModifierGroup.id == group_id,
+                ModifierGroup.tenant_id == tenant_id,
+                ModifierGroup.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError(
+            message=f"modifier group {group_id} not found",
+            details={"group_id": str(group_id)},
+        )
+    from datetime import UTC, datetime
+
+    row.deleted_at = datetime.now(UTC)
+    await session.flush()
+    await audit(
+        session,
+        action="modifier_group.deleted",
+        tenant_id=tenant_id,
+        store_id=None,
+        target=("modifier_groups", row.id),
+        before={"name": row.name},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 套餐組合 (combo components)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def add_combo_component(
+    session: AsyncSession,
+    combo_item_id: uuid.UUID,
+    payload: ComboComponentCreate,
+    *,
+    tenant_id: uuid.UUID,
+) -> ComboComponentResponse:
+    combo_item = await _load_item(session, combo_item_id, tenant_id)
+    if payload.component_item_id == combo_item_id:
+        raise ConflictError(
+            message="套餐不能把自己當作組成品項", details={"combo_item_id": str(combo_item_id)}
+        )
+    await _load_item(session, payload.component_item_id, tenant_id)
+    row = ComboComponent(
+        tenant_id=tenant_id,
+        combo_item_id=combo_item.id,
+        component_item_id=payload.component_item_id,
+        qty=payload.qty,
+        sort_order=payload.sort_order,
+    )
+    session.add(row)
+    await session.flush()
+    await audit(
+        session,
+        action="combo_component.added",
+        tenant_id=tenant_id,
+        store_id=combo_item.store_id,
+        target=("combo_components", row.id),
+        after={"combo_item_id": str(combo_item_id), "component_item_id": str(payload.component_item_id)},
+    )
+    return ComboComponentResponse.model_validate(row)
+
+
+async def list_combo_components(
+    session: AsyncSession,
+    combo_item_id: uuid.UUID,
+    *,
+    tenant_id: uuid.UUID,
+) -> list[ComboComponentResponse]:
+    stmt = (
+        select(ComboComponent)
+        .where(ComboComponent.combo_item_id == combo_item_id, ComboComponent.tenant_id == tenant_id)
+        .order_by(ComboComponent.sort_order)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return [ComboComponentResponse.model_validate(r) for r in rows]
+
+
+async def remove_combo_component(
+    session: AsyncSession,
+    component_id: uuid.UUID,
+    *,
+    tenant_id: uuid.UUID,
+) -> None:
+    row = (
+        await session.execute(
+            select(ComboComponent).where(
+                ComboComponent.id == component_id, ComboComponent.tenant_id == tenant_id
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise NotFoundError(
+            message=f"combo component {component_id} not found",
+            details={"component_id": str(component_id)},
+        )
+    await session.delete(row)
+    await session.flush()
+    await audit(
+        session,
+        action="combo_component.removed",
+        tenant_id=tenant_id,
+        store_id=None,
+        target=("combo_components", component_id),
+        before={"combo_item_id": str(row.combo_item_id), "component_item_id": str(row.component_item_id)},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # Private helpers
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -308,13 +505,19 @@ async def _guard_sku_unique(
 
 
 __all__ = [
+    "add_combo_component",
     "create_category",
     "create_item",
+    "create_modifier_group",
     "delete_category",
     "delete_item",
+    "delete_modifier_group",
     "get_item",
     "list_categories",
+    "list_combo_components",
     "list_items",
+    "list_modifier_groups",
+    "remove_combo_component",
     "update_category",
     "update_item",
 ]

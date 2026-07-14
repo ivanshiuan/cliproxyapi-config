@@ -239,6 +239,17 @@ apply_discount 的招待守衛曾因此漏擋。
 退菜一 audit 就撞 FK。**測試要建一個真的 Employee 當授權者**（見 test_pos_orders_router 的
 `client` fixture 建 manager）。gate 本身（deny/override/wrong-pin）在 test_pos_auth_router 用真 PIN 測。
 
+### POS 前台任何「取代 `#tmBody`」的 prompt，收尾一定要 `reopenOrder()` 不是 `loadOrder()`
+`pos_static/index.html` 的桌況帳單活在 `#tmBody` 底下的 `#orderPanel` 包裝 div。
+折扣/服務費/加點口味這類 prompt sheet 直接 `$("tmBody").innerHTML = "...表單..."` 整個蓋掉，
+連 `#orderPanel` 這個包裝 div 都一起消失。此時若收尾呼叫 `loadOrder(t.session)`（它内部抓
+`$("orderPanel")` 塞 innerHTML），會拿到 `null` 直接壞掉（`Cannot set properties of null`），
+帳單畫面卡在表單頁不會刷新——**這是瀏覽器互動才踩得到的 bug，L3 httpx 腳本測不出來**（P7.3
+用 Playwright 才抓到）。修法：用 `reopenOrder(sessionId)`（呼叫 `openTableModal(t)` 整個重建
+`tmBody`/`tmActions` 再重抓帳單），不要直接呼叫 `loadOrder`。新增任何會蓋掉 `tmBody` 的 prompt
+（口味選項、未來的加購/備註輸入）收尾都要走這條，並用 Playwright（`executablePath:
+'/opt/pw-browsers/chromium'`）真的點過一輪再算完工。
+
 ---
 
 ## 檔案攝取 — 看到檔案自己選武器（不用我下指令）

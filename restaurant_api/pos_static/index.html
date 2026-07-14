@@ -82,6 +82,7 @@
     background: var(--panel2); border-radius: 10px;
   }
   .menu-item .price { color: var(--ok); font-variant-numeric: tabular-nums; }
+  .menu-item.selected { outline: 2px solid var(--accent, #4c8dff); background: var(--panel3, #2a3550); }
   .toast {
     position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
     background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px;
@@ -330,6 +331,14 @@ function show(id) { $(id).classList.add("show"); }
 function hide(id) { $(id).classList.remove("show"); }
 function closeModal() { hide("tableModal"); openSessionId = null; refresh(); }
 
+// Prompts (折扣/服務費/加點口味) replace #tmBody wholesale, which destroys the
+// #orderPanel wrapper loadOrder() writes into. Reopening the table modal
+// rebuilds tmBody (incl. #orderPanel) from scratch before refetching the bill.
+function reopenOrder(sessionId) {
+  const t = floor.find((x) => x.session && x.session.id === sessionId);
+  if (t) openTableModal(t);
+}
+
 // ─── stores ───
 async function loadStores() {
   // No public stores endpoint yet; let the operator paste a store_id via the
@@ -486,14 +495,24 @@ async function loadOrder(s) {
     panel.innerHTML = `
       <div style="font-weight:600;margin:6px 0">本桌帳單</div>
       <div class="menu-list">
-        ${order.lines.length ? order.lines.map((l) => {
+        ${order.lines.length ? order.lines.filter((l) => !l.combo_parent_id).map((l) => {
           const it = items.find((m) => m.id === l.menu_item_id);
           const nm = it ? it.name : l.menu_item_id.slice(0, 8);
-          return `<div class="menu-item">
-            <span>${escapeHtml(nm)} × ${Number(l.qty)}</span>
-            <span><span class="price">$${Number(l.line_total).toFixed(0)}</span>
-            <button class="ghost" style="padding:2px 8px;margin-left:8px"
-              onclick="voidLine('${s.id}','${l.id}')">退</button></span>
+          const kids = order.lines.filter((k) => k.combo_parent_id === l.id);
+          const modTags = (l.modifiers || []).map((m) => escapeHtml(m.option_name)).join("、");
+          return `<div class="menu-item" style="flex-direction:column;align-items:stretch;gap:2px">
+            <div style="display:flex;justify-content:space-between">
+              <span>${escapeHtml(nm)} × ${Number(l.qty)}</span>
+              <span><span class="price">$${Number(l.line_total).toFixed(0)}</span>
+              <button class="ghost" style="padding:2px 8px;margin-left:8px"
+                onclick="voidLine('${s.id}','${l.id}')">退</button></span>
+            </div>
+            ${modTags ? `<div class="sub" style="padding-left:8px">＋ ${modTags}</div>` : ""}
+            ${kids.length ? kids.map((k) => {
+              const kit = items.find((m) => m.id === k.menu_item_id);
+              const knm = kit ? kit.name : k.menu_item_id.slice(0, 8);
+              return `<div class="sub" style="padding-left:8px">└ ${escapeHtml(knm)} × ${Number(k.qty)} (套餐內含)</div>`;
+            }).join("") : ""}
           </div>`;
         }).join("") : `<div class="empty" style="padding:14px">尚未點餐</div>`}
       </div>
@@ -505,7 +524,7 @@ async function loadOrder(s) {
       <div style="font-weight:600;margin:10px 0 6px">加點</div>
       <div class="menu-list" style="max-height:34vh;overflow:auto">
         ${items.length ? items.map((m) => `<div class="menu-item"
-          style="cursor:pointer" onclick="addLine('${s.id}','${m.id}')">
+          style="cursor:pointer" onclick="openItemPrompt('${s.id}','${m.id}')">
           <span>${escapeHtml(m.name)}</span><span class="price">$${Number(m.price).toFixed(0)}</span>
         </div>`).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
       </div>
@@ -520,15 +539,65 @@ async function loadOrder(s) {
   } catch (e) { panel.innerHTML = `<div class="empty">載入訂單失敗: ${escapeHtml(e.message)}</div>`; }
 }
 
-async function addLine(sessionId, itemId) {
+async function addLine(sessionId, itemId, modifierOptionIds) {
   try {
+    const body = { menu_item_id: itemId, qty: "1" };
+    if (modifierOptionIds && modifierOptionIds.length) body.modifier_option_ids = modifierOptionIds;
     await api(`/tables/sessions/${sessionId}/lines`, {
-      method: "POST", body: JSON.stringify({ menu_item_id: itemId, qty: "1" }),
+      method: "POST", body: JSON.stringify(body),
     });
-    const t = floor.find((x) => x.session && x.session.id === sessionId);
-    if (t) loadOrder(t.session);
+    reopenOrder(sessionId);
     toast("已加點");
   } catch (e) { toast(e.message, true); }
+}
+
+// 口味選項組/加價購: check the item for configured groups before adding —
+// zero extra tap for plain items, one small sheet for items with choices.
+const modifierGroupsCache = {};
+async function openItemPrompt(sessionId, itemId) {
+  let groups = modifierGroupsCache[itemId];
+  if (groups === undefined) {
+    try { groups = await api(`/menu/items/${itemId}/modifier-groups`); }
+    catch { groups = []; }
+    modifierGroupsCache[itemId] = groups;
+  }
+  if (!groups.length) return addLine(sessionId, itemId);
+
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">選擇口味/加購</div>
+    ${groups.map((g) => `
+      <div class="sub" style="margin:8px 0 2px">${escapeHtml(g.name)}
+        ${g.min_select > 0 ? "（必選）" : "（可不選）"} — 最多 ${g.max_select} 項</div>
+      <div class="menu-list" data-group="${g.id}" data-min="${g.min_select}" data-max="${g.max_select}">
+        ${g.options.map((o) => `<div class="menu-item" style="cursor:pointer"
+            data-option="${o.id}" onclick="toggleModOption(this)">
+            <span>${escapeHtml(o.name)}</span>
+            <span class="price">${Number(o.price_delta) > 0 ? "+$" + Number(o.price_delta).toFixed(0) : ""}</span>
+          </div>`).join("")}
+      </div>`).join("")}`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("加入", "primary", async () => {
+    const selected = [];
+    for (const groupEl of body.querySelectorAll("[data-group]")) {
+      const min = Number(groupEl.dataset.min), max = Number(groupEl.dataset.max);
+      const chosen = [...groupEl.querySelectorAll(".menu-item.selected")];
+      if (chosen.length < min || chosen.length > max) {
+        return toast(`請選擇 ${min}-${max} 項`, true);
+      }
+      chosen.forEach((el) => selected.push(el.dataset.option));
+    }
+    await addLine(sessionId, itemId, selected);
+  }));
+  acts.append(mkBtn("取消", "ghost", () => reopenOrder(sessionId)));
+}
+
+function toggleModOption(el) {
+  const groupEl = el.closest("[data-group]");
+  const max = Number(groupEl.dataset.max);
+  if (!el.classList.contains("selected") && max === 1) {
+    groupEl.querySelectorAll(".menu-item.selected").forEach((s) => s.classList.remove("selected"));
+  }
+  el.classList.toggle("selected");
 }
 
 async function voidLine(sessionId, lineId) {
@@ -542,8 +611,7 @@ async function voidLine(sessionId, lineId) {
     await api(`/tables/order-lines/${lineId}/void`, {
       method: "POST", body: JSON.stringify(body),
     });
-    const t = floor.find((x) => x.session && x.session.id === sessionId);
-    if (t) loadOrder(t.session);
+    reopenOrder(sessionId);
     toast("已退菜");
   } catch (e) { toast(e.message, true); }
 }
@@ -577,12 +645,11 @@ async function discountPrompt(sessionId) {
       await api(`/tables/sessions/${sessionId}/discount`, {
         method: "POST", body: JSON.stringify(payload),
       });
-      const t = floor.find((x) => x.session && x.session.id === sessionId);
-      if (t) loadOrder(t.session);
+      reopenOrder(sessionId);
       toast("已套用折扣");
     } catch (e) { toast(e.message, true); }
   }));
-  acts.append(mkBtn("取消", "ghost", () => { const t = floor.find((x) => x.session && x.session.id === sessionId); if (t) loadOrder(t.session); }));
+  acts.append(mkBtn("取消", "ghost", () => reopenOrder(sessionId)));
 }
 
 async function serviceChargePrompt(sessionId) {
@@ -596,8 +663,7 @@ async function serviceChargePrompt(sessionId) {
         method: "POST", body: JSON.stringify({ rate }),
       });
       toast(msg);
-      const t = floor.find((x) => x.session && x.session.id === sessionId);
-      if (t) loadOrder(t.session);
+      reopenOrder(sessionId);
     } catch (e) { toast(e.message, true); }
   };
   acts.append(mkBtn("加收 10%", "primary", () => setRate("0.1", "已加收 10% 服務費")));

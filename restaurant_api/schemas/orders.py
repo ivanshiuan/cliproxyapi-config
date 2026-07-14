@@ -189,11 +189,21 @@ class OrderVoidRequest(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────
 
 
+class OrderLineModifierResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    option_name: str
+    price_delta: Decimal
+
+
 class OrderLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     menu_item_id: UUID
+    # 套餐組合: set when this line is an auto-expanded $0 component ticket of
+    # a combo item's line (see pos_order_service._expand_combo).
+    combo_parent_id: UUID | None = None
     qty: Decimal
     unit_price: Decimal
     line_total: Decimal
@@ -204,6 +214,7 @@ class OrderLineResponse(BaseModel):
     kitchen_station: str | None = None
     kitchen_status: str | None = None
     sent_to_kitchen_at: datetime | None = None
+    modifiers: list[OrderLineModifierResponse] = Field(default_factory=list)
 
 
 class OrderDiscountResponse(BaseModel):
@@ -263,6 +274,7 @@ __all__ = [
     "OrderDiscountCreate",
     "OrderDiscountResponse",
     "OrderLineCreate",
+    "OrderLineModifierResponse",
     "OrderLineResponse",
     "OrderPaymentCreate",
     "OrderPaymentResponse",

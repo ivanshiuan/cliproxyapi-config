@@ -23,6 +23,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
@@ -31,14 +32,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..api.errors import ConflictError, NotFoundError, ValidationError
 from ..api.pos_auth import PosPrincipal
 from ..models import (
+    ComboComponent,
     DiscountKind,
     Ingredient,
     MenuItem,
+    ModifierGroup,
+    ModifierOption,
     MovementType,
     Order,
     OrderChannel,
     OrderDiscount,
     OrderLine,
+    OrderLineModifier,
     OrderPayment,
     OrderStatus,
     OrderType,
@@ -183,14 +188,17 @@ async def add_line(
             details={"menu_item_id": str(payload.menu_item_id)},
         )
 
+    unit_price, selected_options = await _resolve_modifiers(
+        session, item, payload.modifier_option_ids, tenant_id=tenant_id
+    )
     line_payload = OrderLineCreate(
         menu_item_id=payload.menu_item_id,
         qty=payload.qty,
-        unit_price=item.price,  # server-side price snapshot
+        unit_price=unit_price,
         notes=payload.notes,
-        # POS/table-QR lines default onto the KDS board (station "kitchen");
-        # the bulk /orders ingest path keeps its explicit opt-in behaviour.
-        kitchen_station=payload.kitchen_station or "kitchen",
+        # POS/table-QR lines default onto the KDS board; an explicit request
+        # station wins, then the item's 廚房自動分站 default, then "kitchen".
+        kitchen_station=payload.kitchen_station or _resolve_kitchen_station(item),
     )
     now = datetime.now(UTC)
     placeholder: dict[str, Ingredient] = {}
@@ -202,12 +210,32 @@ async def add_line(
             )
         return placeholder["ing"]
 
-    await orders_service._add_line_with_movement(
+    line = await orders_service._add_line_with_movement(
         session=session,
         order=order,
         tenant_id=tenant_id,
         store_id=ts.store_id,
         line_payload=line_payload,
+        get_placeholder=_get_placeholder,
+        occurred_at=now,
+    )
+    for opt in selected_options:
+        session.add(
+            OrderLineModifier(
+                tenant_id=tenant_id,
+                order_line_id=line.id,
+                modifier_option_id=opt.id,
+                option_name=opt.name,
+                price_delta=opt.price_delta,
+            )
+        )
+    await _expand_combo(
+        session,
+        order=order,
+        parent_line=line,
+        combo_item_id=item.id,
+        tenant_id=tenant_id,
+        store_id=ts.store_id,
         get_placeholder=_get_placeholder,
         occurred_at=now,
     )
@@ -221,7 +249,8 @@ async def add_line(
         after={
             "menu_item_id": str(payload.menu_item_id),
             "qty": str(payload.qty),
-            "unit_price": str(item.price),
+            "unit_price": str(unit_price),
+            "modifier_option_ids": [str(o.id) for o in selected_options],
         },
     )
     await record_event(
@@ -235,6 +264,155 @@ async def add_line(
     )
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
     return orders_service.order_to_response(order)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 口味選項組/加價購 + 套餐組合 + 廚房自動分站
+# ──────────────────────────────────────────────────────────────────────────
+
+
+_STATION_LITERALS: dict[str, Literal["kitchen", "bar", "dessert", "counter"]] = {
+    "kitchen": "kitchen",
+    "bar": "bar",
+    "dessert": "dessert",
+    "counter": "counter",
+}
+
+
+def _resolve_kitchen_station(item: MenuItem) -> Literal["kitchen", "bar", "dessert", "counter"]:
+    """廚房自動分站: item's configured default, falling back to "kitchen"."""
+    if item.default_kitchen_station is None:
+        return "kitchen"
+    return _STATION_LITERALS[item.default_kitchen_station.value]
+
+
+async def _resolve_modifiers(
+    session: AsyncSession,
+    item: MenuItem,
+    option_ids: list[uuid.UUID],
+    *,
+    tenant_id: uuid.UUID,
+) -> tuple[Decimal, list[ModifierOption]]:
+    """Validate the selected modifier options against the item's groups and
+    return ``(unit_price_with_deltas, selected_options)``.
+
+    Every configured group's cardinality (``min_select``..``max_select``) is
+    enforced regardless of what the caller sent — an item with a required
+    甜度 group can't be ordered with zero sugar choices.
+    """
+    groups = (
+        await session.execute(
+            select(ModifierGroup).where(
+                ModifierGroup.menu_item_id == item.id,
+                ModifierGroup.tenant_id == tenant_id,
+                ModifierGroup.deleted_at.is_(None),
+                ModifierGroup.is_active.is_(True),
+            )
+        )
+    ).scalars().all()
+    if not groups and not option_ids:
+        return item.price, []
+
+    options: list[ModifierOption] = []
+    if option_ids:
+        options = list(
+            (
+                await session.execute(
+                    select(ModifierOption).where(
+                        ModifierOption.id.in_(option_ids),
+                        ModifierOption.tenant_id == tenant_id,
+                        ModifierOption.deleted_at.is_(None),
+                        ModifierOption.is_active.is_(True),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if len(options) != len(set(option_ids)):
+            raise NotFoundError(
+                message="modifier option not found",
+                details={"modifier_option_ids": [str(i) for i in option_ids]},
+            )
+
+    group_by_id = {g.id: g for g in groups}
+    selected_by_group: dict[uuid.UUID, list[ModifierOption]] = {}
+    for opt in options:
+        if opt.group_id not in group_by_id:
+            raise ValidationError(f"選項「{opt.name}」不屬於此品項")
+        selected_by_group.setdefault(opt.group_id, []).append(opt)
+    for g in groups:
+        chosen = len(selected_by_group.get(g.id, []))
+        if not (g.min_select <= chosen <= g.max_select):
+            raise ValidationError(
+                f"「{g.name}」需選擇 {g.min_select}-{g.max_select} 項, 目前選了 {chosen} 項"
+            )
+
+    price_delta_total = sum((o.price_delta for o in options), Decimal("0"))
+    return item.price + price_delta_total, options
+
+
+async def _expand_combo(
+    session: AsyncSession,
+    *,
+    order: Order,
+    parent_line: OrderLine,
+    combo_item_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    get_placeholder,
+    occurred_at: datetime,
+) -> None:
+    """套餐組合: auto-expand a combo item's line into zero-price component
+    tickets so the kitchen still gets one card per component, routed to that
+    component's own station. The combo's own price already covers everyone —
+    components are $0 lines that exist purely for prep visibility."""
+    components = (
+        await session.execute(
+            select(ComboComponent)
+            .where(
+                ComboComponent.combo_item_id == combo_item_id,
+                ComboComponent.tenant_id == tenant_id,
+            )
+            .order_by(ComboComponent.sort_order)
+        )
+    ).scalars().all()
+    if not components:
+        return
+
+    component_items = {
+        m.id: m
+        for m in (
+            await session.execute(
+                select(MenuItem).where(
+                    MenuItem.id.in_([c.component_item_id for c in components]),
+                    MenuItem.tenant_id == tenant_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    }
+    for comp in components:
+        comp_item = component_items.get(comp.component_item_id)
+        if comp_item is None:  # pragma: no cover - FK guarantees this in practice
+            continue
+        await orders_service._add_line_with_movement(
+            session=session,
+            order=order,
+            tenant_id=tenant_id,
+            store_id=store_id,
+            line_payload=OrderLineCreate(
+                menu_item_id=comp.component_item_id,
+                qty=comp.qty,
+                unit_price=Decimal("0"),
+                notes=None,
+                kitchen_station=_resolve_kitchen_station(comp_item),
+            ),
+            get_placeholder=get_placeholder,
+            occurred_at=occurred_at,
+            combo_parent_id=parent_line.id,
+        )
 
 
 async def update_line_qty(
@@ -309,38 +487,18 @@ async def void_line(
             details={"line_id": str(line_id)},
         )
 
-    # Reverse this line's stock consumption (append-only ledger: add inverse
-    # rows, never mutate the originals).
-    movements = (
-        await session.execute(
-            select(StockMovement).where(
-                StockMovement.source_table == "order_lines",
-                StockMovement.source_id == line.id,
-                StockMovement.movement_type == MovementType.SALE_CONSUME,
-            )
-        )
-    ).scalars().all()
-    for mv in movements:
-        session.add(
-            StockMovement(
-                tenant_id=order.tenant_id,
-                store_id=mv.store_id,
-                ingredient_id=mv.ingredient_id,
-                movement_type=MovementType.ADJUSTMENT_IN,
-                qty=-mv.qty,  # -(-x) = +x → restore stock
-                source_table="order_line_voids",
-                source_id=line.id,
-                occurred_at=datetime.now(UTC),
-                note=f"退菜 reversal of movement {mv.id}",
-            )
-        )
-
     snapshot = {
         "menu_item_id": str(line.menu_item_id),
         "qty": str(line.qty),
         "unit_price": str(line.unit_price),
     }
-    order.lines.remove(line)  # delete-orphan cascade removes the row on flush
+    # 套餐組合: voiding the combo's own line takes its zero-price component
+    # tickets with it — the kitchen shouldn't keep cooking sides for a combo
+    # that just got pulled.
+    children = [ln for ln in order.lines if ln.combo_parent_id == line.id]
+    for child in children:
+        await _reverse_stock_and_remove(session, order, child)
+    await _reverse_stock_and_remove(session, order, line)
     await session.flush()
     _guard_not_below_paid(order)
     await audit(
@@ -778,7 +936,7 @@ async def takeout_sale(
                 qty=item_req.qty,
                 unit_price=item.price,  # server-side snapshot
                 notes=item_req.notes,
-                kitchen_station="kitchen",  # takeout still cooks
+                kitchen_station=_resolve_kitchen_station(item),  # takeout still cooks
             ),
             get_placeholder=_get_placeholder,
             occurred_at=ts_now,
@@ -954,6 +1112,36 @@ def _guard_order_open(order: Order) -> None:
             message=f"order is {order.status.value}, cannot modify lines",
             details={"current": order.status.value},
         )
+
+
+async def _reverse_stock_and_remove(session: AsyncSession, order: Order, line: OrderLine) -> None:
+    """退菜 for one line: reverse its stock consumption (append-only ledger —
+    add inverse rows, never mutate the originals) and remove it from the
+    order (delete-orphan cascade also drops its OrderLineModifier rows)."""
+    movements = (
+        await session.execute(
+            select(StockMovement).where(
+                StockMovement.source_table == "order_lines",
+                StockMovement.source_id == line.id,
+                StockMovement.movement_type == MovementType.SALE_CONSUME,
+            )
+        )
+    ).scalars().all()
+    for mv in movements:
+        session.add(
+            StockMovement(
+                tenant_id=order.tenant_id,
+                store_id=mv.store_id,
+                ingredient_id=mv.ingredient_id,
+                movement_type=MovementType.ADJUSTMENT_IN,
+                qty=-mv.qty,  # -(-x) = +x → restore stock
+                source_table="order_line_voids",
+                source_id=line.id,
+                occurred_at=datetime.now(UTC),
+                note=f"退菜 reversal of movement {mv.id}",
+            )
+        )
+    order.lines.remove(line)  # delete-orphan cascade removes the row on flush
 
 
 __all__ = [

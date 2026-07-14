@@ -38,7 +38,7 @@ from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
-from .menu import MenuCategory, MenuItem
+from .menu import ComboComponent, MenuCategory, MenuItem, ModifierGroup, ModifierOption
 from .order_events import OrderEvent
 from .orders import (
     DiscountKind,
@@ -50,6 +50,7 @@ from .orders import (
     OrderChannel,
     OrderDiscount,
     OrderLine,
+    OrderLineModifier,
     OrderPayment,
     OrderStatus,
     OrderType,
@@ -83,8 +84,11 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "Employee",
     "EmployeeRole",
     # menu
+    "ComboComponent",
     "MenuCategory",
     "MenuItem",
+    "ModifierGroup",
+    "ModifierOption",
     # inventory
     "Ingredient",
     "MovementType",
@@ -100,6 +104,7 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "OrderChannel",
     "OrderDiscount",
     "OrderLine",
+    "OrderLineModifier",
     "OrderPayment",
     "OrderStatus",
     "OrderType",

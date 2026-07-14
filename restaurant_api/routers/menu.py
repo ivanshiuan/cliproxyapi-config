@@ -12,12 +12,16 @@ from fastapi import APIRouter, Query, status
 
 from ..api.deps import DbSession, TenantId
 from ..schemas.menu import (
+    ComboComponentCreate,
+    ComboComponentResponse,
     MenuCategoryCreate,
     MenuCategoryResponse,
     MenuCategoryUpdate,
     MenuItemCreate,
     MenuItemResponse,
     MenuItemUpdate,
+    ModifierGroupCreate,
+    ModifierGroupResponse,
 )
 from ..services import menu_service
 
@@ -170,6 +174,94 @@ async def delete_item(
     tenant_id: TenantId,
 ) -> None:
     await menu_service.delete_item(session, item_id, tenant_id=tenant_id)
+
+
+# ── 口味選項組/加價購 (modifier groups) ────────────────────────────────────
+
+
+@router.post(
+    "/items/{item_id}/modifier-groups",
+    response_model=ModifierGroupResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="建立品項的口味選項組/加價購",
+)
+async def create_modifier_group(
+    item_id: uuid.UUID,
+    payload: ModifierGroupCreate,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> ModifierGroupResponse:
+    return await menu_service.create_modifier_group(session, item_id, payload, tenant_id=tenant_id)
+
+
+@router.get(
+    "/items/{item_id}/modifier-groups",
+    response_model=list[ModifierGroupResponse],
+    summary="列出品項的口味選項組",
+)
+async def list_modifier_groups(
+    item_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> list[ModifierGroupResponse]:
+    return await menu_service.list_modifier_groups(session, item_id, tenant_id=tenant_id)
+
+
+@router.delete(
+    "/modifier-groups/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="刪除口味選項組 (軟刪)",
+)
+async def delete_modifier_group(
+    group_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> None:
+    await menu_service.delete_modifier_group(session, group_id, tenant_id=tenant_id)
+
+
+# ── 套餐組合 (combo components) ─────────────────────────────────────────────
+
+
+@router.post(
+    "/items/{item_id}/combo-components",
+    response_model=ComboComponentResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="把品項加進套餐的組成清單",
+)
+async def add_combo_component(
+    item_id: uuid.UUID,
+    payload: ComboComponentCreate,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> ComboComponentResponse:
+    return await menu_service.add_combo_component(session, item_id, payload, tenant_id=tenant_id)
+
+
+@router.get(
+    "/items/{item_id}/combo-components",
+    response_model=list[ComboComponentResponse],
+    summary="列出套餐的組成品項",
+)
+async def list_combo_components(
+    item_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> list[ComboComponentResponse]:
+    return await menu_service.list_combo_components(session, item_id, tenant_id=tenant_id)
+
+
+@router.delete(
+    "/combo-components/{component_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="從套餐移除組成品項",
+)
+async def remove_combo_component(
+    component_id: uuid.UUID,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> None:
+    await menu_service.remove_combo_component(session, component_id, tenant_id=tenant_id)
 
 
 __all__ = ["router"]

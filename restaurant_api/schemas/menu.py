@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
@@ -71,6 +71,9 @@ class MenuCategoryResponse(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────
 
 
+_KitchenStationLiteral = Literal["kitchen", "bar", "dessert", "counter"]
+
+
 class MenuItemCreate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -83,6 +86,7 @@ class MenuItemCreate(BaseModel):
     cost_estimate: StrictDecimal | None = Field(default=None, ge=Decimal("0"))
     allergens: list[str] = Field(default_factory=list)
     is_available: bool = True
+    default_kitchen_station: _KitchenStationLiteral | None = None
 
 
 class MenuItemUpdate(BaseModel):
@@ -103,6 +107,7 @@ class MenuItemUpdate(BaseModel):
     cost_estimate: StrictDecimal | None = Field(default=None, ge=Decimal("0"))
     allergens: list[str] | None = None
     is_available: bool | None = None
+    default_kitchen_station: _KitchenStationLiteral | None = None
 
 
 class MenuItemResponse(BaseModel):
@@ -119,16 +124,95 @@ class MenuItemResponse(BaseModel):
     cost_estimate: Decimal | None
     allergens: list[str]
     is_available: bool
+    default_kitchen_station: str | None = None
     created_at: datetime
     updated_at: datetime
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# 口味選項組/加價購 (modifier groups)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class ModifierOptionCreate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1, max_length=80)
+    price_delta: StrictDecimal = Decimal("0")
+    sort_order: int = Field(default=0, ge=0)
+    is_active: bool = True
+
+
+class ModifierOptionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    group_id: UUID
+    name: str
+    price_delta: Decimal
+    sort_order: int
+    is_active: bool
+
+
+class ModifierGroupCreate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str = Field(min_length=1, max_length=80)
+    min_select: int = Field(default=0, ge=0)
+    max_select: int = Field(default=1, ge=1)
+    sort_order: int = Field(default=0, ge=0)
+    is_active: bool = True
+    options: list[ModifierOptionCreate] = Field(default_factory=list)
+
+
+class ModifierGroupResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    menu_item_id: UUID
+    name: str
+    min_select: int
+    max_select: int
+    sort_order: int
+    is_active: bool
+    options: list[ModifierOptionResponse] = Field(default_factory=list)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 套餐組合 (combo components)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class ComboComponentCreate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    component_item_id: UUID
+    qty: StrictDecimal = Field(default=Decimal("1"), gt=Decimal("0"))
+    sort_order: int = Field(default=0, ge=0)
+
+
+class ComboComponentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    combo_item_id: UUID
+    component_item_id: UUID
+    qty: Decimal
+    sort_order: int
+
+
 __all__ = [
+    "ComboComponentCreate",
+    "ComboComponentResponse",
     "MenuCategoryCreate",
     "MenuCategoryResponse",
     "MenuCategoryUpdate",
     "MenuItemCreate",
     "MenuItemResponse",
     "MenuItemUpdate",
+    "ModifierGroupCreate",
+    "ModifierGroupResponse",
+    "ModifierOptionCreate",
+    "ModifierOptionResponse",
     "StrictDecimal",
 ]

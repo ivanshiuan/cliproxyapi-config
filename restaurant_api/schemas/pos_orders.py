@@ -37,6 +37,7 @@ class LineAddRequest(BaseModel):
     qty: StrictDecimal = Field(default=Decimal("1"), gt=Decimal("0"))
     notes: str | None = Field(default=None, max_length=200)
     kitchen_station: Literal["kitchen", "bar", "dessert", "counter"] | None = None
+    modifier_option_ids: list[UUID] = Field(default_factory=list)
     actor_id: UUID | None = None
 
 

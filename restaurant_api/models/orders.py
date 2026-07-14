@@ -305,6 +305,15 @@ class OrderLine(TenantScopedMixin, Base):
         nullable=False,
         index=True,
     )
+    # 套餐組合: set when this line is an auto-expanded component of a combo
+    # item's line (see pos_order_service._expand_combo). NULL for a normal
+    # line or a combo's own "header" line. CASCADE so voiding the parent
+    # combo line takes its zero-price component tickets with it.
+    combo_parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("order_lines.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     qty: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Money, nullable=False)
     line_total: Mapped[Decimal] = mapped_column(Money, nullable=False)
@@ -353,6 +362,11 @@ class OrderLine(TenantScopedMixin, Base):
     )
 
     order: Mapped[Order] = relationship(back_populates="lines")
+    modifiers: Mapped[list[OrderLineModifier]] = relationship(
+        back_populates="order_line",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         # KDS queue scans: "what's queued at the kitchen station, oldest first?"
@@ -363,6 +377,37 @@ class OrderLine(TenantScopedMixin, Base):
             "sent_to_kitchen_at",
         ),
     )
+
+
+class OrderLineModifier(TenantScopedMixin, TimestampedMixin, Base):
+    """A selected 口味選項/加價購 choice on one order line.
+
+    ``option_name`` / ``price_delta`` are snapshotted at selection time (same
+    receipt-immutability reasoning as ``OrderLine.unit_price`` — the modifier
+    catalog can change price later without rewriting past sales).
+    """
+
+    __tablename__ = "order_line_modifiers"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid7,
+    )
+    order_line_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("order_lines.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    modifier_option_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("modifier_options.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    option_name: Mapped[str] = mapped_column(Text, nullable=False)
+    price_delta: Mapped[Decimal] = mapped_column(Money, nullable=False)
+
+    order_line: Mapped[OrderLine] = relationship(back_populates="modifiers")
 
 
 class OrderDiscount(TenantScopedMixin, Base):
