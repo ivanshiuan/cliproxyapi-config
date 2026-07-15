@@ -1,85 +1,78 @@
-# 模型分流設定教學（Claude/MiniMax/DeepSeek + 本地 MoE）
+# 模型分流設定教學（全雲端版：Claude/MiniMax/DeepSeek + 代管 Ornith）
 
-> 目標：開發 / 重要任務走雲端大模型（Claude 優先，MiniMax、DeepSeek 依序備援），
-> 日常寫程式小任務、日常聊天走本地免費模型，省 token 又不犧牲關鍵任務品質。
+> 目標：開發 / 重要任務走 Claude（MiniMax、DeepSeek 依序備援），
+> 日常寫程式小任務、日常聊天走「按量計費的便宜雲端模型」，省 token 又不犧牲關鍵任務品質。
 > 配置檔在 `litellm/config.yaml`，中間層用 [LiteLLM Proxy](https://docs.litellm.ai/docs/proxy/quick_start)。
+> **全程零磁碟、零 GPU 需求** —— 不裝任何本地模型。
 
 ---
 
 ## 全貌（90 秒看懂）
 
 ```
-你的工具 (Claude Code / Hermes / 編輯器)
+你的工具 (Claude Code / Hermes / 編輯器 / LINE bot)
         │  base URL 一律指向 http://localhost:4000/v1
         ▼
    LiteLLM Proxy（litellm/config.yaml）
         │
-        ├─ model=smart       → Claude Sonnet 5（優先）─fallback→ MiniMax ─fallback→ DeepSeek
-        ├─ model=code-local  → 本地 Ornith-1.0 35B（Ollama）
-        └─ model=chat-local  → 本地 Qwen3.5 32B（Ollama）
+        ├─ model=smart      → Claude Sonnet 5 ─掛了才→ MiniMax ─再掛→ DeepSeek
+        ├─ model=code-lite  → DeepInfra 代管 Ornith-1.0 35B ─掛了→ DeepSeek
+        └─ model=chat-lite  → DeepSeek-chat
 ```
 
 **分工原則**：
-- **開發、重要任務** → `smart`。雲端付費，品質優先，Claude 掛了才轉 MiniMax/DeepSeek。
-- **日常寫程式小任務**（改個函式、寫測試、補註解）→ `code-local`。免費、快。
-- **日常組織語言 / 聊天 / 文案** → `chat-local`。**不要用 Ornith**——它是純 coding 模型，沒工具時幻覺明顯，聊天要用通用模型（Qwen3.5 / Gemma 4）。
 
-不做「系統自動判斷任務重不重要」——分類容易判斷錯，重要任務被誤丟去本地小模型後果你要自己扛。改用**場景綁定**：每個工具/情境固定用哪個別名，行為可預測。
+| 別名 | 場景 | 後端 | 成本感 |
+|---|---|---|---|
+| `smart` | 開發、重要任務、多步 agent | Claude Sonnet 5（優先） | 品質優先，該花就花 |
+| `code-lite` | 日常寫程式小任務（改函式、寫測試、補註解） | 代管 Ornith-1.0 35B | 約 $0.14/M 輸入、$1.0/M 輸出 |
+| `chat-lite` | 組織語言、聊天、文案、潤飾 | DeepSeek-chat | 極便宜、中文強 |
 
----
+兩個刻意的設計決定：
 
-## 1. 裝本地模型（Ollama）
+1. **不裝本地模型**。35B 權重要 18-20GB 磁碟 + 24GB VRAM 等級硬體，目前機器不符。
+   按量計費 API 一樣達到「日常小任務用便宜模型」，還不用維運。未來有機器再啟用
+   `litellm/config.yaml` 檔尾的附錄區塊即可，對外別名不變、工具端零改動。
+2. **不做「系統自動判斷任務重不重要」**。分類器會誤判，重要任務被錯丟去小模型的
+   代價比多花點錢高。改用場景綁定：每個工具/情境固定用哪個別名，行為可預測。
 
-```bash
-# 裝 Ollama（沒裝過的話）：https://ollama.com/download
-
-# code-local：Ornith-1.0 35B MoE，Q4 量化約 18-20GB，需要 24GB VRAM 或 32GB+ 統一記憶體
-ollama pull ornith:35b
-
-# 硬體不到 24GB？改拉 9B（約 5-6GB，12GB VRAM / 16GB Mac 可跑，但實戰口碑普通）
-# ollama pull ornith:9b
-
-# chat-local：通用模型負責聊天/組織語言
-ollama pull qwen3.5:32b
-# 記憶體不夠就拉小的：ollama pull qwen3.5:8b
-```
-
-⚠️ **Ornith 需要新版推論棧**才能正確解析它的 reasoning + tool-call 格式（Transformers ≥ 5.8.1 / vLLM ≥ 0.19.1）。Ollama 保持最新版即可，用 GGUF 走 llama.cpp 後端沒有這個問題。
-
-⚠️ **已知限制**：Ornith 在長 agent 任務上有社群回報的 doom loop（陷入重複打轉不收斂）。這是它被歸類為「日常小任務」而不是「開發/重要任務」的原因——重要的多步驟工作還是交給 `smart`。
+另外：**聊天不要用 Ornith** —— 它是純 coding 模型，社群回報沒工具時幻覺明顯，
+所以 `chat-lite` 走 DeepSeek-chat 而不是 Ornith。
 
 ---
 
-## 2. 填 API Key
+## 1. 申請 API Key（都免綁月費，儲值制/按量計費）
+
+| 變數 | 去哪拿 | 用途 |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | https://console.anthropic.com | `smart` 主力（已有就沿用） |
+| `MINIMAX_API_KEY` | https://www.minimax.io/platform | `smart` 第一備援（選填） |
+| `DEEPSEEK_API_KEY` | https://platform.deepseek.com | `smart` 第二備援 + `chat-lite` |
+| `DEEPINFRA_API_KEY` | https://deepinfra.com | `code-lite`（代管 Ornith） |
+| `LITELLM_MASTER_KEY` | 自己生成：`openssl rand -hex 32` | 保護你的本地 proxy |
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # 然後把上面的 key 填進去
 ```
 
-編輯 `.env`，補上：
+沒申請 MiniMax 也能跑——`smart` 只是少一層備援，Claude 掛掉時直接退 DeepSeek。
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-xxxxx        # 已有的話沿用
-MINIMAX_API_KEY=你的-minimax-key       # https://www.minimax.io/platform
-DEEPSEEK_API_KEY=你的-deepseek-key     # https://platform.deepseek.com
-LITELLM_MASTER_KEY=自己隨便設一組長字串  # 保護你的本地 proxy，openssl rand -hex 32
-```
-
-`litellm/config.yaml` 裡的 MiniMax 模型代號（`MiniMax-M2`）常變動，上線前先到 MiniMax 平台確認目前的正確代號，跟 config 裡的不一樣就改掉。
+⚠️ `litellm/config.yaml` 裡的 MiniMax 模型代號（`MiniMax-M2`）常變動，
+上線前到 MiniMax 平台核對目前的正確代號。
 
 ---
 
-## 3. 啟動 Proxy
+## 2. 啟動 Proxy
 
 ```bash
 pip install 'litellm[proxy]'
 litellm --config litellm/config.yaml --port 4000
 ```
 
-驗證三條線都通：
+## 3. 驗證三條線都通
 
 ```bash
-export LLKEY=你剛剛設的LITELLM_MASTER_KEY
+export LLKEY=你的LITELLM_MASTER_KEY
 
 curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer $LLKEY" -H "Content-Type: application/json" \
@@ -87,16 +80,14 @@ curl http://localhost:4000/v1/chat/completions \
 
 curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer $LLKEY" -H "Content-Type: application/json" \
-  -d '{"model":"code-local","messages":[{"role":"user","content":"寫一個 Python 的 fibonacci 函式"}]}'
+  -d '{"model":"code-lite","messages":[{"role":"user","content":"寫一個 Python 的 fibonacci 函式"}]}'
 
 curl http://localhost:4000/v1/chat/completions \
   -H "Authorization: Bearer $LLKEY" -H "Content-Type: application/json" \
-  -d '{"model":"chat-local","messages":[{"role":"user","content":"幫我把這句話潤飾得更專業"}]}'
+  -d '{"model":"chat-lite","messages":[{"role":"user","content":"幫我把這句話潤飾得更專業"}]}'
 ```
 
 三個都回應正常就是接通了。
-
----
 
 ## 4. 把工具指過去
 
@@ -105,23 +96,33 @@ curl http://localhost:4000/v1/chat/completions \
 ```
 Base URL:  http://localhost:4000/v1
 API Key:   你的 LITELLM_MASTER_KEY
-Model:     smart / code-local / chat-local
+Model:     smart / code-lite / chat-lite
 ```
 
-**建議綁定方式**：
-- Claude Code / DevSwarm 這類開發工具 → 固定用 `smart`（本專案 DevSwarm 目前直接呼叫 Anthropic API，若要改走 proxy 需另外改 `devswarm/config.py` 的 base URL，屬於獨立任務，這份文件先不動它）
-- 日常筆記 / 聊天工具（LINE bot、備忘錄助理等）→ 固定用 `chat-local`
-- 編輯器裡的程式碼補全 / 小改動外掛 → 固定用 `code-local`
+**建議綁定**：
+- Claude Code / DevSwarm 這類開發工具 → 固定 `smart`
+  （本專案 DevSwarm 目前直接呼叫 Anthropic API；要改走 proxy 需另外改
+  `devswarm/config.py` 的 base URL，屬獨立任務，這份文件不動它）
+- 日常筆記 / 聊天工具（LINE bot、備忘錄助理）→ 固定 `chat-lite`
+- 編輯器裡的程式碼補全 / 小改動外掛 → 固定 `code-lite`
 
 ---
 
 ## 常見問題
 
-**Q: 為什麼不讓系統自動判斷任務重不重要？**
-A: 分類器本身會誤判，重要任務一旦被錯丟去本地小模型，後果比多花點錢嚴重。場景綁定（工具固定用哪個別名）雖然要你自己選一次，但行為穩定可預期。
+**Q: 為什麼不裝本地模型？不是免費嗎？**
+A: 「免費」的前提是你已經有 20GB+ 閒置磁碟和 24GB VRAM 等級的硬體。沒有的話，
+硬裝的結果是磁碟爆掉或推論慢到不能用。代管 API 每月日常用量通常只要幾十塊台幣，
+遠低於買硬體。未來有機器，啟用 config 檔尾的附錄區塊即可無痛切換。
 
-**Q: MiniMax/DeepSeek fallback 什麼時候會觸發？**
-A: `smart` 呼叫 Claude 失敗（額度用完、超時、5xx 錯誤）才會依序轉 MiniMax 再轉 DeepSeek。正常情況下你打的都是 Claude。
+**Q: fallback 什麼時候觸發？**
+A: 呼叫失敗（額度用完、超時、5xx）才會轉。正常情況 `smart` 打的都是 Claude。
 
 **Q: Ornith 可以拿來做重要開發任務嗎？**
-A: 不建議。它同尺寸開源模型中的 benchmark 數字漂亮，但只贏上一代 Claude Opus（4.7），社群實測在長 agent 任務有 doom loop 抱怨。定位它為「免費的日常小工具」，不是主力。
+A: 不建議。它同尺寸開源模型的 benchmark 亮眼，但只贏上一代 Claude Opus 4.7，
+社群實測在長 agent 任務有 doom loop（重複打轉）抱怨。定位是「便宜的日常小工具」。
+
+**Q: 怎麼控制每月花費？**
+A: 三個後端（DeepSeek、DeepInfra、MiniMax）都是儲值制——儲多少花多少，天然封頂。
+Anthropic 可在 console 設每月上限。要更細的話 LiteLLM 支援
+[per-key budget](https://docs.litellm.ai/docs/proxy/users)，之後有需要再加。
