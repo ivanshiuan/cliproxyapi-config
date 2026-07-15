@@ -1,6 +1,6 @@
 # Release Notes Draft
 
-> Auto-generated 2026-07-08 13:46 UTC — 125 commit(s) since first commit
+> Auto-generated 2026-07-15 11:24 UTC — 132 commit(s) since first commit
 > **Human review required before publishing.**
 
 ## ✨ Features
@@ -64,6 +64,7 @@
 - LangGraph agent swarm — PM/Architect/Coder/QA + self-heal (`7fb1040`)
 
 ## 🐛 Bug Fixes
+- 用 datetime.UTC alias 修 ruff UP017（morning_brief / draft_changelog） (`020985b`)
 - 把 workflow branch 從 main 改成實際主幹 [skip ci] (`d4d8d5d`)
 - 處理 PR #13 review 回饋(對抗式審查 + 守衛強化) (`292e87f`)
 - Claude 4.x/Fable models reject deprecated temperature param (`9e5a455`)
@@ -124,6 +125,12 @@
 - full project planning artifacts (`c50de45`)
 
 ## 🔧 Chores
+- daily brief 2026-07-15 [skip ci] (`4fba0de`)
+- daily brief 2026-07-14 [skip ci] (`f4d74ec`)
+- daily brief 2026-07-13 [skip ci] (`7b309f2`)
+- daily brief 2026-07-10 [skip ci] (`22799c1`)
+- daily brief 2026-07-09 [skip ci] (`a8e350a`)
+- update changelog draft [skip ci] (`2a1491a`)
 - daily brief 2026-07-08 [skip ci] (`91fdc77`)
 - add BrowserAct skill, setup script, and setup docs (`07da0b0`)
 - daily brief 2026-07-07 [skip ci] (`dc7eccf`)

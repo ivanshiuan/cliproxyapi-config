@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,7 +69,7 @@ def strip_prefix(subject: str) -> str:
 
 
 def main() -> None:
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
     tag = last_tag()
 
     if tag:
