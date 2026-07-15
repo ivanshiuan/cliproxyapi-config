@@ -255,6 +255,12 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「跑一日流程」 | `make demo-flow` |
 | 「審查目前 diff」 | 用 `/code-review` skill |
 | 「找 bug」 | 用 `/bugfix` skill |
+| 「我想做 XX」但需求還很模糊 | 用 `/grill` command（需求拷問 → 產需求簡報，動工前必經） |
+| 「用 TDD 做 / 先寫測試」或任何新業務邏輯 | 用 `tdd` skill（紅→綠→重構，綁 conftest 規矩） |
+| 「幫我診斷 / 查為什麼壞了」原因不明的錯 | 用 `diagnose` skill（先重現、找根因、才動刀） |
+| 「架構還健康嗎 / 技術債盤點」 | 用 `/arch-review` command（只診斷不動刀） |
+| 「這個名詞什麼意思 / 名詞不一致」 | 看 `docs/21_domain_glossary.md`；新名詞先登記再寫 code |
+| 「AI 工作流怎麼走 / 不只 vibe coding」 | 看 `docs/20_ai_engineering_workflow.md`（四失敗模式 → 武器對照） |
 | 「文件交接」 | 看 `COMMANDER_HANDOFF.md` |
 | 「建檔 / digest / 整理這篇 / 幫我消化 / 存進知識庫 / 把 XX 學起來」+ 一條連結或內容 | 用 `digest` skill → 提煉成知識卡存 `docs/knowledge/` + 登進 `00_MOC.md` |
 | 「幫我開網站 / 登入抓資料 / 監看競品菜單價格 / 填沒 API 的後台表單 / 過驗證碼」 | 用 `browser-act` skill（需先開網路白名單，見 `docs/18`） |
