@@ -72,7 +72,7 @@ from ..schemas.pos_orders import (
     TakeoutSaleRequest,
 )
 from ..schemas.tables import TableSessionMerge
-from . import menu_service, orders_service, pos_auth_service
+from . import discount_rule_service, menu_service, orders_service, pos_auth_service
 from .audit_service import audit
 from .event_hub import record_event
 from .permissions import SensitiveAction
@@ -653,6 +653,7 @@ def _build_quote(order: Order) -> CheckoutQuote:
         net=due,
         paid=paid,
         remaining=due - paid,
+        auto_discount=next((d.reason for d in order.discounts if d.rule_id is not None), None),
     )
 
 
@@ -668,6 +669,62 @@ def _guard_not_below_paid(order: Order) -> None:
             message=f"應收 {due} 低於已收 {paid} — 已收款的帳單不能再降價, 請先處理退款",
             details={"due": str(due), "paid": str(paid)},
         )
+
+
+async def _auto_apply_rule(
+    session: AsyncSession, order: Order, *, tenant_id: uuid.UUID
+) -> None:
+    """自動折扣規則 (docs/22 #10) — apply the best matching rule, once.
+
+    Called from every money path (quote / checkout / 拆單首筆 / 外帶 / 線上
+    外帶取件) so what the quote shows is exactly what the till charges. The
+    applied row is an ordinary ``OrderDiscount`` tagged ``rule_id`` — the
+    ``amount_due`` stack does all the math, and the tag doubles as the
+    apply-once marker. Skips (silently, a promo is a bonus not an error):
+    already applied / order already took payments (拆單進行中不改價, keeps
+    ``_guard_not_below_paid`` unbreachable) / empty order / no match. Once
+    applied the row stays even if later voids drop the bill below a 滿額
+    threshold — the customer keeps the promised promo.
+    """
+    if any(d.rule_id is not None for d in order.discounts):
+        return
+    if order.payments or not order.lines:
+        return
+    rules = await discount_rule_service.active_rules_for_store(
+        session, tenant_id=tenant_id, store_id=order.store_id
+    )
+    if not rules:
+        return
+    gross = sum((ln.line_total for ln in order.lines), Decimal("0"))
+    rule = discount_rule_service.best_rule(rules, gross, discount_rule_service.taipei_now())
+    if rule is None:
+        return
+    # Append through the relationship (not bare session.add) so the loaded
+    # collection stays current — same rule as apply_discount above.
+    order.discounts.append(
+        OrderDiscount(
+            tenant_id=tenant_id,
+            order_id=order.id,
+            kind=rule.kind,
+            value=rule.value,
+            reason=f"自動折扣: {rule.name}",
+            rule_id=rule.id,
+        )
+    )
+    await session.flush()
+    await audit(
+        session,
+        action="pos_order.auto_discount_applied",
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        target=("orders", order.id),
+        after={
+            "rule_id": str(rule.id),
+            "name": rule.name,
+            "kind": rule.kind.value,
+            "value": str(rule.value),
+        },
+    )
 
 
 async def merge_sessions(
@@ -782,10 +839,15 @@ async def quote(
     tenant_id: uuid.UUID,
 ) -> CheckoutQuote:
     """Amount due for the open order (discounts + 服務費 + partial payments
-    applied) — checkout UI reads this instead of doing money math client-side."""
+    applied) — checkout UI reads this instead of doing money math client-side.
+
+    Also runs the 自動折扣規則 pass (idempotent — apply-once via ``rule_id``)
+    so the number the customer is quoted is the number the till will charge.
+    """
     ts = await _load_open_session(session, session_id, tenant_id)
     order = await _get_or_create_session_order(session, ts, tenant_id=tenant_id)
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    await _auto_apply_rule(session, order, tenant_id=tenant_id)
     return _build_quote(order)
 
 
@@ -846,6 +908,7 @@ async def pay_partial(
     if not order.lines:
         raise ValidationError("空訂單不能收款")
 
+    await _auto_apply_rule(session, order, tenant_id=tenant_id)
     _gross, _disc, _charge, due = amount_due(order)
     remaining = due - _paid_so_far(order)
     if payload.amount > remaining:
@@ -977,6 +1040,7 @@ async def takeout_sale(
         )
 
     order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    await _auto_apply_rule(session, order, tenant_id=tenant_id)
     total = orders_service._compute_net_revenue(order)
     if payload.tendered < total:
         raise ValidationError(
@@ -1245,6 +1309,7 @@ async def collect_online_takeout(
         )
     _guard_order_open(order)
 
+    await _auto_apply_rule(session, order, tenant_id=tenant_id)
     _gross, _disc, _charge, due = amount_due(order)
     if due < Decimal("0"):  # pragma: no cover - defensive, see _guard_not_below_paid elsewhere
         raise ConflictError(message="due is negative", details={"due": str(due)})
@@ -1316,6 +1381,7 @@ async def checkout_cash(
     if not order.lines:
         raise ValidationError("cannot check out an empty order")
 
+    await _auto_apply_rule(session, order, tenant_id=tenant_id)
     # Settle whatever is still owed: discount stack + 服務費 minus partial payments.
     _gross, _disc, _charge, due = amount_due(order)
     total = due - _paid_so_far(order)

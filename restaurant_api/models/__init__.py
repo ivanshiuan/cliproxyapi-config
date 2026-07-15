@@ -34,6 +34,7 @@ from .customers import (
     Referral,
     ReferralStatus,
 )
+from .discount_rules import DiscountRule
 from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
@@ -96,6 +97,7 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "StockMovement",
     # orders
     "DiscountKind",
+    "DiscountRule",
     "InvoiceMedia",
     "InvoiceStatus",
     "KitchenStation",

@@ -446,6 +446,13 @@ class OrderDiscount(TenantScopedMixin, Base):
     # Either a percentage (0..1) or a TWD amount, depending on ``kind``.
     value: Mapped[Decimal] = mapped_column(Money, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set when this row was auto-applied by a 自動折扣規則 (docs/22 #10) —
+    # doubles as the apply-once marker and the reporting link. SET NULL so
+    # deleting a rule doesn't erase the discount history it produced.
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("discount_rules.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # SET NULL: don't lose the discount record if the approving employee is
     # later removed from the system.
     applied_by: Mapped[uuid.UUID | None] = mapped_column(

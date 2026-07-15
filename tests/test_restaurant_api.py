@@ -39,7 +39,8 @@ def test_models_metadata_has_30_tables():
     + 1 UGC + 2 POS floor plan (dining_tables + table_sessions)
     + 1 POS real-time (order_events)
     + 4 P7.3 modifiers/combo (modifier_groups, modifier_options,
-    order_line_modifiers, combo_components) = 40 total."""
+    order_line_modifiers, combo_components)
+    + 1 自動折扣規則 (discount_rules) = 41 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -94,10 +95,12 @@ def test_models_metadata_has_30_tables():
         "modifier_options",
         "order_line_modifiers",
         "combo_components",
+        # 自動折扣規則 — P7 #10 (1)
+        "discount_rules",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 40
+    assert len(Base.metadata.tables) == 41
 
 
 def test_money_columns_are_numeric_14_4():

@@ -108,6 +108,7 @@
   <button class="ghost" id="queueBtn">候位</button>
   <button class="ghost" id="resvBtn">訂位</button>
   <button class="ghost" id="shiftBtn">交班</button>
+  <button class="ghost" id="rulesBtn">促銷</button>
   <button class="ghost" id="menuBtn">菜單</button>
   <button class="ghost" id="refreshBtn">↻</button>
 </header>
@@ -705,6 +706,7 @@ async function checkoutPrompt(sessionId) {
   body.innerHTML = `
     <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 應收 $${remaining.toFixed(0)}</div>
     <div class="sub">原價 $${Number(q.gross).toFixed(0)}${disc > 0 ? ` − 折扣 $${disc.toFixed(0)}` : ""}${charge > 0 ? ` ＋ 服務費 $${charge.toFixed(0)}` : ""}${paid > 0 ? ` − 已收 $${paid.toFixed(0)}` : ""}</div>
+    ${q.auto_discount ? `<div class="sub" style="color:var(--ok)">🏷️ ${escapeHtml(q.auto_discount)}（已自動套用）</div>` : ""}
     <div class="row"><label>收現</label>
       <input id="tendered" type="number" value="${remaining}" min="0" /></div>
     <div class="row"><label>本次結清</label>
@@ -965,6 +967,69 @@ function collectOnlineTakeoutPrompt(orderId, total) {
   acts.append(mkBtn("返回", "ghost", showOnlineTakeout));
 }
 $("onlineTakeoutBtn").onclick = showOnlineTakeout;
+
+// ─── 自動折扣規則 (促銷: 滿額/時段自動套, docs/22 #10) ───
+async function showRules() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "促銷 · 自動折扣規則";
+  $("tmSub").textContent = "符合條件的帳單在報價/結帳時自動套用折得最多的一條，不用店員手動按。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入中…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let rules = [];
+  try { rules = await api(`/discount-rules?store_id=${encodeURIComponent(storeId)}&include_inactive=true`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  const cond = (r) => {
+    const parts = [];
+    if (r.min_subtotal) parts.push(`滿 $${Number(r.min_subtotal).toFixed(0)}`);
+    if (r.start_time) parts.push(`${r.start_time.slice(0, 5)}–${r.end_time.slice(0, 5)}`);
+    return parts.length ? parts.join(" · ") : "無條件";
+  };
+  const off = (r) => r.kind === "percent" ? `${(Number(r.value) * 100).toFixed(0)}% off` : `折 $${Number(r.value).toFixed(0)}`;
+  body.innerHTML = (rules.length ? `<div class="menu-list">` + rules.map((r) => `
+    <div class="menu-item" style="align-items:center;gap:8px${r.is_active ? "" : ";opacity:.45"}">
+      <span>${escapeHtml(r.name)}<br><small style="color:#888">${cond(r)} → ${off(r)}</small></span>
+      <button class="ghost" style="padding:4px 10px" onclick="toggleRule('${r.id}', ${r.is_active ? "false" : "true"})">
+        ${r.is_active ? "停用" : "啟用"}</button>
+    </div>`).join("") + `</div>` : `<div class="empty">尚無促銷規則</div>`)
+    + `<div style="font-weight:600;margin:14px 0 6px">新增規則</div>
+    <div class="row"><label>名稱</label><input id="drName" placeholder="例: 滿千折百" /></div>
+    <div class="row"><label>折法</label>
+      <select id="drKind"><option value="amount">折固定金額</option><option value="percent">打折 (%)</option></select>
+      <input id="drValue" type="number" placeholder="100 或 10(%)" min="0" /></div>
+    <div class="row"><label>滿額門檻</label><input id="drMin" type="number" placeholder="留空=不限" min="0" /></div>
+    <div class="row"><label>時段</label>
+      <input id="drStart" type="time" /><input id="drEnd" type="time" /></div>
+    <div class="sub">滿額與時段可只填一種; 打折輸入 10 代表 10% off。</div>`;
+  acts.append(mkBtn("新增", "primary", async () => {
+    const name = $("drName").value.trim();
+    const kind = $("drKind").value;
+    const raw = $("drValue").value;
+    if (!name || !raw) return toast("請填名稱與折扣值", true);
+    const payload = {
+      name, kind,
+      value: kind === "percent" ? String(Number(raw) / 100) : String(raw),
+      store_id: storeId,
+    };
+    if ($("drMin").value) payload.min_subtotal = String($("drMin").value);
+    if ($("drStart").value && $("drEnd").value) {
+      payload.start_time = $("drStart").value + ":00";
+      payload.end_time = $("drEnd").value + ":00";
+    }
+    try {
+      await api("/discount-rules", { method: "POST", body: JSON.stringify(payload) });
+      toast("促銷規則已建立"); showRules();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("關閉", "ghost", closeModal));
+}
+async function toggleRule(ruleId, active) {
+  try {
+    await api(`/discount-rules/${ruleId}`, { method: "PATCH", body: JSON.stringify({ is_active: active === "true" || active === true }) });
+    showRules();
+  } catch (e) { toast(e.message, true); }
+}
+$("rulesBtn").onclick = showRules;
 
 // ─── 候位面板 (現場排隊: 取號 → 叫號 → 帶位/棄號) ───
 async function showQueue() {

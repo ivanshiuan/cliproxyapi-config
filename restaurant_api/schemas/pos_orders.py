@@ -186,6 +186,9 @@ class CheckoutQuote(BaseModel):
     net: Decimal
     paid: Decimal
     remaining: Decimal
+    # 自動折扣規則 (#10): the applied rule's label (e.g. "自動折扣: 滿千折百"),
+    # already included in discount_total/net — display-only for the till UI.
+    auto_discount: str | None = None
 
 
 class ServiceChargeRequest(BaseModel):
