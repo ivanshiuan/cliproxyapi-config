@@ -232,6 +232,12 @@ apply_discount 的招待守衛曾因此漏擋。
 手動 curl/腳本 commit 進 resto_dev 的資料會殘留，讓 savepoint 測試（掃全表計數的那種，
 如 test_create_empty_order）看到多餘列而失敗。驗完跑 `make db-truncate` 清乾淨。
 
+L3 腳本裡連續兩支請求（例如 `POST /tables` 建桌緊接著 `POST /tables/{id}/open`）偶爾會在
+毫秒級間距內對剛 commit 的列讀到 404/查無資料——這是這個沙盒 Postgres 連線池偶發的
+read-after-write 可見度延遲，不是 app bug（用同一顆 DB session 的 pytest savepoint fixture
+從沒踩過）。不要因此改動 production code；L3 腳本裡對「建立後立刻讀」的呼叫加個 3-5 次、
+每次間隔 ~150ms 的重試即可，之後就穩定。
+
 ### 退菜/折扣的 audit `actor_id` 是「授權者」，必須是真員工（FK employees）
 `pos_order_service.void_line`/`apply_discount` 經 `authorize_sensitive` 決定授權者
 （self=登入者、override=覆核主管），audit 用那個 `actor_id`。`audit_log.actor_id` 有 FK 到

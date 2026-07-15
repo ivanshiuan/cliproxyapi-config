@@ -10,13 +10,23 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, time
+from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
-from ..models import ComboComponent, MenuCategory, MenuItem, ModifierGroup, ModifierOption
+from ..models import (
+    ComboComponent,
+    MenuCategory,
+    MenuItem,
+    ModifierGroup,
+    ModifierOption,
+    Order,
+    OrderLine,
+    OrderStatus,
+)
 from ..schemas.menu import (
     ComboComponentCreate,
     ComboComponentResponse,
@@ -29,6 +39,7 @@ from ..schemas.menu import (
     MenuItemUpdate,
     ModifierGroupCreate,
     ModifierGroupResponse,
+    RecommendedItem,
 )
 from .audit_service import audit
 
@@ -337,6 +348,143 @@ async def delete_item(
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# 規則版智慧加購推薦 (#21/#25) — 先出規則版, 之後再上 AI 個人化版本。
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def _co_occurring_items(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    cart_ids: set[uuid.UUID],
+    exclude: set[uuid.UUID],
+    limit: int,
+) -> list[uuid.UUID]:
+    """購物車搭配建議: items most often CLOSED-ordered alongside ``cart_ids``."""
+    anchor_orders = (
+        select(OrderLine.order_id)
+        .join(Order, OrderLine.order_id == Order.id)
+        .where(
+            Order.tenant_id == tenant_id,
+            Order.store_id == store_id,
+            Order.status == OrderStatus.CLOSED,
+            Order.deleted_at.is_(None),
+            OrderLine.menu_item_id.in_(cart_ids),
+        )
+        .distinct()
+    )
+    stmt = select(
+        OrderLine.menu_item_id, func.count(func.distinct(OrderLine.order_id)).label("cnt")
+    ).where(OrderLine.order_id.in_(anchor_orders))
+    if exclude:
+        stmt = stmt.where(OrderLine.menu_item_id.notin_(exclude))
+    stmt = stmt.group_by(OrderLine.menu_item_id).order_by(func.count(func.distinct(OrderLine.order_id)).desc()).limit(limit)
+    rows = (await session.execute(stmt)).all()
+    return [r.menu_item_id for r in rows]
+
+
+async def _top_seller_items(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    exclude: set[uuid.UUID],
+    limit: int,
+    hour: int | None,
+) -> list[uuid.UUID]:
+    """熱銷加購: highest-qty CLOSED items, optionally scoped to a Taipei hour-of-day."""
+    stmt = (
+        select(OrderLine.menu_item_id, func.sum(OrderLine.qty).label("qty"))
+        .join(Order, OrderLine.order_id == Order.id)
+        .where(
+            Order.tenant_id == tenant_id,
+            Order.store_id == store_id,
+            Order.status == OrderStatus.CLOSED,
+            Order.deleted_at.is_(None),
+        )
+    )
+    if hour is not None:
+        stmt = stmt.where(func.extract("hour", func.timezone("Asia/Taipei", Order.closed_at)) == hour)
+    if exclude:
+        stmt = stmt.where(OrderLine.menu_item_id.notin_(exclude))
+    stmt = stmt.group_by(OrderLine.menu_item_id).order_by(func.sum(OrderLine.qty).desc()).limit(limit)
+    rows = (await session.execute(stmt)).all()
+    return [r.menu_item_id for r in rows]
+
+
+async def get_recommendations(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+    cart_item_ids: list[uuid.UUID] | None = None,
+    limit: int = 5,
+) -> list[RecommendedItem]:
+    """規則版智慧加購推薦 (docs/22 #21/#25 先行版, 之後再上 AI 個人化)。
+
+    Two rule tiers, cheapest/most-specific signal first:
+    1. cart_pairing — items most often bought in the same CLOSED order as
+       something already in the cart (only tried when the cart isn't empty).
+    2. top_seller — highest-qty items in the current Asia/Taipei hour-of-day
+       bucket (時段情境, #25 先行版); falls back to all-hours if this store
+       has no history yet for the exact current hour.
+    Both tiers skip items already in the cart/already picked, soft-deleted,
+    unavailable, or outside their 時段菜單 window. #25 的人數/天氣情境未收集
+    對應資料, 留給未來 AI 版本。
+    """
+    cart_ids = set(cart_item_ids or [])
+    seen = set(cart_ids)
+    picks: list[tuple[uuid.UUID, Literal["cart_pairing", "top_seller"]]] = []
+
+    if cart_ids:
+        for item_id in await _co_occurring_items(
+            session, tenant_id=tenant_id, store_id=store_id, cart_ids=cart_ids, exclude=seen, limit=limit
+        ):
+            picks.append((item_id, "cart_pairing"))
+            seen.add(item_id)
+
+    if len(picks) < limit:
+        hour = datetime.now(_TPE).hour
+        for item_id in await _top_seller_items(
+            session, tenant_id=tenant_id, store_id=store_id, exclude=seen, limit=limit - len(picks), hour=hour
+        ):
+            picks.append((item_id, "top_seller"))
+            seen.add(item_id)
+
+    if len(picks) < limit:
+        for item_id in await _top_seller_items(
+            session, tenant_id=tenant_id, store_id=store_id, exclude=seen, limit=limit - len(picks), hour=None
+        ):
+            picks.append((item_id, "top_seller"))
+            seen.add(item_id)
+
+    if not picks:
+        return []
+
+    ids = [p[0] for p in picks]
+    rows = (
+        await session.execute(
+            select(MenuItem).where(
+                MenuItem.id.in_(ids),
+                MenuItem.tenant_id == tenant_id,
+                MenuItem.deleted_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    by_id = {r.id: r for r in rows}
+    now = datetime.now(_TPE).time()
+
+    out: list[RecommendedItem] = []
+    for item_id, reason in picks:
+        item = by_id.get(item_id)
+        if item is None or not item.is_available or not is_item_available_now(item, now):
+            continue
+        out.append(RecommendedItem(menu_item_id=item.id, name=item.name, price=item.price, reason=reason))
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # 口味選項組/加價購 (modifier groups)
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -601,6 +749,7 @@ __all__ = [
     "delete_item",
     "delete_modifier_group",
     "get_item",
+    "get_recommendations",
     "is_item_available_now",
     "list_categories",
     "list_combo_components",

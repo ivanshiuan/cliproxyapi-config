@@ -23,6 +23,7 @@ from ..schemas.menu import (
     MenuItemUpdate,
     ModifierGroupCreate,
     ModifierGroupResponse,
+    RecommendedItem,
 )
 from ..services import menu_service
 
@@ -33,6 +34,8 @@ _Q_AVAILABLE_ONLY = Query(default=False)
 _Q_AVAILABLE_NOW = Query(default=False, description="時段菜單: 只列現在時段供應的品項")
 _Q_LANG = Query(default=None, description="多語系菜單: 回傳這個語言的翻譯 (缺翻譯時退回中文)")
 _Q_LIMIT = Query(default=500, ge=1, le=1000)
+_Q_CART_ITEM_IDS = Query(default=None, description="購物車已加品項 id — 可重複帶 (?cart_item_ids=a&cart_item_ids=b)")
+_Q_REC_LIMIT = Query(default=5, ge=1, le=20)
 
 router = APIRouter(prefix="/menu", tags=["menu"])
 
@@ -196,6 +199,23 @@ async def set_translation(
     tenant_id: TenantId,
 ) -> MenuItemResponse:
     return await menu_service.set_translation(session, item_id, payload, tenant_id=tenant_id)
+
+
+@router.get(
+    "/recommendations",
+    response_model=list[RecommendedItem],
+    summary="規則版智慧加購推薦 — 購物車搭配 + 時段熱銷",
+)
+async def get_recommendations(
+    session: DbSession,
+    tenant_id: TenantId,
+    store_id: uuid.UUID,
+    cart_item_ids: list[uuid.UUID] | None = _Q_CART_ITEM_IDS,
+    limit: int = _Q_REC_LIMIT,
+) -> list[RecommendedItem]:
+    return await menu_service.get_recommendations(
+        session, tenant_id=tenant_id, store_id=store_id, cart_item_ids=cart_item_ids, limit=limit
+    )
 
 
 # ── 口味選項組/加價購 (modifier groups) ────────────────────────────────────

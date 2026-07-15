@@ -487,11 +487,22 @@ async function loadMenuCache() {
   return menuCache;
 }
 
+async function loadRecommendations(cartItemIds) {
+  // 規則版智慧加購推薦 (docs/22 #21/#25): best-effort strip, never blocks the bill.
+  if (!storeId) return [];
+  try {
+    const qs = new URLSearchParams({ store_id: storeId, limit: "4" });
+    (cartItemIds || []).forEach((id) => qs.append("cart_item_ids", id));
+    return await api(`/menu/recommendations?${qs.toString()}`);
+  } catch { return []; }
+}
+
 async function loadOrder(s) {
   const panel = $("orderPanel");
   try {
     const order = await api(`/tables/sessions/${s.id}/order`);
     const items = await loadMenuCache();
+    const recs = await loadRecommendations([...new Set(order.lines.map((l) => l.menu_item_id))]);
     const total = order.lines.reduce((a, l) => a + Number(l.line_total), 0);
     panel.innerHTML = `
       <div style="font-weight:600;margin:6px 0">本桌帳單</div>
@@ -522,6 +533,14 @@ async function loadOrder(s) {
       </div>
       ${order.discounts && order.discounts.length ? `<div class="sub" style="margin:2px">
         已套折扣 ${order.discounts.length} 筆（結帳金額以結帳畫面為準）</div>` : ""}
+      ${recs.length ? `<div style="font-weight:600;margin:10px 0 6px">🎯 猜你想加點</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+        ${recs.map((r) => `<div class="menu-item" style="cursor:pointer;flex:0 0 auto;gap:8px"
+          onclick="openItemPrompt('${s.id}','${r.menu_item_id}')">
+          <span>${r.reason === "cart_pairing" ? "🔗" : "🔥"} ${escapeHtml(r.name)}</span>
+          <span class="price">$${Number(r.price).toFixed(0)}</span>
+        </div>`).join("")}
+      </div>` : ""}
       <div style="font-weight:600;margin:10px 0 6px">加點</div>
       <div class="menu-list" style="max-height:34vh;overflow:auto">
         ${items.length ? items.map((m) => `<div class="menu-item"

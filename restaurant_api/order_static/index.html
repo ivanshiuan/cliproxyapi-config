@@ -75,6 +75,9 @@
   <div class="section-title">已點餐點</div>
   <div id="bill"><div class="empty">尚未點餐</div></div>
 
+  <div class="section-title" id="recsTitle" style="display:none">🎯 猜你想加點</div>
+  <div id="recs" style="display:none"></div>
+
   <div class="section-title">菜單</div>
   <div id="menu"><div class="empty">載入中…</div></div>
 </main>
@@ -139,6 +142,33 @@ function bump(id, d) {
   const q = (cart.get(id) || 0) + d;
   if (q <= 0) cart.delete(id); else cart.set(id, q);
   renderMenu();
+  loadRecommendations();
+}
+
+let recs = [];
+async function loadRecommendations() {
+  // 規則版智慧加購推薦 (docs/22 #21/#25): best-effort strip, never blocks ordering.
+  if (!ctx) return;
+  try {
+    const qs = new URLSearchParams({ store_id: ctx.store_id, limit: "4" });
+    [...cart.keys()].forEach((id) => qs.append("cart_item_ids", id));
+    recs = await api(`/menu/recommendations?${qs.toString()}`);
+  } catch { recs = []; }
+  renderRecs();
+}
+
+function renderRecs() {
+  const titleEl = $("recsTitle"), el = $("recs");
+  const shown = recs.filter((r) => !cart.has(r.menu_item_id));
+  if (!shown.length) { titleEl.style.display = "none"; el.style.display = "none"; el.innerHTML = ""; return; }
+  titleEl.style.display = "";
+  el.style.display = "";
+  el.innerHTML = shown.map((r) => `<div class="item" style="cursor:pointer" onclick="bump('${r.menu_item_id}',1)">
+    <div class="info">
+      <div class="name">${r.reason === "cart_pairing" ? "🔗" : "🔥"} ${escapeHtml(r.name)}</div>
+      <div class="price">$${Number(r.price).toFixed(0)}</div>
+    </div>
+  </div>`).join("");
 }
 
 function renderCartBar() {
@@ -176,6 +206,7 @@ async function submit() {
     cart.clear();
     renderBill(bill);
     renderMenu();
+    loadRecommendations();
     toast("已送出！餐點已加入本桌帳單");
   } catch (e) { toast(e.message, true); $("submitBtn").disabled = false; }
 }
@@ -205,6 +236,7 @@ async function boot() {
   }
   renderMenu();
   refreshBill();
+  loadRecommendations();
   // Light polling keeps the bill in sync when staff also add/void items.
   setInterval(refreshBill, 8000);
 }

@@ -231,6 +231,22 @@ class ComboComponentResponse(BaseModel):
     sort_order: int
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# 規則版智慧加購推薦 (P8.2, docs/22 #21/#25) — rule-based, no ML model.
+# ──────────────────────────────────────────────────────────────────────────
+
+
+class RecommendedItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    menu_item_id: UUID
+    name: str
+    price: Decimal
+    # cart_pairing: 常跟購物車裡的品項一起被點過 (co-occurrence)。
+    # top_seller: 目前時段(或全時段退回)賣最好的品項。
+    reason: Literal["cart_pairing", "top_seller"]
+
+
 __all__ = [
     "SUPPORTED_LANGS",
     "ComboComponentCreate",
@@ -246,6 +262,7 @@ __all__ = [
     "ModifierGroupResponse",
     "ModifierOptionCreate",
     "ModifierOptionResponse",
+    "RecommendedItem",
     "StrictDecimal",
     "SupportedLang",
 ]
