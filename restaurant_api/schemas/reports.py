@@ -109,12 +109,44 @@ class ChannelReport(BaseModel):
     slices: list[ChannelSlice]
 
 
+class StoreSlice(BaseModel):
+    """One store's slice of the tenant-wide range (總部多店儀表板)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    store_id: UUID
+    store_name: str
+    order_count: int
+    gross_sales: Decimal
+    net_sales: Decimal
+    avg_ticket: Decimal
+
+
+class HqDashboard(BaseModel):
+    """總部多店儀表板 (#42) — every active store under the tenant, ranked by
+    ``net_sales`` descending, plus the tenant-wide total. Same money math as
+    ``SalesReport`` per store, so a row here always matches what
+    ``/reports/sales?store_id=<that store>`` returns for the same range."""
+
+    model_config = ConfigDict(frozen=True)
+
+    tenant_id: UUID
+    date_from: date
+    date_to: date
+    store_count: int
+    total_order_count: int
+    total_net_sales: Decimal
+    stores: list[StoreSlice]
+
+
 __all__ = [
     "ChannelReport",
     "ChannelSlice",
     "HourlyReport",
     "HourlySlice",
+    "HqDashboard",
     "PaymentBreakdown",
     "SalesReport",
+    "StoreSlice",
     "TopItem",
 ]

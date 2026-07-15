@@ -166,6 +166,13 @@ if _PICKUP_BOARD_DIR.is_dir():
         "/pickup-board", StaticFiles(directory=str(_PICKUP_BOARD_DIR), html=True), name="pickup-board"
     )
 
+# 總部多店儀表板 (P8.3) — /hq/?date_from=&date_to=, ranks every active store
+# under the tenant off GET /reports/hq. No store_id: this is the one screen
+# that deliberately spans every store.
+_HQ_DIR = Path(__file__).parent / "hq_static"
+if _HQ_DIR.is_dir():
+    app.mount("/hq", StaticFiles(directory=str(_HQ_DIR), html=True), name="hq")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:

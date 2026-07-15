@@ -30,14 +30,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from ..api.errors import ValidationError
-from ..models import MenuItem, Order, OrderLine, OrderStatus
+from ..models import MenuItem, Order, OrderLine, OrderStatus, Store
 from ..schemas.reports import (
     ChannelReport,
     ChannelSlice,
     HourlyReport,
     HourlySlice,
+    HqDashboard,
     PaymentBreakdown,
     SalesReport,
+    StoreSlice,
     TopItem,
 )
 from . import pos_order_service
@@ -338,4 +340,87 @@ async def channel_report(
     return ChannelReport(store_id=store_id, date_from=date_from, date_to=end, net_sales=total, slices=slices)
 
 
-__all__ = ["channel_report", "hourly_report", "orders_csv", "sales_report", "top_items"]
+async def hq_dashboard(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    date_from: date,
+    date_to: date | None = None,
+) -> HqDashboard:
+    """總部多店儀表板 (#42): every active store under the tenant, ranked by
+    net_sales for the range, plus the tenant-wide total.
+
+    Reuses the same per-order ``amount_due`` money math as ``sales_report`` —
+    a store's row here always reconciles with what ``/reports/sales`` returns
+    for that store alone. One query loads every store's CLOSED orders for the
+    range (cheap at today's scale: a handful of stores x a day is still only
+    hundreds of orders); if this ever needs month-range scale across many
+    stores, precompute from ``mv_daily_pnl`` instead like the module docstring
+    already flags for ``sales_report``.
+    """
+    end = _validate_range(date_from, date_to)
+    stores = (
+        await session.execute(
+            select(Store)
+            .where(Store.tenant_id == tenant_id, Store.is_active.is_(True), Store.deleted_at.is_(None))
+            .order_by(Store.name)
+        )
+    ).scalars().all()
+    if not stores:
+        return HqDashboard(
+            tenant_id=tenant_id,
+            date_from=date_from,
+            date_to=end,
+            store_count=0,
+            total_order_count=0,
+            total_net_sales=Decimal("0"),
+            stores=[],
+        )
+
+    store_ids = [s.id for s in stores]
+    orders = (
+        await session.execute(
+            select(Order)
+            .where(
+                Order.tenant_id == tenant_id,
+                Order.store_id.in_(store_ids),
+                Order.status == OrderStatus.CLOSED,
+                Order.deleted_at.is_(None),
+                Order.business_date >= date_from,
+                Order.business_date <= end,
+            )
+            .options(selectinload(Order.lines), selectinload(Order.discounts), selectinload(Order.payments))
+        )
+    ).scalars().all()
+
+    totals: dict[uuid.UUID, list] = {sid: [0, Decimal("0"), Decimal("0")] for sid in store_ids}
+    for o in orders:
+        gross, net, _charge, _qty = _order_gross_net(o)
+        slot = totals[o.store_id]
+        slot[0] += 1
+        slot[1] += gross
+        slot[2] += net
+
+    slices = []
+    for s in stores:
+        count, gross, net = totals[s.id]
+        avg = (net / count).quantize(_MONEY) if count else Decimal("0.00")
+        slices.append(
+            StoreSlice(
+                store_id=s.id, store_name=s.name, order_count=count, gross_sales=gross, net_sales=net, avg_ticket=avg
+            )
+        )
+    slices.sort(key=lambda sl: sl.net_sales, reverse=True)
+
+    return HqDashboard(
+        tenant_id=tenant_id,
+        date_from=date_from,
+        date_to=end,
+        store_count=len(stores),
+        total_order_count=sum(sl.order_count for sl in slices),
+        total_net_sales=sum((sl.net_sales for sl in slices), Decimal("0")),
+        stores=slices,
+    )
+
+
+__all__ = ["channel_report", "hourly_report", "hq_dashboard", "orders_csv", "sales_report", "top_items"]

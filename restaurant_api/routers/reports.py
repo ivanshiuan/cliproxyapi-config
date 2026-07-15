@@ -12,7 +12,7 @@ from datetime import date
 from fastapi import APIRouter, Query, Response
 
 from ..api.deps import DbSession, TenantId
-from ..schemas.reports import ChannelReport, HourlyReport, SalesReport, TopItem
+from ..schemas.reports import ChannelReport, HourlyReport, HqDashboard, SalesReport, TopItem
 from ..services import reports_service
 
 _Q_STORE_ID_REQ = Query()
@@ -88,6 +88,21 @@ async def channels(
         session,
         tenant_id=tenant_id,
         store_id=store_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get("/hq", response_model=HqDashboard, summary="總部多店儀表板 — 全店營收彙總排行")
+async def hq(
+    session: DbSession,
+    tenant_id: TenantId,
+    date_from: date = _Q_DATE_FROM,
+    date_to: date | None = _Q_DATE_TO,
+) -> HqDashboard:
+    return await reports_service.hq_dashboard(
+        session,
+        tenant_id=tenant_id,
         date_from=date_from,
         date_to=date_to,
     )
