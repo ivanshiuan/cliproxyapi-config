@@ -266,6 +266,12 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「分析這場球 / 賽前 memo / 盤口」 | 用 `match-intel` skill（僅分析，不推薦下注） |
 | 「賽後覆盤 / 準備比賽輸入」 | 用 `tiger-pm` agent |
 | 「食安 / 勞基法 / 發票 / 對帳的領域問題」 | 用 `restaurant-domain-expert` agent |
+| 「polish / audit / critique 這個 UI / 這個設計 AI 感太重 / 抓 anti-pattern」 | 用 `impeccable:impeccable` skill（前端設計品味審查） |
+| 「先想清楚再動手 / 用 Superpowers 流程做 XX / brainstorm 這個功能 / 幫我寫實作計畫」 | 用 `superpowers:brainstorming` → `superpowers:writing-plans` → `superpowers:executing-plans` 三段式（動大功能前先審計畫） |
+| 「TDD 做這個 / 寫測試先 / 系統性 debug 這個 bug / 完成前先驗證」 | 用對應 `superpowers:*` 子技能：`test-driven-development` / `systematic-debugging` / `verification-before-completion` |
+| 「上次我們討論過的 XX / 之前解過的問題 / 幫我找過去的 session」 | 用 `claude-mem:mem-search` skill（僅在同一容器 / 已設 cloud sync 時有效） |
+
+**Plugin 資料持久化警告**：impeccable / claude-mem / superpowers 三個 plugin 靠 `.claude/hooks/session-start-plugins.sh` 在每個新 remote 容器自動重裝(user-scope 檔案容器回收會消失)。但 **claude-mem 的記憶庫本身也存 `~/.claude-mem/`,同樣會被回收**——目前它只在單一容器內、跨對話有效,容器重啟就重置。要跨容器保留得手動走 `claude-mem:cloud-sync` 設定 cmem.ai Pro 帳號(外部付費服務),Ivan 尚未決定。
 
 ---
 
