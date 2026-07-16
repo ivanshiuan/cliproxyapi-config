@@ -40,6 +40,14 @@ model_list:
       api_key: os.environ/DEEPSEEK_API_KEY
 
   # ---- code-lite：日常寫程式小任務（雲端代管 Ornith，按量計費） ----
+  #
+  # ⚠️ 2026-07-16 查證：DeepInfra 官方頁面寫「因用量低，本模型將於
+  #    2026-07-19 下架」（https://deepinfra.com/deepreinforce-ai/Ornith-1.0-35B）。
+  #    下架後這個呼叫會失敗 → 靠 router_settings.fallbacks 自動轉 chat-lite，
+  #    系統不會壞，但會悄悄失去 Ornith 的 coding 特化優勢。
+  #    上線前（尤其是 2026-07-19 之後）先去上面那個網址確認模型還在，
+  #    不在的話要嘛換成 DeepInfra 當時還在架的其他 Ornith 尺寸，
+  #    要嘛認命讓它 fallback 到 chat-lite（也不是不能接受，只是不再是 Ornith）。
   - model_name: code-lite
     litellm_params:
       model: openai/deepreinforce-ai/Ornith-1.0-35B

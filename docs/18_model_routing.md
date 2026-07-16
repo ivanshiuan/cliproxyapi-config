@@ -126,3 +126,12 @@ A: 不建議。它同尺寸開源模型的 benchmark 亮眼，但只贏上一代
 A: 三個後端（DeepSeek、DeepInfra、MiniMax）都是儲值制——儲多少花多少，天然封頂。
 Anthropic 可在 console 設每月上限。要更細的話 LiteLLM 支援
 [per-key budget](https://docs.litellm.ai/docs/proxy/users)，之後有需要再加。
+
+**Q: `code-lite` 會不會突然失效？**
+A: 有風險。DeepInfra 官方頁面（2026-07-16 查證）寫「因用量低，
+[Ornith-1.0-35B](https://deepinfra.com/deepreinforce-ai/Ornith-1.0-35B) 將於
+2026-07-19 下架」——這類小眾開源模型的代管服務常會這樣悄悄下架。真的下架時
+`code-lite` 會自動 fallback 到 `chat-lite`（DeepSeek），**系統不會壞，只是會
+失去 Ornith 的 coding 特化優勢**。設定的時候先點進上面那個連結確認模型還在架，
+不在的話去 [DeepInfra 模型列表](https://deepinfra.com/models/text-generation)
+挑一個當時還活著的 Ornith 尺寸換上去。
