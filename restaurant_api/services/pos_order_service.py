@@ -1111,19 +1111,24 @@ async def create_online_takeout(
     and settles it via ``collect_online_takeout`` when the customer arrives.
     """
     now = datetime.now(UTC)
+    is_kiosk = payload.source == "kiosk"
+    contact = (
+        f"{payload.contact_name} / {payload.contact_phone}"
+        if payload.contact_name and payload.contact_phone
+        else "現場 Kiosk 自助"
+    )
     order = Order(
         tenant_id=tenant_id,
         store_id=payload.store_id,
-        order_no=f"OT-{uuid7().hex[:12]}",
+        # KS- prefix so staff can tell a walk-up kiosk order from a remote
+        # online order at a glance on the 外帶待取 panel / pickup board.
+        order_no=f"{'KS' if is_kiosk else 'OT'}-{uuid7().hex[:12]}",
         business_date=datetime.now(_TPE).date(),
         status=OrderStatus.OPEN,
         order_type=OrderType.TAKEOUT,
-        channel=OrderChannel.ONLINE,
+        channel=OrderChannel.TABLET if is_kiosk else OrderChannel.ONLINE,
         pickup_at=payload.pickup_at,
-        notes=(
-            f"{payload.contact_name} / {payload.contact_phone}"
-            + (f" — {payload.notes}" if payload.notes else "")
-        ),
+        notes=contact + (f" — {payload.notes}" if payload.notes else ""),
     )
     session.add(order)
     await session.flush()
@@ -1193,13 +1198,18 @@ async def create_online_takeout(
     return OnlineTakeoutResult(order=orders_service.order_to_response(order), estimated_total=due)
 
 
+# The 外帶待取 flow serves both remote online orders and in-store kiosk
+# self-service orders (P9.1) — same panel, same 叫號, same cash collect.
+_PICKUP_CHANNELS = (OrderChannel.ONLINE, OrderChannel.TABLET)
+
+
 async def list_pending_online_takeout(
     session: AsyncSession,
     *,
     tenant_id: uuid.UUID,
     store_id: uuid.UUID,
 ) -> list[OrderResponse]:
-    """外帶待取面板: OPEN 線上外帶單, oldest first (FIFO pickup queue)."""
+    """外帶待取面板: OPEN 線上外帶/Kiosk 自助單, oldest first (FIFO pickup queue)."""
     stmt = (
         select(Order)
         .where(
@@ -1207,7 +1217,7 @@ async def list_pending_online_takeout(
             Order.store_id == store_id,
             Order.status == OrderStatus.OPEN,
             Order.order_type == OrderType.TAKEOUT,
-            Order.channel == OrderChannel.ONLINE,
+            Order.channel.in_(_PICKUP_CHANNELS),
             Order.deleted_at.is_(None),
         )
         .order_by(Order.opened_at)
@@ -1230,7 +1240,7 @@ async def call_for_pickup(
     pickup board until collected. Doesn't touch payment/status; staff still
     calls ``collect_online_takeout`` separately when the customer arrives."""
     order = await orders_service._load_order_with_relations(session, order_id, tenant_id)
-    if order.channel != OrderChannel.ONLINE or order.order_type != OrderType.TAKEOUT:
+    if order.channel not in _PICKUP_CHANNELS or order.order_type != OrderType.TAKEOUT:
         raise NotFoundError(
             message=f"order {order_id} is not a pending online-takeout order",
             details={"order_id": str(order_id)},
@@ -1302,7 +1312,7 @@ async def collect_online_takeout(
 ) -> CheckoutResult:
     """顧客到店取件付款 — settle a pending 線上外帶單 in cash and close it."""
     order = await orders_service._load_order_with_relations(session, order_id, tenant_id)
-    if order.channel != OrderChannel.ONLINE or order.order_type != OrderType.TAKEOUT:
+    if order.channel not in _PICKUP_CHANNELS or order.order_type != OrderType.TAKEOUT:
         raise NotFoundError(
             message=f"order {order_id} is not a pending online-takeout order",
             details={"order_id": str(order_id)},

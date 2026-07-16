@@ -175,6 +175,12 @@ _HQ_DIR = Path(__file__).parent / "hq_static"
 if _HQ_DIR.is_dir():
     app.mount("/hq", StaticFiles(directory=str(_HQ_DIR), html=True), name="hq")
 
+# Kiosk 自助點餐機 (P9.1, docs/23 G1) — /kiosk/?store=<uuid> on an in-store
+# tablet/kiosk. Orders land as channel TABLET on the same 外帶待取 flow.
+_KIOSK_DIR = Path(__file__).parent / "kiosk_static"
+if _KIOSK_DIR.is_dir():
+    app.mount("/kiosk", StaticFiles(directory=str(_KIOSK_DIR), html=True), name="kiosk")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:

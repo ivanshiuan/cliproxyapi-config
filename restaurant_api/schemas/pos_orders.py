@@ -144,16 +144,28 @@ class OnlineTakeoutRequest(BaseModel):
     Stays ``OPEN`` (no payment) until staff collects cash at pickup via
     ``collect_online_takeout`` — there's no payment gateway yet (🔴 in
     docs/22), so this is order-ahead, pay-at-counter.
+
+    ``source`` (P9.1, docs/23 G1): ``kiosk`` marks an in-store self-service
+    terminal order — the customer is standing right there, so contact info is
+    optional and the order lands as channel TABLET for channel reporting.
     """
 
     model_config = ConfigDict(frozen=True)
 
     store_id: UUID
-    contact_name: str = Field(min_length=1, max_length=80)
-    contact_phone: str = Field(min_length=1, max_length=32)
+    source: Literal["online", "kiosk"] = "online"
+    contact_name: str | None = Field(default=None, max_length=80)
+    contact_phone: str | None = Field(default=None, max_length=32)
     items: list[TakeoutItem] = Field(min_length=1, max_length=50)
     pickup_at: datetime | None = None  # None = 盡快 (ASAP)
     notes: str | None = Field(default=None, max_length=200)
+
+    @model_validator(mode="after")
+    def _contact_required_when_remote(self) -> OnlineTakeoutRequest:
+        # A remote customer must be reachable; a kiosk customer is on-site.
+        if self.source == "online" and not (self.contact_name and self.contact_phone):
+            raise ValueError("線上外帶必須留姓名與電話 (現場 kiosk 自助單才可免填)")
+        return self
 
 
 class OnlineTakeoutResult(BaseModel):
