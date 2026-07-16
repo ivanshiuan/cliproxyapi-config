@@ -181,6 +181,12 @@ _KIOSK_DIR = Path(__file__).parent / "kiosk_static"
 if _KIOSK_DIR.is_dir():
     app.mount("/kiosk", StaticFiles(directory=str(_KIOSK_DIR), html=True), name="kiosk")
 
+# 遠端線上候位 (P9.2, docs/23 G6) — /waitlist/?store=<uuid>: 顧客掃店門口 QR
+# 自助取號、手機看排隊進度; 進度輪詢公開安全的 GET /queue/board。
+_WAITLIST_DIR = Path(__file__).parent / "waitlist_static"
+if _WAITLIST_DIR.is_dir():
+    app.mount("/waitlist", StaticFiles(directory=str(_WAITLIST_DIR), html=True), name="waitlist")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:

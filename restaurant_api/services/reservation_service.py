@@ -20,7 +20,7 @@ import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError
@@ -42,6 +42,8 @@ from ..schemas.orders import OrderLineCreate, OrderResponse
 from ..schemas.reservations import (
     QUEUE_TRANSITIONS,
     RESERVATION_TRANSITIONS,
+    QueueBoardEntry,
+    QueueBoardResponse,
     QueueEntryResponse,
     QueueJoinRequest,
     QueuePreorderLineRequest,
@@ -238,12 +240,38 @@ async def patch_reservation_status(
 # ──────────────────────────────────────────────────────────────────────────
 
 
+async def _next_queue_no(
+    session: AsyncSession, *, tenant_id: uuid.UUID, store_id: uuid.UUID
+) -> str:
+    """今日流水取號 (Taipei day) — W001, W002, … per store.
+
+    Count-based, so it stays monotonic for customers even when earlier
+    parties are seated/abandoned. Collisions under heavy concurrent
+    self-check-in are tolerable (the number is a display label, ``id`` is
+    the identity), matching how 取餐叫號 treats order_no.
+    """
+    day_start_tpe = datetime.now(_TPE).replace(hour=0, minute=0, second=0, microsecond=0)
+    count = (
+        await session.execute(
+            select(func.count(WalkInQueueEntry.id)).where(
+                WalkInQueueEntry.tenant_id == tenant_id,
+                WalkInQueueEntry.store_id == store_id,
+                WalkInQueueEntry.joined_at >= day_start_tpe.astimezone(UTC),
+            )
+        )
+    ).scalar_one()
+    return f"W{count + 1:03d}"
+
+
 async def join_queue(
     session: AsyncSession,
     payload: QueueJoinRequest,
     *,
     tenant_id: uuid.UUID,
 ) -> QueueEntryResponse:
+    queue_no = payload.queue_no or await _next_queue_no(
+        session, tenant_id=tenant_id, store_id=payload.store_id
+    )
     row = WalkInQueueEntry(
         tenant_id=tenant_id,
         store_id=payload.store_id,
@@ -251,7 +279,7 @@ async def join_queue(
         contact_name=payload.contact_name,
         contact_phone=payload.contact_phone,
         party_size=payload.party_size,
-        queue_no=payload.queue_no,
+        queue_no=queue_no,
         notes=payload.notes,
     )
     session.add(row)
@@ -265,7 +293,7 @@ async def join_queue(
         target=("walk_in_queue", row.id),
         after={
             "party_size": payload.party_size,
-            "queue_no": payload.queue_no,
+            "queue_no": queue_no,
         },
     )
     return QueueEntryResponse.model_validate(row)
@@ -287,6 +315,39 @@ async def list_queue(
     stmt = stmt.order_by(WalkInQueueEntry.joined_at).limit(limit)
     rows = (await session.execute(stmt)).scalars().all()
     return [QueueEntryResponse.model_validate(r) for r in rows]
+
+
+async def queue_board(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+) -> QueueBoardResponse:
+    """遠端候位進度 (P9.2, docs/23 G6) — the PUBLIC read: live waiting/called
+    numbers only, no names or phones (anyone holding the store link sees it).
+    The customer page derives its own position from ``queue_no`` client-side."""
+    stmt = (
+        select(WalkInQueueEntry)
+        .where(
+            WalkInQueueEntry.tenant_id == tenant_id,
+            WalkInQueueEntry.store_id == store_id,
+            WalkInQueueEntry.status.in_((QueueStatus.WAITING, QueueStatus.CALLED)),
+        )
+        .order_by(WalkInQueueEntry.joined_at)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return QueueBoardResponse(
+        waiting_count=sum(1 for r in rows if r.status == QueueStatus.WAITING),
+        entries=[
+            QueueBoardEntry(
+                queue_no=r.queue_no,
+                party_size=r.party_size,
+                status=r.status,
+                joined_at=r.joined_at,
+            )
+            for r in rows
+        ],
+    )
 
 
 async def patch_queue_status(

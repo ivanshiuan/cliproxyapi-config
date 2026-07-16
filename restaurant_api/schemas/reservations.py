@@ -163,6 +163,25 @@ class QueueJoinRequest(BaseModel):
     notes: str | None = None
 
 
+class QueueBoardEntry(BaseModel):
+    """One row of the PUBLIC queue board (P9.2, docs/23 G6) — deliberately
+    carries no name/phone: anyone with the store link can read this."""
+
+    model_config = ConfigDict(frozen=True)
+
+    queue_no: str | None
+    party_size: int
+    status: QueueStatus
+    joined_at: datetime
+
+
+class QueueBoardResponse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    waiting_count: int
+    entries: list[QueueBoardEntry]
+
+
 class QueueStatusPatch(BaseModel):
     """Transition a queue entry. Router enforces ``QUEUE_TRANSITIONS``."""
 
@@ -240,6 +259,8 @@ QueueStatusLiteral = Literal["waiting", "called", "seated", "abandoned"]
 __all__ = [
     "QUEUE_TRANSITIONS",
     "RESERVATION_TRANSITIONS",
+    "QueueBoardEntry",
+    "QueueBoardResponse",
     "QueueEntryResponse",
     "QueueJoinRequest",
     "QueuePreorderLineRequest",

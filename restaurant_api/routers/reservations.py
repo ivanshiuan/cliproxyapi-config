@@ -22,6 +22,7 @@ from ..api.deps import DbSession, Messenger, TenantId
 from ..models import QueueStatus, ReservationStatus
 from ..schemas.orders import OrderResponse
 from ..schemas.reservations import (
+    QueueBoardResponse,
     QueueEntryResponse,
     QueueJoinRequest,
     QueuePreorderLineRequest,
@@ -36,6 +37,7 @@ from ..services import reservation_service
 
 # Module-level Query() singletons (ruff B008 avoidance, FastAPI metadata kept).
 _Q_STORE_ID = Query(default=None)
+_Q_STORE_ID_REQ = Query()
 _Q_RES_STATUS = Query(default=None)
 _Q_QUEUE_STATUS = Query(default=None)
 _Q_FROM_DT = Query(default=None)
@@ -164,6 +166,21 @@ async def list_queue(
         store_id=store_id,
         status=queue_status,
         limit=limit,
+    )
+
+
+@queue_router.get(
+    "/board",
+    response_model=QueueBoardResponse,
+    summary="公開候位看板 — 只有號碼/人數/狀態, 不含姓名電話 (顧客進度頁用)",
+)
+async def queue_board(
+    session: DbSession,
+    tenant_id: TenantId,
+    store_id: uuid.UUID = _Q_STORE_ID_REQ,
+) -> QueueBoardResponse:
+    return await reservation_service.queue_board(
+        session, tenant_id=tenant_id, store_id=store_id
     )
 
 
