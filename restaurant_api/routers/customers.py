@@ -22,7 +22,7 @@ import uuid
 
 from fastapi import APIRouter, Query, status
 
-from ..api.deps import DbSession, TenantId
+from ..api.deps import DbSession, Messenger, TenantId
 from ..models import CustomerTier
 from ..schemas.customers import (
     CustomerCreate,
@@ -183,9 +183,10 @@ async def stored_value_top_up(
     payload: StoredValueTopUpRequest,
     session: DbSession,
     tenant_id: TenantId,
+    messenger: Messenger,
 ) -> StoredValueBalanceResponse:
     return await stored_value_service.top_up(
-        session, customer_id, payload, tenant_id=tenant_id
+        session, customer_id, payload, tenant_id=tenant_id, messenger=messenger
     )
 
 

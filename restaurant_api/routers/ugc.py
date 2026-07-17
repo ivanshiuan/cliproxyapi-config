@@ -10,7 +10,7 @@ import uuid
 
 from fastapi import APIRouter, Query, status
 
-from ..api.deps import DbSession, TenantId
+from ..api.deps import DbSession, Messenger, TenantId
 from ..models import UgcStatus
 from ..schemas.ugc import UgcReviewRequest, UgcSubmissionResponse, UgcSubmitRequest
 from ..services import ugc_service
@@ -61,9 +61,10 @@ async def approve_ugc(
     payload: UgcReviewRequest,
     session: DbSession,
     tenant_id: TenantId,
+    messenger: Messenger,
 ) -> UgcSubmissionResponse:
     return await ugc_service.approve(
-        session, submission_id, payload, tenant_id=tenant_id
+        session, submission_id, payload, tenant_id=tenant_id, messenger=messenger
     )
 
 
