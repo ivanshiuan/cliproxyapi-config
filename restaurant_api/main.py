@@ -187,6 +187,14 @@ _WAITLIST_DIR = Path(__file__).parent / "waitlist_static"
 if _WAITLIST_DIR.is_dir():
     app.mount("/waitlist", StaticFiles(directory=str(_WAITLIST_DIR), html=True), name="waitlist")
 
+# P10 重製版 POS UI (docs/25/26) — /pos-v2/ 依 iCHEF+Square/Toast 設計規範重做的
+# 頂級介面: 四色桌況、雙欄點餐、數字鍵盤結帳(動態快捷現金+自動找零)、廚房出單、
+# 比較式報表。目前為「設計驗證版」(前端狀態自帶示範資料); 下一步接真 REST API
+# 取代舊 /pos。Ivan 認可設計方向後才接線, 避免白工。
+_POS_V2_DIR = Path(__file__).parent / "pos_ui_v2"
+if _POS_V2_DIR.is_dir():
+    app.mount("/pos-v2", StaticFiles(directory=str(_POS_V2_DIR), html=True), name="pos-v2")
+
 
 @app.get("/version", tags=["meta"])
 async def version() -> dict[str, str]:
