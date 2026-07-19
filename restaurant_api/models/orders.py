@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     func,
+    text,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -286,6 +287,17 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
 
     __table_args__ = (
         Index("ix_orders_store_business_date", "store_id", "business_date"),
+        # DB-level race guard: a table session has at most ONE open order.
+        # Concurrent first-touch get-or-create (POS order+quote in parallel,
+        # clerk tablet racing table-QR phone) both insert → loser hits this
+        # and adopts the winner's row in _get_or_create_session_order.
+        # NB native_enum=False stores the enum NAME → predicate must say 'OPEN'.
+        Index(
+            "uq_orders_one_open_per_session",
+            "table_session_id",
+            unique=True,
+            postgresql_where=text("status = 'OPEN' AND deleted_at IS NULL"),
+        ),
     )
 
 

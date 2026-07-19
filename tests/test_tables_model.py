@@ -103,3 +103,42 @@ async def test_soft_deleted_table_name_is_reusable(
         DiningTable(tenant_id=seed_tenant.id, store_id=seed_store.id, name="B2", seats=2)
     )
     await db_session.flush()  # soft-deleted row no longer blocks the name
+
+
+@pytest.mark.asyncio
+async def test_one_open_order_per_session_db_guard(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """uq_orders_one_open_per_session: 同一 session 第二張 OPEN 單被 DB 擋下.
+
+    這是 get-or-create race 的最後防線 (POS 平行抓 order+quote、店員平板
+    對撞客人掃碼) — service 端撞到後會撿回贏家那張, 但不變量本身由 DB 保證.
+    NB 此測試放檔尾: IntegrityError 會污染 savepoint, 不能接其他斷言.
+    """
+    from datetime import date
+
+    from restaurant_api.models import Order, OrderStatus, OrderType
+
+    table = await _table(db_session, seed_tenant, seed_store, name="Z9")
+    ts = TableSession(
+        tenant_id=seed_tenant.id, store_id=seed_store.id, table_id=table.id, party_size=2
+    )
+    db_session.add(ts)
+    await db_session.flush()
+
+    def _order(no: str) -> Order:
+        return Order(
+            tenant_id=seed_tenant.id,
+            store_id=seed_store.id,
+            order_no=no,
+            business_date=date(2026, 7, 18),
+            status=OrderStatus.OPEN,
+            order_type=OrderType.DINE_IN,
+            table_session_id=ts.id,
+        )
+
+    db_session.add(_order("RACE-1"))
+    await db_session.flush()
+    db_session.add(_order("RACE-2"))
+    with pytest.raises(IntegrityError):
+        await db_session.flush()

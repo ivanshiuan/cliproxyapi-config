@@ -27,6 +27,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
@@ -121,16 +122,26 @@ async def _get_or_create_session_order(
     ``channel`` marks who *opened* the order (POS clerk vs table-QR customer);
     a session only ever has one open order, so later adds from the other side
     join the same bill.
+
+    Concurrency: two first-touch requests (POS fetching order+quote in
+    parallel, or a clerk racing a table-QR phone) can both see "no order yet"
+    in their own transactions. The ``uq_orders_one_open_per_session`` partial
+    unique index makes the loser's INSERT fail; we catch that inside a
+    SAVEPOINT and adopt the winner's row instead of surfacing a 500.
     """
-    existing = (
-        await session.execute(
-            select(Order).where(
-                Order.table_session_id == ts.id,
-                Order.status == OrderStatus.OPEN,
-                Order.deleted_at.is_(None),
+
+    async def _existing() -> Order | None:
+        return (
+            await session.execute(
+                select(Order).where(
+                    Order.table_session_id == ts.id,
+                    Order.status == OrderStatus.OPEN,
+                    Order.deleted_at.is_(None),
+                )
             )
-        )
-    ).scalar_one_or_none()
+        ).scalar_one_or_none()
+
+    existing = await _existing()
     if existing is not None:
         return existing
 
@@ -145,8 +156,18 @@ async def _get_or_create_session_order(
         channel=channel,
         table_session_id=ts.id,
     )
-    session.add(order)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(order)
+            await session.flush()
+    except IntegrityError:
+        # Lost the race — the SAVEPOINT rolled back only our INSERT (and
+        # expunged ``order``); the winner's committed row is now visible
+        # (our INSERT blocked on the index until the winner committed).
+        winner = await _existing()
+        if winner is None:  # pragma: no cover — only if winner also rolled back
+            raise
+        return winner
     return order
 
 

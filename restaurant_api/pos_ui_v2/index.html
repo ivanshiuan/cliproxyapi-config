@@ -222,7 +222,7 @@ button:focus-visible,.tcard:focus-visible,.mtile:focus-visible{outline:2px solid
 
 <div class="app">
   <div class="topbar">
-    <div class="brand"><span class="dot">🍜</span><span>台北信義店<br><small>iCHEF 級雲端 POS</small></span></div>
+    <div class="brand"><span class="dot">🍜</span><span>雲端 POS<br><small>接真後端 · restaurant_api</small></span></div>
     <div class="tabs" id="tabs"></div>
     <div class="spacer"></div>
     <div class="clock num" id="clock">--:--</div>
@@ -276,129 +276,166 @@ button:focus-visible,.tcard:focus-visible,.mtile:focus-visible{outline:2px solid
 <!-- checkout overlay -->
 <div class="overlay" id="ov"><div class="sheet" id="ovSheet"></div></div>
 <div class="toast" id="toast"></div>
-<div class="demo-tag">互動展示版 · 資料存於本頁</div>
+<div class="demo-tag">/pos-v2 · 接真 REST API</div>
 
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const NT=n=>"$"+Math.round(n).toLocaleString("en-US");
-function toast(m){const t=$("toast");t.textContent=m;t.className="toast on";clearTimeout(t._);t._=setTimeout(()=>t.className="toast",2000)}
+const API="";
+const storeId=new URLSearchParams(location.search).get("store");
+const NT=n=>"$"+Math.round(Number(n)).toLocaleString("en-US");
+function toast(m){const t=$("toast");t.textContent=m;t.className="toast on";clearTimeout(t._);t._=setTimeout(()=>t.className="toast",2200)}
+async function api(path,opts){const r=await fetch(API+path,{headers:{"Content-Type":"application/json"},...opts});
+  if(!r.ok){let d=r.statusText;try{const j=await r.json();d=j.error?.message||d}catch(e){}throw new Error(d)}
+  return r.status===204?null:r.json()}
 
-const MENU={
-  "麵飯":[["紅燒牛肉麵",180,"🍜",["加麵 +$30","加蛋 +$15","不要辣"]],["滷肉飯",60,"🍚",[]],["雞腿便當",120,"🍱",[]],["炒飯",90,"🍳",[]]],
-  "小菜":[["燙青菜",50,"🥬",[]],["滷味拼盤",120,"🍢",[]],["涼拌小黃瓜",45,"🥒",[]],["鹽酥雞",90,"🍗",["大辣","中辣","不辣"]]],
-  "湯品":[["貢丸湯",40,"🥣",[]],["酸辣湯",50,"🍲",[]],["味噌湯",35,"🍵",[]]],
-  "飲料":[["珍珠奶茶",65,"🧋",["正常糖","半糖","微糖","無糖"]],["紅茶",30,"🥤",[]],["古早味檸檬",55,"🍋",[]],["豆漿",35,"🥛",[]]]
-};
-const CATS=Object.keys(MENU);
-const SOLDOUT=new Set(["味噌湯"]);
+/* emoji by keyword (menu items have no emoji field) */
+const EMO=[["麵","🍜"],["飯","🍚"],["便當","🍱"],["雞","🍗"],["湯","🥣"],["茶","🧋"],["奶","🥛"],
+  ["咖啡","☕"],["菜","🥬"],["肉","🍖"],["魚","🐟"],["蝦","🦐"],["餃","🥟"],["粥","🍲"],
+  ["檸","🍋"],["果","🍹"],["酒","🍺"],["蛋","🍳"],["炒","🍳"],["滷","🍢"],["丸","🍡"]];
+function emo(n){for(const[k,e]of EMO)if(n.includes(k))return e;return"🍽️"}
 
-// tables state
-function mk(name,zone,st,party,items){return{name,zone,st,party,items:items||[],no:st==="empty"?null:"#"+(1000+Math.floor(Math.random()*8999)),t:st==="empty"?0:Math.floor(Math.random()*46)+4}}
-const S={tables:[
-  mk("A1","dine","kitchen",4,[["紅燒牛肉麵",180,2,"加蛋 +$15"],["鹽酥雞",90,1,"中辣"],["珍珠奶茶",65,2,"半糖"]]),
-  mk("A2","dine","served",2,[["滷肉飯",60,2,""],["貢丸湯",40,2,""]]),
-  mk("A3","dine","empty",0,[]),
-  mk("A4","dine","new",3,[["雞腿便當",120,3,""],["古早味檸檬",55,2,""]]),
-  mk("A5","dine","paid",5,[["紅燒牛肉麵",180,3,""],["炒飯",90,2,""],["酸辣湯",50,2,""]]),
-  mk("A6","dine","empty",0,[]),
-  mk("B1","dine","empty",0,[]),
-  mk("B2","dine","kitchen",2,[["炒飯",90,1,""],["滷味拼盤",120,1,""]]),
-  mk("外帶1","to","new",1,[["鹽酥雞",90,2,"大辣"]]),
-  mk("外帶2","to","served",1,[["珍珠奶茶",65,3,"微糖"]]),
-  mk("候位·林","to","empty",0,[])
-], cur:null, sales:[{s:"A7 內用",n:640},{s:"外帶-KS03",n:180},{s:"A9 內用",n:1120},{s:"A3 內用",n:295}] };
+const S={store:null,floor:[],menu:[],cats:{},orders:{},cur:null};
 
-/* ── tabs ── */
+/* tabs */
 const TABS=[["floor","🪑 桌況"],["order","📝 點餐"],["kds","👨‍🍳 廚房"],["rep","📊 報表"]];
 $("tabs").innerHTML=TABS.map(t=>`<button class="tab" data-t="${t[0]}" onclick="go('${t[0]}')">${t[1]}</button>`).join("");
 function go(k){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.t===k));
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));$("s-"+k).classList.add("on");
-  if(k==="floor")renderFloor(); if(k==="kds")renderKDS(); if(k==="rep")renderRep();}
+  if(k==="floor")loadFloor(); if(k==="kds")loadKDS(); if(k==="rep")loadRep();}
+
+/* ── status derivation ── */
+const ST_LABEL={empty:"",new:"待送單",kitchen:"製作中",served:"待結帳",paid:"已結帳"};
+function deriveStatus(order){
+  if(!order)return"new";
+  if(order.status==="closed")return"paid";
+  if(!order.lines||!order.lines.length)return"new";
+  const ks=order.lines.map(l=>(l.kitchen_status||"").toLowerCase());
+  if(ks.some(s=>["queued","cooking","preparing","new",""].includes(s)))return"kitchen";
+  return"served";
+}
+function orderGross(o){return o&&o.lines?o.lines.filter(l=>!l.combo_parent_id).reduce((a,l)=>a+Number(l.line_total),0):0}
+
+/* ── boot ── */
+async function boot(){
+  if(!storeId){$("dineGrid").innerHTML='<div style="grid-column:1/-1;color:var(--ink3);padding:40px 0">請在網址加上 ?store=&lt;門市UUID&gt;</div>';return}
+  try{
+    const [items,cats]=await Promise.all([
+      api(`/menu/items?store_id=${storeId}&available_only=true`),
+      api(`/menu/categories?store_id=${storeId}`).catch(()=>[])]);
+    S.menu=items;S.cats={};cats.forEach(c=>S.cats[c.id]=c.name);
+  }catch(e){toast("載入菜單失敗: "+e.message)}
+  go("floor");
+}
 
 /* ── floor ── */
-const ST_LABEL={empty:"",new:"待送單",kitchen:"製作中",served:"待結帳",paid:"已結帳"};
-function billTotal(t){const g=t.items.reduce((a,l)=>a+l[1]*l[2],0);const d=g>=500?50:0;return{gross:g,disc:d,net:g-d}}
+async function loadFloor(){
+  let floor=[];try{floor=await api(`/tables/floor?store_id=${storeId}`)}catch(e){$("dineGrid").innerHTML=`<div style="grid-column:1/-1;color:var(--ink3);padding:30px 0">載入桌況失敗: ${e.message}</div>`;return}
+  S.floor=floor;
+  // fetch orders for occupied tables (parallel)
+  const occ=floor.filter(t=>t.is_occupied&&t.session);
+  await Promise.all(occ.map(async t=>{try{S.orders[t.session.id]=await api(`/tables/sessions/${t.session.id}/order`)}catch(e){}}));
+  renderFloor();
+}
+function elapsed(iso){if(!iso)return 0;return Math.max(0,Math.floor((Date.now()-new Date(iso).getTime())/60000))}
 function renderFloor(){
-  const dine=S.tables.filter(t=>t.zone==="dine"),to=S.tables.filter(t=>t.zone!=="dine");
-  $("dineCnt").textContent=dine.filter(t=>t.st!=="empty").length+" / "+dine.length+" 使用中";
-  $("toCnt").textContent=to.filter(t=>t.st!=="empty").length+" 進行中";
-  const card=t=>{const b=billTotal(t);const cls=t.st==="empty"?"empty":t.st;
-    return `<div class="tcard ${cls}" tabindex="0" onclick="openTable('${t.name}')">
+  const dine=S.floor.filter(t=>(t.zone||"")!=="外帶"&&(t.zone||"")!=="候位");
+  const to=S.floor.filter(t=>(t.zone||"")==="外帶"||(t.zone||"")==="候位");
+  $("dineCnt").textContent=dine.filter(t=>t.is_occupied).length+" / "+dine.length+" 使用中";
+  $("toCnt").textContent=to.filter(t=>t.is_occupied).length+" 進行中";
+  const card=t=>{
+    const o=t.session?S.orders[t.session.id]:null;
+    const st=t.is_occupied?deriveStatus(o):"empty";
+    const cls=st==="empty"?"empty":st;
+    const amt=orderGross(o);
+    return `<div class="tcard ${cls}" tabindex="0" onclick="openTable('${t.id}')">
       <div class="strip"></div>
-      ${t.st!=="empty"?`<div class="pill">${ST_LABEL[t.st]}</div>`:""}
+      ${st!=="empty"?`<div class="pill">${ST_LABEL[st]}</div>`:""}
       <div class="nm">${t.name}</div>
-      ${t.st==="empty"?`<div class="meta"></div><div class="amt">點我開桌 ›</div>`:
-        `<div class="meta"><span><b>${t.party}</b> 位</span><span>⏱ <b>${t.t}</b> 分</span></div>
-         <div class="amt num">${NT(b.net)}</div>`}
+      ${st==="empty"?`<div class="meta"></div><div class="amt">點我開桌 ›</div>`:
+        `<div class="meta"><span><b>${t.session?t.session.party_size:t.seats}</b> 位</span><span>⏱ <b>${t.session?elapsed(t.session.opened_at):0}</b> 分</span></div>
+         <div class="amt num">${NT(amt)}</div>`}
     </div>`};
-  $("dineGrid").innerHTML=dine.map(card).join("");
+  $("dineGrid").innerHTML=dine.length?dine.map(card).join(""):'<div style="grid-column:1/-1;color:var(--ink3);padding:20px 0">這間門市還沒建立桌位</div>';
   $("toGrid").innerHTML=to.map(card).join("");
 }
 
 /* ── order ── */
-let curCat=CATS[0];
-function openTable(name){const t=S.tables.find(x=>x.name===name);S.cur=t;
-  if(t.st==="empty"){t.st="new";t.party=t.zone==="dine"?4:1;t.no="#"+(1000+Math.floor(Math.random()*8999));t.t=0;toast(t.name+" 已開桌")}
-  $("billTitle").textContent=t.name+(t.zone==="dine"?" 桌":"");$("billNo").textContent=t.no;$("billParty").textContent=t.party;
-  curCat=CATS[0];go("order");$("orderWrap").classList.remove("showmenu");renderBill();renderMenu();}
+let curCat="__all__";
+async function openTable(tableId){
+  const t=S.floor.find(x=>x.id===tableId);if(!t)return;
+  let sessId=t.session?t.session.id:null;
+  if(!t.is_occupied){
+    try{const s=await api(`/tables/${tableId}/open`,{method:"POST",body:JSON.stringify({party_size:t.seats||2})});sessId=s.id;toast(t.name+" 已開桌")}
+    catch(e){toast("開桌失敗: "+e.message);return}
+  }
+  S.cur={tableId,sessId,name:t.name};
+  $("billTitle").textContent=t.name;curCat="__all__";
+  go("order");$("orderWrap").classList.remove("showmenu");
+  await refreshBill();renderMenu();
+}
 function backToFloor(){go("floor")}
+async function refreshBill(){
+  let order,quote;
+  // 序列不平行: order 與 quote 都是 get-or-create, 平行打首次觸碰會
+  // 各建一張 OPEN 單 (DB 唯一索引已擋, 但前端也不該自己製造 race)
+  try{order=await api(`/tables/sessions/${S.cur.sessId}/order`);
+    quote=await api(`/tables/sessions/${S.cur.sessId}/quote`);}
+  catch(e){$("billLines").innerHTML=`<div class="empty-bill">載入失敗: ${e.message}</div>`;return}
+  S.cur.order=order;S.cur.quote=quote;S.orders[S.cur.sessId]=order;
+  $("billNo").textContent=order.order_no||"—";
+  const lines=order.lines.filter(l=>!l.combo_parent_id);
+  $("billLines").innerHTML=lines.length?lines.map(l=>{
+    const it=S.menu.find(m=>m.id===l.menu_item_id);const nm=it?it.name:(l.menu_item_id||"").slice(0,6);
+    const mods=(l.modifiers||[]).map(m=>m.option_name||m.name).filter(Boolean).join("、");
+    const note=[mods,l.notes].filter(Boolean).join(" · ");
+    return `<div class="line"><div class="q num">${Number(l.qty)}</div><div class="body"><div class="nm">${nm}</div>${note?`<div class="mod">${note}</div>`:""}</div>
+      <div class="price num">${NT(l.line_total)}</div><button class="rm" onclick="voidLine('${l.id}')" title="退菜">✕</button></div>`}).join("")
+    :`<div class="empty-bill">尚未點餐<br>從右側菜單點選品項加入帳單</div>`;
+  const q=quote;let foot=`<div class="foot-row"><span>小計</span><span class="num">${NT(q.gross)}</span></div>`;
+  if(Number(q.discount_total)>0)foot+=`<div class="foot-row promo"><span>🏷️ ${q.auto_discount||"折扣"}</span><span class="num">−${NT(q.discount_total)}</span></div>`;
+  if(Number(q.service_charge)>0)foot+=`<div class="foot-row"><span>服務費</span><span class="num">${NT(q.service_charge)}</span></div>`;
+  foot+=`<div class="foot-total"><span class="lb">應收</span><span class="v num">${NT(q.net)}</span></div>
+    <div class="foot-act">
+      <button class="btn btn-ghost btn-lg" ${lines.length?"":"disabled"} onclick="refreshBill()">重新整理</button>
+      <button class="btn btn-primary btn-lg" ${lines.length?"":"disabled"} onclick="openCheckout()">結帳</button>
+    </div>
+    <div style="text-align:center;color:var(--ink3);font-size:11.5px;margin-top:9px">品項一經加入即送廚房出單（KDS 同步）</div>`;
+  $("billFoot").innerHTML=foot;$("orderWrap").classList.add("showmenu");
+}
+function menuCats(){const ids=[...new Set(S.menu.map(m=>m.category_id))];
+  return[["__all__","全部"],...ids.map(id=>[id||"__none__",S.cats[id]||"其他"])];}
 function renderMenu(){
-  $("cats").innerHTML=CATS.map(c=>`<button class="cat ${c===curCat?'on':''}" onclick="setCat('${c}')">${c}</button>`).join("");
-  const counts={};(S.cur.items||[]).forEach(l=>counts[l[0]]=(counts[l[0]]||0)+l[2]);
-  $("menuGrid").innerHTML=MENU[curCat].map((m,i)=>{const so=SOLDOUT.has(m[0]);const q=counts[m[0]]||0;
-    return `<div class="mtile ${so?'soldout':''}" tabindex="0" onclick="pick('${curCat}',${i})">
-      ${q&&!so?`<div class="badge num">${q}</div>`:""}
-      <div class="emo">${m[2]}</div><div class="nm">${m[0]}</div><div class="pr num">${NT(m[1])}</div></div>`}).join("");
+  const cats=menuCats();
+  $("cats").innerHTML=cats.map(c=>`<button class="cat ${c[0]===curCat?'on':''}" onclick="setCat('${c[0]}')">${c[1]}</button>`).join("");
+  let items=S.menu;
+  if(curCat!=="__all__")items=S.menu.filter(m=>(m.category_id||"__none__")===curCat);
+  const counts={};(S.cur.order?S.cur.order.lines:[]).forEach(l=>counts[l.menu_item_id]=(counts[l.menu_item_id]||0)+Number(l.qty));
+  $("menuGrid").innerHTML=items.length?items.map(m=>{const q=counts[m.id]||0;
+    return `<div class="mtile" tabindex="0" onclick="addItem('${m.id}')">
+      ${q?`<div class="badge num">${q}</div>`:""}
+      <div class="emo">${emo(m.name)}</div><div class="nm">${m.name}</div><div class="pr num">${NT(m.price)}</div></div>`}).join("")
+    :'<div style="grid-column:1/-1;color:var(--ink3);padding:30px 0">此分類暫無品項</div>';
 }
 function setCat(c){curCat=c;renderMenu()}
-function pick(cat,i){const m=MENU[cat][i];
-  if(m[3]&&m[3].length){openMods(m);return}
-  addItem(m[0],m[1],"");}
-function addItem(nm,pr,mod){const it=S.cur.items.find(l=>l[0]===nm&&l[3]===mod);
-  if(it)it[2]+=1;else S.cur.items.push([nm,pr,1,mod]);
-  if(S.cur.st==="paid"||S.cur.st==="served")S.cur.st="new";renderBill();renderMenu();}
-function rmItem(idx){S.cur.items.splice(idx,1);renderBill();renderMenu()}
-function renderBill(){
-  const t=S.cur,b=billTotal(t);
-  $("billLines").innerHTML=t.items.length?t.items.map((l,i)=>
-    `<div class="line"><div class="q num">${l[2]}</div><div class="body"><div class="nm">${l[0]}</div>${l[3]?`<div class="mod">${l[3]}</div>`:""}</div>
-     <div class="price num">${NT(l[1]*l[2])}</div><button class="rm" onclick="rmItem(${i})" title="移除">✕</button></div>`).join("")
-    :`<div class="empty-bill">尚未點餐<br>從右側菜單點選品項加入帳單</div>`;
-  let foot=`<div class="foot-row"><span>小計</span><span class="num">${NT(b.gross)}</span></div>`;
-  if(b.disc)foot+=`<div class="foot-row promo"><span>🏷️ 滿500折50</span><span class="num">−${NT(b.disc)}</span></div>`;
-  foot+=`<div class="foot-total"><span class="lb">應收</span><span class="v num">${NT(b.net)}</span></div>
-    <div class="foot-act">
-      <button class="btn btn-ghost btn-lg" ${t.items.length?"":"disabled"} onclick="sendKitchen()">送廚房</button>
-      <button class="btn btn-primary btn-lg" ${t.items.length?"":"disabled"} onclick="openCheckout()">結帳</button>
-    </div>
-    <div style="text-align:center;color:var(--ink3);font-size:11.5px;margin-top:9px">結帳鈕：長按可「快速結帳」預設收現</div>`;
-  $("billFoot").innerHTML=foot;
-  // mobile: reveal menu after opening
-  $("orderWrap").classList.add("showmenu");
+async function addItem(itemId){
+  try{await api(`/tables/sessions/${S.cur.sessId}/lines`,{method:"POST",body:JSON.stringify({menu_item_id:itemId,qty:"1"})});
+    await refreshBill();renderMenu();}
+  catch(e){toast(e.message)}
 }
-function sendKitchen(){S.cur.st="kitchen";toast(S.cur.name+"：已送單至廚房 · 分站出單");}
-
-/* ── modifiers ── */
-let modBuf=null;
-function openMods(m){modBuf={m,sel:m[3][0]};
-  $("ovSheet").innerHTML=`<div class="sheet-h"><h3>${m[0]} · 選擇</h3><button class="x" onclick="closeOv()">✕</button></div>
-    <div class="co-body"><div class="mod-opts" id="modOpts"></div></div>
-    <div class="co-foot"><button class="btn btn-ghost btn-lg" onclick="closeOv()">取消</button>
-      <button class="btn btn-primary btn-lg" onclick="confirmMod()">加入帳單</button></div>`;
-  renderMods();$("ov").classList.add("on");
+async function voidLine(lineId){
+  if(!confirm("確定退菜？"))return;
+  try{await api(`/order-lines/${lineId}/void`,{method:"POST",body:JSON.stringify({})});await refreshBill();renderMenu();toast("已退菜")}
+  catch(e){toast("退菜失敗: "+e.message)}
 }
-function renderMods(){$("modOpts").innerHTML=modBuf.m[3].map(o=>
-  `<div class="mod-opt ${o===modBuf.sel?'sel':''}" onclick="modBuf.sel='${o}';renderMods()"><span>${o}</span><span class="ck"></span></div>`).join("")}
-function confirmMod(){addItem(modBuf.m[0],modBuf.m[1],modBuf.sel);closeOv()}
 
 /* ── checkout ── */
-let coTender="", coPay="現金";
-function openCheckout(){const b=billTotal(S.cur);coTender="";coPay="現金";
-  const quicks=cashQuicks(b.net);
+let coTender="",coPay="現金";
+function openCheckout(){const net=Number(S.cur.quote.remaining||S.cur.quote.net);coTender="";coPay="現金";
+  const quicks=cashQuicks(net);
   $("ovSheet").innerHTML=`<div class="sheet-h"><h3>結帳 · ${S.cur.name}</h3><button class="x" onclick="closeOv()">✕</button></div>
   <div class="co-body">
-    <div class="co-due"><span class="lb">應收金額</span><span class="v num">${NT(b.net)}</span></div>
+    <div class="co-due"><span class="lb">應收金額</span><span class="v num">${NT(net)}</span></div>
     <div class="co-disp"><div class="lb">實收現金</div><div class="tender num" id="coT">$0</div><div class="change num" id="coC"></div></div>
     <div class="quick">${quicks.map(q=>`<button class="${q.exact?'exact':''}" onclick="setTender(${q.v})">${q.label}</button>`).join("")}</div>
     <div class="pad">
@@ -408,71 +445,81 @@ function openCheckout(){const b=billTotal(S.cur);coTender="";coPay="現金";
     <div class="co-pay">${["現金","信用卡","LINE Pay","街口"].map(p=>`<button class="pay-m ${p==='現金'?'on':''}" data-p="${p}" onclick="setPay('${p}')">${p}</button>`).join("")}</div>
   </div>
   <div class="co-foot"><button class="btn btn-ghost btn-lg" onclick="closeOv()">取消</button>
-    <button class="btn btn-primary btn-lg" id="coGo" onclick="doPay()">滑動確認結帳 ›</button></div>`;
+    <button class="btn btn-primary btn-lg" id="coGo" onclick="doPay()">確認收款 ›</button></div>`;
   $("ov").classList.add("on");updateCo();
 }
-function cashQuicks(net){const out=[];out.push({v:net,label:NT(net),exact:true});
-  [100,500,1000].forEach(d=>{if(d>=net)out.push({v:d,label:NT(d)})});
-  const nextH=Math.ceil(net/100)*100;if(!out.find(o=>o.v===nextH)&&nextH!==net)out.splice(1,0,{v:nextH,label:NT(nextH)});
+function cashQuicks(net){const out=[{v:net,label:NT(net),exact:true}];
+  [100,500,1000].forEach(d=>{if(d>=net&&!out.find(o=>o.v===d))out.push({v:d,label:NT(d)})});
+  const nH=Math.ceil(net/100)*100;if(nH!==net&&!out.find(o=>o.v===nH))out.splice(1,0,{v:nH,label:NT(nH)});
   return out.slice(0,4);}
 function setTender(v){coTender=String(v);updateCo()}
 function padPush(d){if(coTender.length<7)coTender+=d;updateCo()}
 function padDel(){coTender=coTender.slice(0,-1);updateCo()}
-function setPay(p){coPay=p;document.querySelectorAll(".pay-m").forEach(b=>b.classList.toggle("on",b.dataset.p===p));
-  $("coGo").textContent=p==="現金"?"滑動確認結帳 ›":p+" · 確認收款 ›";updateCo()}
-function updateCo(){const b=billTotal(S.cur);const paid=Number(coTender||0);
-  $("coT").textContent=NT(paid);
-  const c=$("coC");if(coPay==="現金"&&paid>=b.net&&paid>0)c.textContent="找零 "+NT(paid-b.net);else c.textContent="";
-}
-function doPay(){const b=billTotal(S.cur);const paid=Number(coTender||0);
-  if(coPay==="現金"&&paid<b.net){toast("實收不足，應收 "+NT(b.net));return}
-  S.sales.unshift({s:S.cur.name+(S.cur.zone==="dine"?" 內用":" 外帶"),n:b.net});
-  const nm=S.cur.name;S.cur.st="empty";S.cur.items=[];S.cur.party=0;S.cur.no=null;S.cur.t=0;
-  closeOv();toast(nm+" 結帳完成"+(coPay==="現金"&&paid>b.net?" · 找零 "+NT(paid-b.net):" · "+coPay));go("floor");
+function setPay(p){coPay=p;document.querySelectorAll(".pay-m").forEach(b=>b.classList.toggle("on",b.dataset.p===p));updateCo()}
+function updateCo(){const net=Number(S.cur.quote.remaining||S.cur.quote.net);const paid=Number(coTender||0);
+  $("coT").textContent=NT(paid);const c=$("coC");
+  if(coPay==="現金"&&paid>=net&&paid>0)c.textContent="找零 "+NT(paid-net);else c.textContent="";}
+async function doPay(){const net=Number(S.cur.quote.remaining||S.cur.quote.net);const paid=Number(coTender||net);
+  if(coPay==="現金"&&paid<net){toast("實收不足，應收 "+NT(net));return}
+  const tender=coPay==="現金"?String(paid):String(net);
+  try{const res=await api(`/tables/sessions/${S.cur.sessId}/checkout`,{method:"POST",body:JSON.stringify({tendered:tender})});
+    closeOv();toast(S.cur.name+" 結帳完成"+(res.change&&Number(res.change)>0?" · 找零 "+NT(res.change):" · "+coPay));
+    delete S.orders[S.cur.sessId];go("floor");}
+  catch(e){toast("結帳失敗: "+e.message)}
 }
 function closeOv(){$("ov").classList.remove("on")}
 $("ov").addEventListener("click",e=>{if(e.target===$("ov"))closeOv()});
 
 /* ── KDS ── */
-function renderKDS(){const active=S.tables.filter(t=>t.st==="kitchen"||t.st==="new").filter(t=>t.items.length);
-  $("kdsWrap").innerHTML=active.length?active.map(t=>
-    `<div class="ticket ${t.t>20?'rush':''}"><div class="tk-h"><span class="t">${t.name}${t.zone==='dine'?' 桌':''}</span><span class="clk num">⏱ ${t.t} 分</span></div>
-     <div class="tk-body">${t.items.map(l=>`<div class="tk-item"><span><span class="q num">${l[2]}×</span> ${l[0]}${l[3]?` · ${l[3]}`:""}</span></div>`).join("")}</div>
-     <div class="tk-foot"><button class="tk-done" onclick="kdsDone('${t.name}')">✓ 完成出餐</button></div></div>`).join("")
-    :`<div style="grid-column:1/-1;text-align:center;color:var(--ink3);padding:80px 0;font-size:15px">目前沒有待製作的訂單 🎉<br><span style="font-size:13px">到「點餐」送單後會出現在這裡</span></div>`;
+async function loadKDS(){
+  let lines=[];try{lines=await api(`/kitchen/queue?store_id=${storeId}`)}catch(e){$("kdsWrap").innerHTML=`<div style="grid-column:1/-1;color:var(--ink3);padding:40px 0">載入失敗: ${e.message}</div>`;return}
+  // group by order
+  const byOrder={};lines.forEach(l=>{const k=l.order_no||l.order_id||"—";(byOrder[k]=byOrder[k]||[]).push(l)});
+  const keys=Object.keys(byOrder);
+  $("kdsWrap").innerHTML=keys.length?keys.map(k=>{const ls=byOrder[k];
+    return `<div class="ticket"><div class="tk-h"><span class="t">${ls[0].table_name||k}</span><span class="clk num">${ls[0].station||""}</span></div>
+     <div class="tk-body">${ls.map(l=>`<div class="tk-item"><span><span class="q num">${Number(l.qty)}×</span> ${l.item_name||l.menu_item_id||""}${l.notes?` · ${l.notes}`:""}</span></div>`).join("")}</div>
+     <div class="tk-foot"><button class="tk-done" onclick="kdsDone('${ls.map(l=>l.line_id||l.id).join(",")}')">✓ 完成出餐</button></div></div>`}).join("")
+    :`<div style="grid-column:1/-1;text-align:center;color:var(--ink3);padding:80px 0;font-size:15px">目前沒有待製作的訂單 🎉</div>`;
 }
-function kdsDone(name){const t=S.tables.find(x=>x.name===name);t.st="served";toast(name+"：已出餐，轉待結帳");renderKDS()}
+async function kdsDone(ids){
+  for(const id of ids.split(",")){try{await api(`/kitchen/lines/${id}/status`,{method:"PATCH",body:JSON.stringify({status:"served"})})}catch(e){}}
+  toast("已完成出餐");loadKDS();
+}
 
 /* ── reports ── */
-function renderRep(){const net=S.sales.reduce((a,s)=>a+s.n,0);const cnt=S.sales.length;
-  const top=[["紅燒牛肉麵",42,7560],["珍珠奶茶",38,2470],["滷肉飯",31,1860],["鹽酥雞",27,2430],["雞腿便當",19,2280]];
-  const maxT=top[0][2];
-  const hrs=[3,5,8,22,35,28,12,9,14,26,40,33,18];const maxH=Math.max(...hrs);
+// 營業日以台北時區為準 (後端 business_date 同樣用 Asia/Taipei) —
+// 不能用 toISOString() (UTC): 台灣凌晨 0-8 點會查到前一天而顯示 $0
+function today(){return new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Taipei"})}
+async function loadRep(){
+  let sales;try{sales=await api(`/reports/sales?store_id=${storeId}&date_from=${today()}`)}
+  catch(e){$("repWrap").innerHTML=`<div style="color:var(--ink3);padding:40px 0">載入報表失敗: ${e.message}</div>`;return}
+  let top=[];try{top=await api(`/reports/top-items?store_id=${storeId}&date_from=${today()}&limit=6`)}catch(e){}
+  let hourly=null;try{hourly=await api(`/reports/hourly?store_id=${storeId}&date_from=${today()}`)}catch(e){}
+  const net=Number(sales.net_sales),cnt=sales.order_count,avg=cnt?net/cnt:0;
+  const maxT=top.length?Math.max(...top.map(t=>Number(t.revenue))):1;
+  const hrs=hourly?hourly.slices.filter(s=>s.hour>=10&&s.hour<=23):[];
+  const maxH=hrs.length?Math.max(...hrs.map(h=>Number(h.net_sales)),1):1;
   $("repWrap").innerHTML=`
     <div class="kpis">
-      <div class="kpi"><div class="lb">今日淨營收</div><div class="v num">${NT(net)}</div><div class="d up">▲ 12% vs 上週同日</div></div>
-      <div class="kpi"><div class="lb">結帳單數</div><div class="v num">${cnt}</div><div class="d up">▲ 5 單</div></div>
-      <div class="kpi"><div class="lb">客單價</div><div class="v num">${NT(net/cnt)}</div><div class="d eq">持平</div></div>
-      <div class="kpi"><div class="lb">自動折扣讓利</div><div class="v num">${NT(150)}</div><div class="d dn">3 筆滿額</div></div>
+      <div class="kpi"><div class="lb">今日淨營收</div><div class="v num">${NT(net)}</div><div class="d eq">即時</div></div>
+      <div class="kpi"><div class="lb">結帳單數</div><div class="v num">${cnt}</div><div class="d eq">今日</div></div>
+      <div class="kpi"><div class="lb">客單價</div><div class="v num">${NT(avg)}</div><div class="d eq">平均</div></div>
+      <div class="kpi"><div class="lb">折扣讓利</div><div class="v num">${NT(sales.discount_total)}</div><div class="d eq">今日</div></div>
     </div>
     <div class="rep-card"><h3>🔥 熱銷排行</h3>
-      ${top.map(r=>`<div class="bar-row"><span class="nm">${r[0]}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(r[2]/maxT*100)}%"></div></div><span class="val num">${r[1]}份 · ${NT(r[2])}</span></div>`).join("")}
+      ${top.length?top.map(r=>`<div class="bar-row"><span class="nm">${r.name||"—"}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(Number(r.revenue)/maxT*100)}%"></div></div><span class="val num">${Number(r.qty)}份 · ${NT(r.revenue)}</span></div>`).join(""):'<div style="color:var(--ink3)">今日尚無銷售</div>'}
     </div>
-    <div class="rep-card"><h3>⏰ 時段分析（11:00–23:00）</h3>
-      <div class="hours">${hrs.map((h,i)=>`<div class="hbar ${h===maxH?'peak':''}" style="height:${Math.round(h/maxH*100)}%"><span>${11+i}</span></div>`).join("")}</div>
-      <div style="text-align:center;color:var(--ink3);font-size:12px;margin-top:26px">尖峰 21:00 · 建議加派人手</div>
-    </div>
-    <div class="rep-card"><h3>🧾 今日結帳明細</h3>
-      ${S.sales.map(s=>`<div class="foot-row" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${s.s}</span><span class="num" style="font-weight:700">${NT(s.n)}</span></div>`).join("")}
-    </div>`;
+    ${hrs.length?`<div class="rep-card"><h3>⏰ 時段分析</h3>
+      <div class="hours">${hrs.map(h=>`<div class="hbar ${Number(h.net_sales)===maxH&&maxH>0?'peak':''}" style="height:${Math.round(Number(h.net_sales)/maxH*100)||2}%"><span>${h.hour}</span></div>`).join("")}</div>
+      <div style="height:20px"></div></div>`:""}`;
 }
 
 /* clock */
 function tick(){const d=new Date();$("clock").textContent=String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
 tick();setInterval(tick,10000);
+boot();
 
-/* init (after all const declarations are live) */
-go("floor");
 </script>
 
 </body>
