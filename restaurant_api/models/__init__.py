@@ -62,6 +62,12 @@ from .reservations import (
 from .stores import Store
 from .tenants import Tenant
 from .ugc import UgcKind, UgcStatus, UgcSubmission
+from .voucher_sharing import (
+    VoucherGift,
+    VoucherGiftStatus,
+    VoucherGrant,
+    VoucherRewardKind,
+)
 
 __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readability
     # base / shared
@@ -129,6 +135,11 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "UgcKind",
     "UgcStatus",
     "UgcSubmission",
+    # voucher sharing (模式 A 送券裂變) + VIP quota grants (模式 B)
+    "VoucherGift",
+    "VoucherGiftStatus",
+    "VoucherGrant",
+    "VoucherRewardKind",
     # marketing campaigns (wheel-spin lottery)
     "MarketingCampaign",
     "CampaignStatus",
