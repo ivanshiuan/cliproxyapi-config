@@ -177,7 +177,7 @@ async def claim_gift(
     session: AsyncSession,
     *,
     share_token: str,
-    recipient: Customer,
+    recipient_id: uuid.UUID,
     tenant_id: uuid.UUID,
 ) -> VoucherGift:
     """A friend claims a pending gift, binding themselves as the recipient.
@@ -185,6 +185,7 @@ async def claim_gift(
     Anti-fraud: the recipient cannot be the sender (self-send-and-claim), and a
     gift can only be claimed once (guarded by the ``pending`` status under lock).
     """
+    recipient = await _load_customer(session, recipient_id, tenant_id)
     gift = (
         await session.execute(
             select(VoucherGift)

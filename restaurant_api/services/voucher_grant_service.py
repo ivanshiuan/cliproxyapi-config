@@ -133,7 +133,9 @@ async def list_grants(
         await session.execute(
             select(VoucherGrant)
             .where(VoucherGrant.tenant_id == tenant_id)
-            .order_by(VoucherGrant.created_at.desc())
+            # uuid7 id is time-ordered; it deterministically breaks created_at
+            # ties for rows minted in the same transaction (same now()).
+            .order_by(VoucherGrant.created_at.desc(), VoucherGrant.id.desc())
         )
     ).scalars().all()
     return list(rows)

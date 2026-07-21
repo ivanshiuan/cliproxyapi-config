@@ -39,6 +39,7 @@ from .routers import orders as orders_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
 from .routers import ugc as ugc_router
+from .routers import voucher_sharing as voucher_sharing_router
 from .services import campaigns_service
 from .services.holiday_calendar import refresh_singleton as refresh_holiday_cache
 
@@ -115,6 +116,7 @@ _mount_router(kitchen_router, "/kitchen")
 _mount_router(customers_router, "/customers")
 _mount_router(campaigns_router, "/campaigns")
 _mount_router(ugc_router, "/ugc")
+_mount_router(voucher_sharing_router, "/vouchers")
 _mount_router(membership_router, "/membership")
 _mount_router(line_setup_router, "/admin/line")
 _mount_router(line_webhook_router, "/line/webhook")

@@ -89,7 +89,7 @@ async def test_claim_binds_recipient(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     claimed = await svc.claim_gift(
-        db_session, share_token=gift.share_token, recipient=friend, tenant_id=seed_tenant.id
+        db_session, share_token=gift.share_token, recipient_id=friend.id, tenant_id=seed_tenant.id
     )
     assert claimed.status is VoucherGiftStatus.CLAIMED
     assert claimed.recipient_id == friend.id
@@ -107,7 +107,7 @@ async def test_cannot_claim_own_gift(
         await svc.claim_gift(
             db_session,
             share_token=gift.share_token,
-            recipient=sender,
+            recipient_id=sender.id,
             tenant_id=seed_tenant.id,
         )
 
@@ -122,11 +122,11 @@ async def test_cannot_claim_twice(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     await svc.claim_gift(
-        db_session, share_token=gift.share_token, recipient=f1, tenant_id=seed_tenant.id
+        db_session, share_token=gift.share_token, recipient_id=f1.id, tenant_id=seed_tenant.id
     )
     with pytest.raises(ConflictError):
         await svc.claim_gift(
-            db_session, share_token=gift.share_token, recipient=f2, tenant_id=seed_tenant.id
+            db_session, share_token=gift.share_token, recipient_id=f2.id, tenant_id=seed_tenant.id
         )
 
 
@@ -136,7 +136,7 @@ async def test_claim_unknown_token_404(
     friend = await _customer(db_session, seed_tenant.id)
     with pytest.raises(NotFoundError):
         await svc.claim_gift(
-            db_session, share_token="nope", recipient=friend, tenant_id=seed_tenant.id
+            db_session, share_token="nope", recipient_id=friend.id, tenant_id=seed_tenant.id
         )
 
 
@@ -155,7 +155,7 @@ async def test_redeem_grants_sender_reward(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     await svc.claim_gift(
-        db_session, share_token=gift.share_token, recipient=friend, tenant_id=seed_tenant.id
+        db_session, share_token=gift.share_token, recipient_id=friend.id, tenant_id=seed_tenant.id
     )
     # Reward NOT yet paid — only claimed, not redeemed.
     assert await _points(db_session, sender.id) == Decimal("0")
@@ -180,7 +180,7 @@ async def test_redeem_is_one_shot(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     await svc.claim_gift(
-        db_session, share_token=gift.share_token, recipient=friend, tenant_id=seed_tenant.id
+        db_session, share_token=gift.share_token, recipient_id=friend.id, tenant_id=seed_tenant.id
     )
     await svc.redeem_gift(db_session, gift_id=gift.id, tenant_id=seed_tenant.id)
     with pytest.raises(ConflictError):
@@ -202,7 +202,7 @@ async def test_redeem_succeeds_even_if_sender_deleted(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     await svc.claim_gift(
-        db_session, share_token=gift.share_token, recipient=friend, tenant_id=seed_tenant.id
+        db_session, share_token=gift.share_token, recipient_id=friend.id, tenant_id=seed_tenant.id
     )
     # sender leaves / is erased after claiming
     sender.deleted_at = datetime.now(UTC)
@@ -248,7 +248,7 @@ async def test_monthly_reward_cap_clamps_payout(
         reward_amount=near_cap,
     )
     await svc.claim_gift(
-        db_session, share_token=g1.share_token, recipient=f1, tenant_id=seed_tenant.id
+        db_session, share_token=g1.share_token, recipient_id=f1.id, tenant_id=seed_tenant.id
     )
     await svc.redeem_gift(db_session, gift_id=g1.id, tenant_id=seed_tenant.id)
 
@@ -258,7 +258,7 @@ async def test_monthly_reward_cap_clamps_payout(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     await svc.claim_gift(
-        db_session, share_token=g2.share_token, recipient=f2, tenant_id=seed_tenant.id
+        db_session, share_token=g2.share_token, recipient_id=f2.id, tenant_id=seed_tenant.id
     )
     redeemed = await svc.redeem_gift(
         db_session, gift_id=g2.id, tenant_id=seed_tenant.id
@@ -279,7 +279,7 @@ async def test_cap_exhausted_pays_zero(
         reward_amount=svc.MONTHLY_REWARD_CAP_POINTS,
     )
     await svc.claim_gift(
-        db_session, share_token=g1.share_token, recipient=f1, tenant_id=seed_tenant.id
+        db_session, share_token=g1.share_token, recipient_id=f1.id, tenant_id=seed_tenant.id
     )
     await svc.redeem_gift(db_session, gift_id=g1.id, tenant_id=seed_tenant.id)
 
@@ -288,7 +288,7 @@ async def test_cap_exhausted_pays_zero(
         db_session, sender_id=sender.id, tenant_id=seed_tenant.id
     )
     await svc.claim_gift(
-        db_session, share_token=g2.share_token, recipient=f2, tenant_id=seed_tenant.id
+        db_session, share_token=g2.share_token, recipient_id=f2.id, tenant_id=seed_tenant.id
     )
     redeemed = await svc.redeem_gift(
         db_session, gift_id=g2.id, tenant_id=seed_tenant.id
