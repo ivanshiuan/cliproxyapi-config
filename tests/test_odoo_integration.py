@@ -1,0 +1,377 @@
+"""Tests for the Odoo back-office integration.
+
+Everything here runs against the in-memory stub or an ``httpx.MockTransport``
+-- no live Odoo is needed, exactly like ``test_line_integration.py``.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+from datetime import date
+from decimal import Decimal
+from unittest.mock import patch
+
+import httpx
+import pytest
+
+from restaurant_api.config import get_settings
+from restaurant_api.integrations.odoo import (
+    AccountChart,
+    DailySales,
+    HttpOdooClient,
+    JournalEntry,
+    JournalLine,
+    ModelNotAllowedError,
+    OdooApiError,
+    OdooClient,
+    PayrollAccrual,
+    PostingNotPermittedError,
+    PurchaseBill,
+    StubOdooClient,
+    SupplierRecord,
+    UnbalancedEntryError,
+    WasteLoss,
+    daily_sales_journal,
+    get_odoo,
+    payroll_journal,
+    purchase_to_vendor_bill,
+    waste_loss_journal,
+)
+from restaurant_api.integrations.odoo.client import reset_odoo
+
+# ── posting builders: balance + correctness ────────────────────────────────
+
+
+def test_purchase_bill_builds_balanced_vendor_bill():
+    entry = purchase_to_vendor_bill(
+        PurchaseBill(
+            source_id="po-1",
+            supplier_ref="SUP-C",
+            invoice_number="AB-12345678",
+            occurred_on=date(2026, 7, 28),
+            subtotal=Decimal("1000"),
+            tax_amount=Decimal("50"),
+        )
+    )
+    assert entry.is_balanced()
+    assert entry.total_debit() == Decimal("1050")
+    assert entry.move_type == "in_invoice"
+    assert entry.external_id == "po-1"  # idempotency key
+    assert entry.partner_ref == "SUP-C"
+    # inventory + input VAT on the debit side, AP on the credit side
+    debits = {ln.account_code: ln.debit for ln in entry.lines if ln.debit > 0}
+    credits = {ln.account_code: ln.credit for ln in entry.lines if ln.credit > 0}
+    assert debits == {"1310": Decimal("1000"), "1360": Decimal("50")}
+    assert credits == {"2100": Decimal("1050")}
+
+
+def test_purchase_bill_without_tax_omits_vat_line():
+    entry = purchase_to_vendor_bill(
+        PurchaseBill(
+            source_id="po-2",
+            supplier_ref="SUP-D",
+            invoice_number="ZZ-00000001",
+            occurred_on=date(2026, 7, 28),
+            subtotal=Decimal("500"),
+        )
+    )
+    assert entry.is_balanced()
+    assert len(entry.lines) == 2  # no zero-value VAT line
+
+
+def test_daily_sales_journal_balances():
+    entry = daily_sales_journal(
+        DailySales(
+            source_id="store-1:2026-07-28",
+            occurred_on=date(2026, 7, 28),
+            net_revenue=Decimal("8000"),
+            tax_amount=Decimal("400"),
+        )
+    )
+    assert entry.is_balanced()
+    assert entry.total_debit() == Decimal("8400")
+    assert entry.journal_code == "SAL"
+
+
+def test_waste_and_payroll_journals_balance():
+    waste = waste_loss_journal(
+        WasteLoss(source_id="w-1", occurred_on=date(2026, 7, 28), amount=Decimal("300"))
+    )
+    payroll = payroll_journal(
+        PayrollAccrual(
+            source_id="pay-1", occurred_on=date(2026, 7, 28), gross_wages=Decimal("50000")
+        )
+    )
+    assert waste.is_balanced() and payroll.is_balanced()
+    assert waste.total_debit() == Decimal("300")
+    assert payroll.total_credit() == Decimal("50000")
+
+
+def test_custom_chart_overrides_account_codes():
+    chart = AccountChart(inventory="X1", accounts_payable="X2")
+    entry = purchase_to_vendor_bill(
+        PurchaseBill(
+            source_id="po-3",
+            supplier_ref="S",
+            invoice_number="I",
+            occurred_on=date(2026, 7, 28),
+            subtotal=Decimal("10"),
+        ),
+        chart,
+    )
+    codes = {ln.account_code for ln in entry.lines}
+    assert codes == {"X1", "X2"}
+
+
+def test_money_inputs_reject_float():
+    with pytest.raises(TypeError):
+        PurchaseBill(
+            source_id="x",
+            supplier_ref="s",
+            invoice_number="i",
+            occurred_on=date(2026, 7, 28),
+            subtotal=1000.0,  # type: ignore[arg-type]
+        )
+    with pytest.raises(TypeError):
+        JournalLine("1310", debit=1.5)  # type: ignore[arg-type]
+
+
+def test_journal_line_rejects_two_sided_and_empty_lines():
+    with pytest.raises(ValueError):
+        JournalLine("1310", debit=Decimal("1"), credit=Decimal("1"))
+    with pytest.raises(ValueError):
+        JournalLine("1310")  # both zero
+    with pytest.raises(ValueError):
+        JournalLine("1310", debit=Decimal("-1"))
+
+
+def test_assert_balanced_raises_on_unbalanced_entry():
+    bad = JournalEntry(
+        external_id="bad",
+        entry_date=date(2026, 7, 28),
+        journal_code="MISC",
+        ref="x",
+        move_type="entry",
+        lines=(
+            JournalLine("1310", debit=Decimal("100")),
+            JournalLine("2100", credit=Decimal("90")),
+        ),
+    )
+    assert not bad.is_balanced()
+    with pytest.raises(UnbalancedEntryError):
+        bad.assert_balanced()
+
+
+# ── StubOdooClient ─────────────────────────────────────────────────────────
+
+
+def _bill() -> JournalEntry:
+    return purchase_to_vendor_bill(
+        PurchaseBill(
+            source_id="po-9",
+            supplier_ref="SUP-C",
+            invoice_number="AB-1",
+            occurred_on=date(2026, 7, 28),
+            subtotal=Decimal("100"),
+            tax_amount=Decimal("5"),
+        )
+    )
+
+
+def test_stub_creates_draft_vendor_bill_by_default():
+    stub = StubOdooClient()
+    rec_id = asyncio.run(stub.create_vendor_bill(_bill()))
+    assert rec_id == "1"
+    call = stub.calls[0]
+    assert call["op"] == "create_vendor_bill"
+    assert call["external_id"] == "po-9"
+    assert call["posted"] is False  # draft -- not posted to ledger
+
+
+def test_stub_blocks_posting_without_auto_post():
+    stub = StubOdooClient(allow_auto_post=False)
+    with pytest.raises(PostingNotPermittedError):
+        asyncio.run(stub.create_vendor_bill(_bill(), post=True))
+
+
+def test_stub_allows_posting_when_enabled():
+    stub = StubOdooClient(allow_auto_post=True)
+    asyncio.run(stub.post_journal_entry(_bill(), post=True))
+    assert stub.calls[0]["posted"] is True
+
+
+def test_stub_upsert_supplier_is_idempotent_on_ref():
+    stub = StubOdooClient()
+    a = asyncio.run(stub.upsert_supplier(SupplierRecord(ref="SUP-C", name="C 食材")))
+    b = asyncio.run(stub.upsert_supplier(SupplierRecord(ref="SUP-C", name="C 食材行")))
+    assert a == b  # same ref -> same Odoo id
+
+
+def test_stub_ap_aging_filters_by_supplier():
+    stub = StubOdooClient()
+    stub.ap_rows = [
+        {"partner_ref": "SUP-C", "amount_residual": 1050},
+        {"partner_ref": "SUP-D", "amount_residual": 200},
+    ]
+    rows = asyncio.run(stub.get_ap_aging("SUP-C"))
+    assert len(rows) == 1 and rows[0]["partner_ref"] == "SUP-C"
+
+
+# ── HttpOdooClient: JSON-RPC mechanics (mocked transport) ───────────────────
+
+
+def _http_client(handler, *, allow_auto_post: bool = False) -> HttpOdooClient:
+    return HttpOdooClient(
+        url="https://odoo.example.com",
+        db="resto",
+        username="svc@resto",
+        api_key="test-key",
+        allow_auto_post=allow_auto_post,
+        transport=httpx.MockTransport(handler),
+    )
+
+
+def _odoo_handler(*, accounts=None, journals=None, created_id=42):
+    """A stateful Odoo JSON-RPC mock: auth, code->id lookups, then create."""
+    accounts = accounts or {"1310": 11, "1360": 12, "2100": 13}
+    journals = journals or {"PUR": 3, "SAL": 4, "MISC": 5}
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        params = body["params"]
+        if params["service"] == "common" and params["method"] == "authenticate":
+            seen["authenticated"] = True
+            return httpx.Response(200, json={"result": 7})
+        # object.execute_kw: args = [db, uid, key, model, method, [args], {kwargs}]
+        args = params["args"]
+        model, method, model_args = args[3], args[4], args[5]
+        if model == "account.journal":
+            code = model_args[0][0][2]
+            return httpx.Response(200, json={"result": [{"id": journals[code]}]})
+        if model == "account.account":
+            code = model_args[0][0][2]
+            return httpx.Response(200, json={"result": [{"id": accounts[code]}]})
+        if model == "account.move" and method == "create":
+            seen["created_vals"] = model_args[0]
+            return httpx.Response(200, json={"result": created_id})
+        return httpx.Response(200, json={"result": True})
+
+    return handler, seen
+
+
+def test_http_create_vendor_bill_sends_balanced_move():
+    handler, seen = _odoo_handler()
+
+    async def _run() -> str:
+        client = _http_client(handler)
+        try:
+            return await client.create_vendor_bill(_bill())
+        finally:
+            await client.aclose()
+
+    move_id = asyncio.run(_run())
+    assert move_id == "42"
+    assert seen["authenticated"] is True
+    vals = seen["created_vals"]
+    assert vals["move_type"] == "in_invoice"
+    assert vals["journal_id"] == 3
+    # debits equal credits on the wire too
+    total_debit = sum(cmd[2]["debit"] for cmd in vals["line_ids"])
+    total_credit = sum(cmd[2]["credit"] for cmd in vals["line_ids"])
+    assert total_debit == total_credit == 105.0
+
+
+def test_http_execute_kw_blocks_disallowed_model():
+    handler, _ = _odoo_handler()
+    client = _http_client(handler)
+
+    async def _run():
+        try:
+            await client._execute_kw("res.users", "search", [[]])
+        finally:
+            await client.aclose()
+
+    with pytest.raises(ModelNotAllowedError):
+        asyncio.run(_run())
+
+
+def test_http_blocks_posting_without_auto_post():
+    handler, _ = _odoo_handler()
+    client = _http_client(handler, allow_auto_post=False)
+    with pytest.raises(PostingNotPermittedError):
+        asyncio.run(client.create_vendor_bill(_bill(), post=True))
+
+
+def test_http_raises_on_jsonrpc_error_body():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"error": {"data": {"message": "Access Denied"}}},
+        )
+
+    client = _http_client(handler)
+
+    async def _run():
+        try:
+            await client.get_ap_aging()
+        finally:
+            await client.aclose()
+
+    with pytest.raises(OdooApiError) as excinfo:
+        asyncio.run(_run())
+    assert "Access Denied" in str(excinfo.value)
+
+
+def test_http_raises_on_non_2xx():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="boom")
+
+    client = _http_client(handler)
+
+    async def _run():
+        try:
+            await client.get_ap_aging()
+        finally:
+            await client.aclose()
+
+    with pytest.raises(OdooApiError):
+        asyncio.run(_run())
+
+
+# ── DI switch + contract ───────────────────────────────────────────────────
+
+
+def test_get_odoo_returns_stub_without_env():
+    reset_odoo()
+    get_settings.cache_clear()
+    with patch.dict(os.environ, {}, clear=False):
+        for key in ("ODOO_URL", "ODOO_DB", "ODOO_USERNAME", "ODOO_API_KEY"):
+            os.environ.pop(key, None)
+        assert isinstance(get_odoo(), StubOdooClient)
+    reset_odoo()
+    get_settings.cache_clear()
+
+
+def test_get_odoo_returns_http_when_env_set():
+    reset_odoo()
+    get_settings.cache_clear()
+    env = {
+        "ODOO_URL": "https://odoo.example.com",
+        "ODOO_DB": "resto",
+        "ODOO_USERNAME": "svc@resto",
+        "ODOO_API_KEY": "k",
+    }
+    with patch.dict(os.environ, env):
+        client = get_odoo()
+        assert isinstance(client, HttpOdooClient)
+        assert client.db == "resto"
+    reset_odoo()
+    get_settings.cache_clear()
+
+
+def test_odoo_client_is_abstract():
+    with pytest.raises(TypeError):
+        OdooClient()  # type: ignore[abstract]
