@@ -25,6 +25,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Numeric,
     String,
     Text,
@@ -137,9 +138,16 @@ class PurchaseOrder(TenantScopedMixin, TimestampedMixin, Base):
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
     )
-    # ── Odoo AP sync tracking (idempotency handle) ──────────────────────────
+    # ── Odoo AP sync tracking (idempotency handle + dead-letter state) ──────
     odoo_move_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     odoo_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Failure bookkeeping: each failed push bumps attempts and records the
+    # error. POs at MAX_SYNC_ATTEMPTS are dead-lettered — excluded from the
+    # nightly retry and surfaced by reconcile_sync_status for a human.
+    odoo_sync_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    odoo_last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("tenant_id", "po_number", name="uq_purchase_orders_tenant_po"),

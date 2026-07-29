@@ -22,7 +22,11 @@ from restaurant_api.models import (
     Supplier,
     Tenant,
 )
-from restaurant_api.services.odoo_sync_service import sync_purchase_orders
+from restaurant_api.services.odoo_sync_service import (
+    MAX_SYNC_ATTEMPTS,
+    reconcile_sync_status,
+    sync_purchase_orders,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -146,3 +150,68 @@ async def test_per_item_error_isolation(
     assert report.failed == 1
     assert bad.odoo_synced_at is None  # failed one stays pending for next run
     assert good.odoo_synced_at is not None
+    # failure bookkeeping for the dead-letter path
+    assert bad.odoo_sync_attempts == 1
+    assert bad.odoo_last_sync_error is not None
+    assert "RuntimeError" in bad.odoo_last_sync_error
+    assert good.odoo_last_sync_error is None
+
+
+async def test_soft_deleted_supplier_blocks_push(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """AP is never booked against a deactivated supplier — hard refusal."""
+    sup = await _supplier(db_session, seed_tenant.id)
+    po = await _po(db_session, seed_tenant, seed_store, sup)
+    sup.deleted_at = datetime.now(UTC)  # soft-delete the supplier
+    stub = StubOdooClient()
+
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+
+    assert report.pushed == 0
+    assert report.failed == 1
+    assert po.odoo_synced_at is None
+    assert po.odoo_last_sync_error is not None
+    assert "deactivated" in po.odoo_last_sync_error
+    assert stub.calls == []  # nothing reached Odoo
+
+
+async def test_dead_lettered_po_is_excluded_from_retry(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    sup = await _supplier(db_session, seed_tenant.id)
+    po = await _po(db_session, seed_tenant, seed_store, sup)
+    po.odoo_sync_attempts = MAX_SYNC_ATTEMPTS  # already exhausted
+    stub = StubOdooClient()
+
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+
+    assert report.considered == 0  # dead-lettered — not retried automatically
+    assert stub.calls == []
+
+
+async def test_reconcile_sync_status_counts(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    sup = await _supplier(db_session, seed_tenant.id)
+    synced_po = await _po(db_session, seed_tenant, seed_store, sup, po_number="PO-S")
+    await _po(db_session, seed_tenant, seed_store, sup, po_number="PO-P")  # pending
+    dead_po = await _po(db_session, seed_tenant, seed_store, sup, po_number="PO-D")
+    await _po(db_session, seed_tenant, seed_store, sup, po_number="PO-N", received=False)
+
+    synced_po.odoo_synced_at = datetime.now(UTC)
+    synced_po.odoo_move_id = "42"
+    dead_po.odoo_sync_attempts = MAX_SYNC_ATTEMPTS
+    await db_session.flush()
+
+    counts = await reconcile_sync_status(db_session, tenant_id=seed_tenant.id)
+    assert counts == {"synced": 1, "pending": 1, "dead_letter": 1, "not_received": 1}
+
+
+async def test_report_carries_run_id(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    report = await sync_purchase_orders(
+        tenant_id=seed_tenant.id, session=db_session, odoo=StubOdooClient()
+    )
+    assert len(report.run_id) == 12  # traceable correlation id on every run

@@ -14,14 +14,20 @@ translation (``postings``).
 from __future__ import annotations
 
 from .client import (
+    ALLOWED_JOURNAL_CODES,
     ALLOWED_MODELS,
+    ALLOWED_WRITE_OPERATIONS,
+    FORBIDDEN_METHODS,
+    READ_METHODS,
     HttpOdooClient,
     ModelNotAllowedError,
     OdooApiError,
     OdooClient,
+    OperationNotAllowedError,
     PostingNotPermittedError,
     StubOdooClient,
     SupplierRecord,
+    enforce_operation_policy,
     get_odoo,
     reset_odoo,
 )
@@ -42,8 +48,12 @@ from .postings import (
 )
 
 __all__ = [
+    "ALLOWED_JOURNAL_CODES",
     "ALLOWED_MODELS",
+    "ALLOWED_WRITE_OPERATIONS",
     "DEFAULT_CHART",
+    "FORBIDDEN_METHODS",
+    "READ_METHODS",
     "AccountChart",
     "DailySales",
     "HttpOdooClient",
@@ -52,6 +62,7 @@ __all__ = [
     "ModelNotAllowedError",
     "OdooApiError",
     "OdooClient",
+    "OperationNotAllowedError",
     "PayrollAccrual",
     "PostingNotPermittedError",
     "PurchaseBill",
@@ -60,6 +71,7 @@ __all__ = [
     "UnbalancedEntryError",
     "WasteLoss",
     "daily_sales_journal",
+    "enforce_operation_policy",
     "get_odoo",
     "payroll_journal",
     "purchase_to_vendor_bill",

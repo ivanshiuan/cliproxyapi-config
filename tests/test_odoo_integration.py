@@ -26,6 +26,7 @@ from restaurant_api.integrations.odoo import (
     ModelNotAllowedError,
     OdooApiError,
     OdooClient,
+    OperationNotAllowedError,
     PayrollAccrual,
     PostingNotPermittedError,
     PurchaseBill,
@@ -34,6 +35,7 @@ from restaurant_api.integrations.odoo import (
     UnbalancedEntryError,
     WasteLoss,
     daily_sales_journal,
+    enforce_operation_policy,
     get_odoo,
     payroll_journal,
     purchase_to_vendor_bill,
@@ -375,3 +377,208 @@ def test_get_odoo_returns_http_when_env_set():
 def test_odoo_client_is_abstract():
     with pytest.raises(TypeError):
         OdooClient()  # type: ignore[abstract]
+
+
+# ── operation policy: the permission boundary, attempted adversarially ──────
+
+
+def _no_egress_handler(request: httpx.Request) -> httpx.Response:
+    raise AssertionError(f"policy violation reached the wire: {request.url}")
+
+
+def test_policy_blocks_unlink_even_on_allowed_model():
+    """unlink (delete) is always denied — before any request is sent."""
+    client = _http_client(_no_egress_handler)
+    with pytest.raises(OperationNotAllowedError):
+        asyncio.run(client._execute_kw("account.move", "unlink", [[1]]))
+
+
+def test_policy_blocks_payment_registration():
+    """account.payment is read-only: create/write/action are all denied."""
+    client = _http_client(_no_egress_handler)
+    for method in ("create", "write", "action_register_payment"):
+        with pytest.raises((OperationNotAllowedError, ModelNotAllowedError)):
+            asyncio.run(client._execute_kw("account.payment", method, [{}]))
+
+
+def test_policy_blocks_arbitrary_model_and_settings():
+    for model in ("res.users", "ir.config_parameter", "res.groups", "ir.model.access"):
+        with pytest.raises(ModelNotAllowedError):
+            asyncio.run(_http_client(_no_egress_handler)._execute_kw(model, "search_read", [[]]))
+
+
+def test_policy_blocks_unlisted_write_method():
+    """A write method not explicitly whitelisted is denied (e.g. button_cancel)."""
+    client = _http_client(_no_egress_handler)
+    with pytest.raises(OperationNotAllowedError):
+        asyncio.run(client._execute_kw("account.move", "button_cancel", [[1]]))
+
+
+def test_policy_blocks_disallowed_journal():
+    """Moves may only target PUR/SAL/MISC — never bank/cash journals."""
+    bank_entry = JournalEntry(
+        external_id="x-1",
+        entry_date=date(2026, 7, 28),
+        journal_code="BANK",
+        ref="x",
+        move_type="entry",
+        lines=(
+            JournalLine("1100", debit=Decimal("1")),
+            JournalLine("4100", credit=Decimal("1")),
+        ),
+    )
+    with pytest.raises(OperationNotAllowedError):
+        asyncio.run(StubOdooClient().post_journal_entry(bank_entry))
+    with pytest.raises(OperationNotAllowedError):
+        asyncio.run(_http_client(_no_egress_handler).post_journal_entry(bank_entry))
+
+
+def test_enforce_operation_policy_direct():
+    enforce_operation_policy("res.partner", "search_read")  # read: ok
+    enforce_operation_policy("account.move", "create")  # whitelisted write: ok
+    with pytest.raises(OperationNotAllowedError):
+        enforce_operation_policy("res.partner", "unlink")
+    with pytest.raises(ModelNotAllowedError):
+        enforce_operation_policy("res.users", "read")
+
+
+# ── retry: bounded exponential backoff on transient failures only ───────────
+
+
+def test_http_retries_transient_timeout_then_succeeds():
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        if attempts["n"] <= 2:
+            raise httpx.ConnectTimeout("simulated timeout")
+        return httpx.Response(200, json={"result": 7})
+
+    client = HttpOdooClient(
+        url="https://odoo.example.com",
+        db="resto",
+        username="svc",
+        api_key="k",
+        retry_backoff_seconds=0.0,
+        transport=httpx.MockTransport(handler),
+    )
+
+    async def _run() -> object:
+        try:
+            return await client._rpc("common", "authenticate", [])
+        finally:
+            await client.aclose()
+
+    assert asyncio.run(_run()) == 7
+    assert attempts["n"] == 3  # two failures + one success
+
+
+def test_http_retry_exhaustion_raises_odoo_api_error():
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        raise httpx.ConnectTimeout("down")
+
+    client = HttpOdooClient(
+        url="https://odoo.example.com",
+        db="resto",
+        username="svc",
+        api_key="k",
+        max_retries=2,
+        retry_backoff_seconds=0.0,
+        transport=httpx.MockTransport(handler),
+    )
+    with pytest.raises(OdooApiError, match="unreachable after 3 attempts"):
+        asyncio.run(client._rpc("common", "authenticate", []))
+    assert attempts["n"] == 3
+
+
+def test_http_does_not_retry_application_errors():
+    """4xx and JSON-RPC errors are permanent — exactly one attempt."""
+    attempts = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["n"] += 1
+        return httpx.Response(403, text="forbidden")
+
+    client = _http_client(handler)
+    with pytest.raises(OdooApiError):
+        asyncio.run(client._rpc("common", "authenticate", []))
+    assert attempts["n"] == 1
+
+
+# ── secret handling ─────────────────────────────────────────────────────────
+
+
+def test_api_key_never_appears_in_repr_or_errors_or_logs(caplog):
+    secret = "SECRET-API-KEY-XYZZY"
+    client = HttpOdooClient(
+        url="https://odoo.example.com",
+        db="resto",
+        username="svc",
+        api_key=secret,
+        max_retries=1,
+        retry_backoff_seconds=0.0,
+        transport=httpx.MockTransport(lambda r: httpx.Response(500, text="boom")),
+    )
+    assert secret not in repr(client)
+    assert secret not in str(client)
+    with caplog.at_level("DEBUG"), pytest.raises(OdooApiError) as excinfo:
+        asyncio.run(client._rpc("common", "authenticate", []))
+    assert secret not in str(excinfo.value)
+    assert secret not in caplog.text
+
+
+# ── duplicate guard at the client layer ─────────────────────────────────────
+
+
+def test_stub_dedups_same_external_id():
+    stub = StubOdooClient()
+    first = asyncio.run(stub.create_vendor_bill(_bill()))
+    second = asyncio.run(stub.create_vendor_bill(_bill()))
+    assert first == second  # same external_id -> same move, no duplicate
+    dedups = [c for c in stub.calls if c.get("dedup")]
+    assert len(dedups) == 1
+
+
+def test_http_create_embeds_src_marker_and_dedups():
+    """The move ref carries [src:<id>]; a pre-existing match short-circuits create."""
+    created: list[dict[str, object]] = []
+    existing_moves: dict[int, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        params = body["params"]
+        if params["service"] == "common":
+            return httpx.Response(200, json={"result": 7})
+        args = params["args"]
+        model, method, model_args = args[3], args[4], args[5]
+        if model == "account.move" and method == "search_read":
+            needle = model_args[0][0][2]
+            hits = [{"id": mid} for mid, ref in existing_moves.items() if needle in ref]
+            return httpx.Response(200, json={"result": hits[:1]})
+        if model == "account.journal":
+            return httpx.Response(200, json={"result": [{"id": 3}]})
+        if model == "account.account":
+            return httpx.Response(200, json={"result": [{"id": 11}]})
+        if model == "account.move" and method == "create":
+            created.append(model_args[0])
+            mid = 900 + len(created)
+            existing_moves[mid] = str(model_args[0]["ref"])
+            return httpx.Response(200, json={"result": mid})
+        return httpx.Response(200, json={"result": []})
+
+    async def _run() -> tuple[str, str]:
+        client = _http_client(handler)
+        try:
+            a = await client.create_vendor_bill(_bill())
+            b = await client.create_vendor_bill(_bill())  # same external_id
+            return a, b
+        finally:
+            await client.aclose()
+
+    a, b = asyncio.run(_run())
+    assert a == b
+    assert len(created) == 1  # second call deduped, no second create
+    assert "[src:po-9]" in str(created[0]["ref"])

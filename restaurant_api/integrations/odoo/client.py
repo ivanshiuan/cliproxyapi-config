@@ -30,6 +30,7 @@ is enforced in code, not left to prose:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -51,9 +52,78 @@ ALLOWED_MODELS: frozenset[str] = frozenset(
         "account.move.line",
         "account.account",  # chart of accounts (code -> id resolution)
         "account.journal",  # journals (code -> id resolution)
-        "account.payment",  # read-only: payment status write-back
+        "account.payment",  # READ-ONLY: payment status write-back
     }
 )
+
+# Read methods are allowed on every ALLOWED model. Everything else must be an
+# explicitly whitelisted (model, method) pair -- so ``account.payment`` is
+# read-only by construction, and ``unlink`` (delete) does not exist anywhere
+# on this surface. This is the method-level half of the permission boundary;
+# the model allow-list above is the other half.
+READ_METHODS: frozenset[str] = frozenset(
+    {"read", "search", "search_read", "search_count", "fields_get", "name_get"}
+)
+
+ALLOWED_WRITE_OPERATIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("res.partner", "create"),
+        ("res.partner", "write"),
+        ("account.move", "create"),
+        # action_post is *additionally* gated behind allow_auto_post in
+        # _create_move; listing it here only makes it reachable at all.
+        ("account.move", "action_post"),
+    }
+)
+
+# Hard denials, checked before anything else. These can never be enabled by
+# configuration -- payment registration, deletion/cancellation of documents,
+# and privilege escalation are outside this integration's mandate (docs/20).
+FORBIDDEN_METHODS: frozenset[str] = frozenset(
+    {
+        "unlink",
+        "button_cancel",
+        "button_draft",
+        "action_register_payment",
+        "action_archive",
+        "toggle_active",
+        "sudo",
+    }
+)
+
+# Journals this integration may write moves into. Bank/cash journals are
+# deliberately absent: money movement is not this bridge's job.
+ALLOWED_JOURNAL_CODES: frozenset[str] = frozenset({"PUR", "SAL", "MISC"})
+
+
+class OperationNotAllowedError(PermissionError):
+    """Raised when a (model, method) pair is outside the operation policy."""
+
+    def __init__(self, model: str, method: str) -> None:
+        self.model = model
+        self.method = method
+        super().__init__(
+            f"operation {model}.{method} is not permitted by the Odoo "
+            "integration policy (reads on allowed models, plus explicitly "
+            "whitelisted writes only; unlink/payment/cancel are always denied)"
+        )
+
+
+def enforce_operation_policy(model: str, method: str) -> None:
+    """The single chokepoint every Odoo call must pass.
+
+    Order matters: forbidden methods are denied even on allowed models, then
+    the model allow-list applies, then reads pass, then only whitelisted
+    (model, method) writes pass.
+    """
+    if method in FORBIDDEN_METHODS:
+        raise OperationNotAllowedError(model, method)
+    if model not in ALLOWED_MODELS:
+        raise ModelNotAllowedError(model)
+    if method in READ_METHODS:
+        return
+    if (model, method) not in ALLOWED_WRITE_OPERATIONS:
+        raise OperationNotAllowedError(model, method)
 
 
 # ---------------------------------------------------------------------------
@@ -126,6 +196,15 @@ class OdooClient(ABC):
     async def get_ap_aging(self, supplier_ref: str | None = None) -> list[dict[str, object]]:
         """Read outstanding vendor bills (accounts payable), optionally by supplier."""
 
+    @abstractmethod
+    async def find_move(self, external_id: str) -> str | None:
+        """Look up an existing move by its restaurant_api source id, or None.
+
+        This is the duplicate guard: ``_create_move`` calls it before creating,
+        so a crash between "created in Odoo" and "stamped in our DB" cannot
+        produce a second draft on the next run.
+        """
+
 
 # ---------------------------------------------------------------------------
 # Phase-1 stub -- no network, fully deterministic for tests
@@ -146,12 +225,17 @@ class StubOdooClient(OdooClient):
     _seq: int = 0
     # supplier ref -> fake id, so a second upsert returns the same id
     _suppliers: dict[str, str] = field(default_factory=dict)
+    # external_id -> fake move id, mirroring the HTTP backend's dedup guard
+    _moves_by_ext: dict[str, str] = field(default_factory=dict)
     # posted "aging" rows the test can pre-seed
     ap_rows: list[dict[str, object]] = field(default_factory=list)
 
     def _next_id(self) -> str:
         self._seq += 1
         return str(self._seq)
+
+    async def find_move(self, external_id: str) -> str | None:
+        return self._moves_by_ext.get(external_id)
 
     async def upsert_supplier(self, supplier: SupplierRecord) -> str:
         rec_id = self._suppliers.get(supplier.ref) or self._next_id()
@@ -162,9 +246,18 @@ class StubOdooClient(OdooClient):
 
     def _record_move(self, op: str, entry: JournalEntry, post: bool) -> str:
         entry.assert_balanced()
+        if entry.journal_code not in ALLOWED_JOURNAL_CODES:
+            raise OperationNotAllowedError("account.move", f"journal:{entry.journal_code}")
         if post and not self.allow_auto_post:
             raise PostingNotPermittedError()
+        existing = self._moves_by_ext.get(entry.external_id)
+        if existing is not None:
+            self.calls.append(
+                {"op": op, "external_id": entry.external_id, "dedup": True, "id": existing}
+            )
+            return existing
         rec_id = self._next_id()
+        self._moves_by_ext[entry.external_id] = rec_id
         self.calls.append(
             {
                 "op": op,
@@ -219,9 +312,16 @@ class HttpOdooClient(OdooClient):
     url: str
     db: str
     username: str
-    api_key: str
+    # repr=False: the key must never surface in tracebacks, logs, or debug
+    # output that stringifies this object. It is sent only inside the JSON-RPC
+    # request body, which is never logged.
+    api_key: str = field(repr=False)
     allow_auto_post: bool = False
     timeout_seconds: float = 15.0
+    # Bounded retry for *transient* failures (transport errors, HTTP 5xx).
+    # JSON-RPC application errors and 4xx are never retried.
+    max_retries: int = 3
+    retry_backoff_seconds: float = 0.2
     transport: httpx.BaseTransport | None = None
     _client: httpx.AsyncClient | None = field(default=None, repr=False, compare=False)
     _uid: int | None = field(default=None, repr=False, compare=False)
@@ -263,15 +363,40 @@ class HttpOdooClient(OdooClient):
             "method": "call",
             "params": {"service": service, "method": method, "args": args},
         }
-        resp = await self._get_client().post("/jsonrpc", json=payload)
-        if resp.status_code >= 400:
-            raise OdooApiError(f"Odoo HTTP {resp.status_code}: {resp.text[:300]}")
-        body = resp.json()
-        if "error" in body:
-            err = body["error"]
-            msg = err.get("data", {}).get("message") if isinstance(err, dict) else str(err)
-            raise OdooApiError(f"Odoo JSON-RPC error: {msg}", data=err)
-        return body.get("result")
+        last_error = "unknown"
+        for attempt in range(self.max_retries + 1):
+            if attempt:
+                await asyncio.sleep(self.retry_backoff_seconds * (2 ** (attempt - 1)))
+            try:
+                resp = await self._get_client().post("/jsonrpc", json=payload)
+            except httpx.TransportError as exc:
+                # network-level: timeout, connect refused, proxy hiccup — retry
+                last_error = type(exc).__name__
+                logger.warning(
+                    "odoo rpc transport error, attempt %d/%d: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    last_error,
+                )
+                continue
+            if resp.status_code >= 500:
+                # server-side transient — retry
+                last_error = f"HTTP {resp.status_code}"
+                logger.warning(
+                    "odoo rpc %s, attempt %d/%d", last_error, attempt + 1, self.max_retries + 1
+                )
+                continue
+            if resp.status_code >= 400:
+                raise OdooApiError(f"Odoo HTTP {resp.status_code}: {resp.text[:300]}")
+            body = resp.json()
+            if "error" in body:
+                err = body["error"]
+                msg = err.get("data", {}).get("message") if isinstance(err, dict) else str(err)
+                raise OdooApiError(f"Odoo JSON-RPC error: {msg}", data=err)
+            return body.get("result")
+        raise OdooApiError(
+            f"Odoo unreachable after {self.max_retries + 1} attempts (last: {last_error})"
+        )
 
     async def _authenticate(self) -> int:
         if self._uid is None:
@@ -290,8 +415,7 @@ class HttpOdooClient(OdooClient):
         args: list[object],
         kwargs: dict[str, object] | None = None,
     ) -> object:
-        if model not in ALLOWED_MODELS:
-            raise ModelNotAllowedError(model)
+        enforce_operation_policy(model, method)
         uid = await self._authenticate()
         return await self._rpc(
             "object",
@@ -325,10 +449,30 @@ class HttpOdooClient(OdooClient):
             self._journal_ids[code] = int(rows[0]["id"])
         return self._journal_ids[code]
 
+    async def find_move(self, external_id: str) -> str | None:
+        rows = await self._execute_kw(
+            "account.move",
+            "search_read",
+            [[["ref", "like", f"[src:{external_id}]"]]],
+            {"fields": ["id"], "limit": 1},
+        )
+        if isinstance(rows, list) and rows:
+            return str(rows[0]["id"])
+        return None
+
     async def _create_move(self, entry: JournalEntry, op: str, post: bool) -> str:
         entry.assert_balanced()
+        if entry.journal_code not in ALLOWED_JOURNAL_CODES:
+            raise OperationNotAllowedError("account.move", f"journal:{entry.journal_code}")
         if post and not self.allow_auto_post:
             raise PostingNotPermittedError()
+        # Duplicate guard: a crash after Odoo-create but before our DB commit
+        # must not create a second draft on re-run. The external_id is embedded
+        # in the move's ref as a searchable marker.
+        existing = await self.find_move(entry.external_id)
+        if existing is not None:
+            logger.info("odoo %s dedup ext=%s -> existing %s", op, entry.external_id, existing)
+            return existing
         journal_id = await self._resolve_journal_id(entry.journal_code)
         line_cmds: list[object] = []
         for ln in entry.lines:
@@ -348,7 +492,8 @@ class HttpOdooClient(OdooClient):
         vals = {
             "move_type": entry.move_type,
             "date": entry.entry_date.isoformat(),
-            "ref": entry.ref,
+            # the [src:...] suffix is the idempotency marker find_move queries
+            "ref": f"{entry.ref} [src:{entry.external_id}]",
             "journal_id": journal_id,
             "line_ids": line_cmds,
         }
@@ -437,14 +582,20 @@ def reset_odoo() -> None:
 
 
 __all__ = [
+    "ALLOWED_JOURNAL_CODES",
     "ALLOWED_MODELS",
+    "ALLOWED_WRITE_OPERATIONS",
+    "FORBIDDEN_METHODS",
+    "READ_METHODS",
     "HttpOdooClient",
     "ModelNotAllowedError",
     "OdooApiError",
     "OdooClient",
+    "OperationNotAllowedError",
     "PostingNotPermittedError",
     "StubOdooClient",
     "SupplierRecord",
+    "enforce_operation_policy",
     "get_odoo",
     "reset_odoo",
 ]
