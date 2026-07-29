@@ -1,0 +1,283 @@
+........................................................................ [ 10%]
+..........................F............................................. [ 21%]
+........................................................................ [ 31%]
+........................................................................ [ 42%]
+........................................................................ [ 52%]
+........................................................................ [ 63%]
+............................s........................................... [ 73%]
+........................................................................ [ 84%]
+........................................................................ [ 94%]
+...................................                                      [100%]
+=================================== FAILURES ===================================
+_______________________ test_http_segments_and_broadcast _______________________
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:101: in map_httpcore_exceptions
+    yield
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:394: in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:256: in handle_async_request
+    raise exc from None
+.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py:236: in handle_async_request
+    response = await connection.handle_async_request(
+.venv/lib/python3.12/site-packages/httpcore/_async/http_proxy.py:297: in handle_async_request
+    raise ProxyError(msg)
+E   httpcore.ProxyError: 403 Forbidden
+
+The above exception was the direct cause of the following exception:
+tests/routers/test_growth_endpoints.py:213: in test_http_segments_and_broadcast
+    r = await client.post(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/applications.py:1163: in __call__
+    await super().__call__(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv/lib/python3.12/site-packages/starlette/middleware/base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+restaurant_api/middleware/request_context.py:83: in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/starlette/middleware/base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+.venv/lib/python3.12/site-packages/starlette/middleware/base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2697: in app
+    await route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1778: in handle
+    await self.original_router.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:2752: in handle
+    await included_router._handle_selected(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1798: in _handle_selected
+    await original_route.handle(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:1277: in handle
+    await app(scope, receive, send)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:156: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+.venv/lib/python3.12/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+.venv/lib/python3.12/site-packages/fastapi/routing.py:142: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/fastapi/routing.py:704: in app
+    raw_response = await run_endpoint_function(
+.venv/lib/python3.12/site-packages/fastapi/routing.py:350: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+restaurant_api/routers/membership.py:64: in broadcast_segment
+    return await rfm_service.broadcast_to_segment(
+restaurant_api/services/rfm_service.py:163: in broadcast_to_segment
+    delivered = await out.broadcast(
+restaurant_api/integrations/line/messenger.py:256: in broadcast
+    await self._post("/message/multicast", {"to": batch, "messages": [payload]})
+restaurant_api/integrations/line/messenger.py:222: in _post
+    resp = await self._get_client().post(path, json=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv/lib/python3.12/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:393: in handle_async_request
+    with map_httpcore_exceptions():
+/usr/lib/python3.12/contextlib.py:158: in __exit__
+    self.gen.throw(value)
+.venv/lib/python3.12/site-packages/httpx/_transports/default.py:118: in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+E   httpx.ProxyError: 403 Forbidden
+------------------------------ Captured log call -------------------------------
+ERROR    restaurant_api.access:request_context.py:86 http.request.error
+Traceback (most recent call last):
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpcore/_async/connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpcore/_async/http_proxy.py", line 297, in handle_async_request
+    raise ProxyError(msg)
+httpcore.ProxyError: 403 Forbidden
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/user/cliproxyapi-config/restaurant_api/middleware/request_context.py", line 83, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 2697, in app
+    await route.handle(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 1778, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 2752, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 1798, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 1277, in handle
+    await app(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 156, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 142, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 704, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 350, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/restaurant_api/routers/membership.py", line 64, in broadcast_segment
+    return await rfm_service.broadcast_to_segment(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/restaurant_api/services/rfm_service.py", line 163, in broadcast_to_segment
+    delivered = await out.broadcast(
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/restaurant_api/integrations/line/messenger.py", line 256, in broadcast
+    await self._post("/message/multicast", {"to": batch, "messages": [payload]})
+  File "/home/user/cliproxyapi-config/restaurant_api/integrations/line/messenger.py", line 222, in _post
+    resp = await self._get_client().post(path, json=body)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1859, in post
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+  File "/usr/lib/python3.12/contextlib.py", line 158, in __exit__
+    self.gen.throw(value)
+  File "/home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/httpx/_transports/default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.ProxyError: 403 Forbidden
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID create_waste_events_waste_post for function create_waste at /home/user/cliproxyapi-config/restaurant_api/routers/events.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID create_staff_meal_events_staff_meal_post for function create_staff_meal at /home/user/cliproxyapi-config/restaurant_api/routers/events.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID create_tasting_events_tasting_post for function create_tasting at /home/user/cliproxyapi-config/restaurant_api/routers/events.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID list_events_endpoint_events_get for function list_events_endpoint at /home/user/cliproxyapi-config/restaurant_api/routers/events.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID create_purchase_stock_purchases_post for function create_purchase at /home/user/cliproxyapi-config/restaurant_api/routers/stock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID list_purchases_stock_purchases_get for function list_purchases at /home/user/cliproxyapi-config/restaurant_api/routers/stock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID create_adjustment_stock_adjustments_post for function create_adjustment at /home/user/cliproxyapi-config/restaurant_api/routers/stock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID list_movements_stock_movements_get for function list_movements at /home/user/cliproxyapi-config/restaurant_api/routers/stock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID post_clock_in_clock_in_post for function post_clock_in at /home/user/cliproxyapi-config/restaurant_api/routers/clock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID post_clock_out_clock_out_post for function post_clock_out at /home/user/cliproxyapi-config/restaurant_api/routers/clock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID post_leave_request_clock_leave_request_post for function post_leave_request at /home/user/cliproxyapi-config/restaurant_api/routers/clock.py
+    warnings.warn(message, stacklevel=1)
+
+tests/routers/test_events_router.py::test_no_mutation_endpoints_exposed
+  /home/user/cliproxyapi-config/.venv/lib/python3.12/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID get_today_open_clock_today_get for function get_today_open at /home/user/cliproxyapi-config/restaurant_api/routers/clock.py
+    warnings.warn(message, stacklevel=1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/routers/test_growth_endpoints.py::test_http_segments_and_broadcast
+1 failed, 681 passed, 1 skipped, 13 warnings in 31.54s

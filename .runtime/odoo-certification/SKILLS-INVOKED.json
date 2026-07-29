@@ -1,0 +1,8 @@
+[
+  {"skill": "check", "source": "project skill (repo quality gate)", "version": "repo@25c807c", "reason": "release gate / python quality / testing routing", "phase": "2,7", "output": "raw-logs/baseline-*.log, raw-logs/final-pytest.log", "result": "PASS (with 2 classified pre-existing/external items)"},
+  {"skill": "security-review", "source": "harness skill", "version": "session", "reason": "security review routing (Phase 7 gate)", "phase": "7", "output": "SECURITY-REVIEW.md", "result": "NO_FINDINGS (identification agent, 16 tool uses; stage-2 filter n/a)", "note": "first invocation failed on missing origin/HEAD ref; fixed via git remote set-head, then ran"},
+  {"skill": "repository-audit equivalent", "source": null, "version": null, "reason": "required by mission", "phase": "1", "output": "CLAIM-VERIFICATION.md", "result": "MISSING_CAPABILITY — covered manually with git evidence"},
+  {"skill": "odoo-integration equivalent", "source": null, "version": null, "reason": "required by mission", "phase": "3-5", "output": "integrations/odoo/*", "result": "MISSING_CAPABILITY — implemented in-repo mirroring integrations/line"},
+  {"skill": "database-migration equivalent", "source": null, "version": null, "reason": "required by mission", "phase": "2,7", "output": "MIGRATION-REPORT.md", "result": "MISSING_CAPABILITY — covered via alembic from-zero + downgrade round-trip + check"},
+  {"skill": "independent-verification", "source": "Agent tool (read-only reviewer subagent)", "version": "session", "reason": "Phase 8 — implementer may not self-certify", "phase": "8", "output": "REVIEWER-VERDICT.md", "result": "see FINAL-CERTIFICATION-REPORT"}
+]

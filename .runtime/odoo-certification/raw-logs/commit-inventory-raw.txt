@@ -1,0 +1,38 @@
+───── aaacea6 ─────
+sha=aaacea63abf79c68b198fd54ada7e1cf2e4a59a5
+parent=656ed1fa54d6ed53225a7dc374232ce410d8a41a
+author=Claude <noreply@anthropic.com>
+date=2026-07-28T16:59:13+00:00
+subject=docs: Odoo 純後台整合規劃（會計+廠商帳+Claude 對話層）
+
+ docs/20_odoo_backoffice_integration.md | 245 +++++++++++++++++++++++++++++++++
+ 1 file changed, 245 insertions(+)
+───── 1695949 ─────
+sha=16959495ce1d7b41ba4fe8bfe7ee13fd2a014938
+parent=aaacea63abf79c68b198fd54ada7e1cf2e4a59a5
+author=Claude <noreply@anthropic.com>
+date=2026-07-28T18:09:54+00:00
+subject=feat: Odoo back-office integration layer (client + postings)
+
+ restaurant_api/config.py                     |  24 +-
+ restaurant_api/integrations/odoo/__init__.py |  68 ++++
+ restaurant_api/integrations/odoo/client.py   | 450 +++++++++++++++++++++++++++
+ restaurant_api/integrations/odoo/postings.py | 326 +++++++++++++++++++
+ tests/test_odoo_integration.py               | 377 ++++++++++++++++++++++
+ 5 files changed, 1239 insertions(+), 6 deletions(-)
+───── 25c807c ─────
+sha=25c807c381bc82d0d13e9c571cc3ecaaf3ca794b
+parent=16959495ce1d7b41ba4fe8bfe7ee13fd2a014938
+author=Claude <noreply@anthropic.com>
+date=2026-07-28T18:50:02+00:00
+subject=feat: procurement tables + Odoo AP sync (Phase C+D)
+
+ ...24214_procurement_suppliers_purchase_orders_.py | 203 +++++++++++++++++++++
+ restaurant_api/jobs/__init__.py                    |  11 ++
+ restaurant_api/jobs/odoo_sync.py                   |  33 ++++
+ restaurant_api/models/__init__.py                  |  11 ++
+ restaurant_api/models/procurement.py               | 177 ++++++++++++++++++
+ restaurant_api/services/odoo_sync_service.py       | 151 +++++++++++++++
+ tests/test_odoo_sync_service.py                    | 148 +++++++++++++++
+ tests/test_restaurant_api.py                       |   8 +-
+ 8 files changed, 740 insertions(+), 2 deletions(-)
