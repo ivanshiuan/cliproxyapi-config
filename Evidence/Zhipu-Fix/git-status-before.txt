@@ -1,0 +1,46 @@
+===== PHASE 1 GIT SCOPE RECONCILIATION =====
+DATE: 2026-07-29
+REPO: /home/user/cliproxyapi-config
+BRANCH: claude/odoo-inventory-integration-s4olur
+
+===== git status --short =====
+(no output — working tree clean)
+
+===== git status --porcelain=v1 -uall =====
+(no output — working tree clean after last commit)
+
+===== git diff --stat =====
+(no output)
+
+===== git diff --name-status =====
+(no output)
+
+===== git diff --cached --stat =====
+(no output)
+
+===== git diff --cached --name-status =====
+(no output)
+
+===== git ls-files --error-unmatch tests/allowlist.test.mjs =====
+error: pathspec 'tests/allowlist.test.mjs' did not match any file(s) known to git
+Did you forget to 'git add'?
+EXIT CODE: 1
+
+===== git log --oneline --all -- tests/allowlist.test.mjs =====
+(no output — no git history for this file in this repo)
+
+===== CLASSIFICATION =====
+tests/allowlist.test.mjs: MISSING
+
+===== FILESYSTEM CHECK =====
+/home/user/ contents: cliproxyapi-config (only directory)
+/home/user/Documents/: does not exist
+Documents/Claude/Projects/lovart-plus/: does not exist
+/home/user/cliproxyapi-config/server.js: does not exist (this repo has no server.js)
+/home/user/cliproxyapi-config/tests/allowlist.test.mjs: does not exist
+
+===== TARGET PROJECT STATUS =====
+lovart-plus project: NOT FOUND in this environment
+buff-hotpot-system (only candidate private JS repo): INACCESSIBLE
+  - add_repo: requires user approval (MCP -32003)
+  - github get_file_contents: access denied (session scoped to cliproxyapi-config only)
