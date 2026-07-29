@@ -91,6 +91,33 @@ def test_models_metadata_has_30_tables():
     assert len(Base.metadata.tables) == 36
 
 
+def test_odoo_sync_job_registered_at_0445_taipei():
+    """The nightly Odoo AP sync is wired exactly once with the agreed guards.
+
+    The scheduler is only constructed and inspected — never started.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    from restaurant_api.jobs import _register
+
+    scheduler = AsyncIOScheduler()
+    _register(scheduler)
+    pending = [item[0] for item in scheduler._pending_jobs]
+    odoo_jobs = [j for j in pending if j.id == "odoo_sync"]
+    assert len(odoo_jobs) == 1  # registered exactly once
+    job = odoo_jobs[0]
+    assert job.max_instances == 1
+    assert job.coalesce is True
+    assert job.misfire_grace_time == 600
+    trigger = job.trigger
+    assert isinstance(trigger, CronTrigger)
+    fields = {f.name: str(f) for f in trigger.fields}
+    assert fields["hour"] == "4"
+    assert fields["minute"] == "45"
+    assert str(trigger.timezone) == "Asia/Taipei"
+
+
 def test_money_columns_are_numeric_14_4():
     """Spot-check: revenue-critical columns must use the Money type (Numeric(14,4))."""
     from sqlalchemy import Numeric

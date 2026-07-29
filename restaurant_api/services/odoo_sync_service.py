@@ -38,10 +38,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import get_settings
 from ..database import get_sessionmaker
 from ..integrations.odoo import (
+    ALLOWED_CURRENCIES,
     OdooClient,
     PurchaseBill,
     SupplierRecord,
     get_odoo,
+    odoo_run_id,
     purchase_to_vendor_bill,
 )
 from ..models import PurchaseOrder, PurchaseOrderStatus, Supplier
@@ -61,6 +63,7 @@ class SyncReport:
     considered: int = 0
     pushed: int = 0
     failed: int = 0
+    skipped: int = 0
 
     @property
     def ok(self) -> bool:
@@ -112,64 +115,90 @@ async def _sync(
         stmt = stmt.where(PurchaseOrder.tenant_id == tenant_id)
 
     orders = list((await session.execute(stmt)).scalars().all())
-    pushed = failed = 0
+    pushed = failed = skipped = 0
+    run_token = odoo_run_id.set(run_id)
+    try:
+        for po in orders:
+            try:
+                if (po.subtotal or 0) == 0 and (po.tax_amount or 0) == 0:
+                    # A zero-amount PO carries no liability worth booking.
+                    # Skip it explicitly: no Odoo call, no failure attempt, no
+                    # dead-letter — but leave an auditable trace every night.
+                    skipped += 1
+                    logger.info(
+                        "odoo_sync.skipped_zero_amount",
+                        extra={"run_id": run_id, "po_id": str(po.id)},
+                    )
+                    continue
+                if po.currency_code not in ALLOWED_CURRENCIES:
+                    # Refuse before any egress: booking a foreign-currency PO
+                    # unconverted would mis-state the books. Loud failure path.
+                    raise ValueError(
+                        f"currency {po.currency_code!r} not supported by the Odoo "
+                        "bridge (TWD only); refusing to book"
+                    )
+                supplier = await session.get(Supplier, po.supplier_id)
+                if supplier is None or supplier.deleted_at is not None:
+                    # Hard refusal: never book an AP liability against a missing
+                    # or deactivated supplier. The PO goes to the failure path
+                    # and, after MAX attempts, the dead-letter queue.
+                    raise LookupError(
+                        f"supplier {po.supplier_id} is missing or deactivated; refusing to book AP"
+                    )
+                # The received timestamp is UTC in the DB; book the bill on the
+                # local (Asia/Taipei) accounting date.
+                received = po.received_at or po.ordered_at
+                occurred_on = received.astimezone(tz).date()
 
-    for po in orders:
-        try:
-            supplier = await session.get(Supplier, po.supplier_id)
-            if supplier is None or supplier.deleted_at is not None:
-                # Hard refusal: never book an AP liability against a missing or
-                # deactivated supplier. The PO goes to the failure path and,
-                # after MAX attempts, the dead-letter queue.
-                raise LookupError(
-                    f"supplier {po.supplier_id} is missing or deactivated; refusing to book AP"
+                partner_id = int(
+                    await client.upsert_supplier(
+                        SupplierRecord(
+                            ref=supplier.code,
+                            name=supplier.name,
+                            tax_id=supplier.tax_id,
+                            payment_terms=supplier.payment_terms,
+                        )
+                    )
                 )
-            # The received timestamp is UTC in the DB; book the bill on the
-            # local (Asia/Taipei) accounting date.
-            received = po.received_at or po.ordered_at
-            occurred_on = received.astimezone(tz).date()
 
-            await client.upsert_supplier(
-                SupplierRecord(
-                    ref=supplier.code,
-                    name=supplier.name,
-                    tax_id=supplier.tax_id,
-                    payment_terms=supplier.payment_terms,
+                entry = purchase_to_vendor_bill(
+                    PurchaseBill(
+                        # Tenant-qualified idempotency marker — never just a PO
+                        # number, which could repeat across tenants.
+                        source_id=f"purchase_order:{po.tenant_id}:{po.id}",
+                        supplier_ref=supplier.code,
+                        invoice_number=po.invoice_number or po.po_number,
+                        occurred_on=occurred_on,
+                        subtotal=po.subtotal,
+                        tax_amount=po.tax_amount,
+                    )
                 )
-            )
-
-            entry = purchase_to_vendor_bill(
-                PurchaseBill(
-                    source_id=str(po.id),
-                    supplier_ref=supplier.code,
-                    invoice_number=po.invoice_number or po.po_number,
-                    occurred_on=occurred_on,
-                    subtotal=po.subtotal,
-                    tax_amount=po.tax_amount,
+                # The bill is bound to the partner id the upsert returned — the
+                # PO payload has no way to carry a partner id of its own.
+                move_id = await client.create_vendor_bill(entry, partner_id=partner_id)
+                po.odoo_move_id = move_id
+                po.odoo_synced_at = datetime.now(UTC)
+                po.odoo_last_sync_error = None
+                pushed += 1
+                logger.info(
+                    "odoo_sync.pushed",
+                    extra={"run_id": run_id, "po_id": str(po.id), "odoo_move_id": move_id},
                 )
-            )
-            move_id = await client.create_vendor_bill(entry)
-            po.odoo_move_id = move_id
-            po.odoo_synced_at = datetime.now(UTC)
-            po.odoo_last_sync_error = None
-            pushed += 1
-            logger.info(
-                "odoo_sync.pushed",
-                extra={"run_id": run_id, "po_id": str(po.id), "odoo_move_id": move_id},
-            )
-        except Exception as exc:
-            failed += 1
-            po.odoo_sync_attempts = (po.odoo_sync_attempts or 0) + 1
-            po.odoo_last_sync_error = f"{type(exc).__name__}: {exc}"[:500]
-            logger.exception(
-                "odoo_sync.failed",
-                extra={
-                    "run_id": run_id,
-                    "po_id": str(po.id),
-                    "attempts": po.odoo_sync_attempts,
-                    "dead_lettered": po.odoo_sync_attempts >= MAX_SYNC_ATTEMPTS,
-                },
-            )
+            except Exception as exc:
+                failed += 1
+                po.odoo_sync_attempts = (po.odoo_sync_attempts or 0) + 1
+                po.odoo_last_sync_error = f"{type(exc).__name__}: {exc}"[:500]
+                logger.exception(
+                    "odoo_sync.failed",
+                    extra={
+                        "run_id": run_id,
+                        "po_id": str(po.id),
+                        "attempts": po.odoo_sync_attempts,
+                        "dead_lettered": po.odoo_sync_attempts >= MAX_SYNC_ATTEMPTS,
+                    },
+                )
+    finally:
+        odoo_run_id.reset(run_token)
 
     logger.info(
         "odoo_sync.complete",
@@ -178,9 +207,12 @@ async def _sync(
             "considered": len(orders),
             "pushed": pushed,
             "failed": failed,
+            "skipped": skipped,
         },
     )
-    return SyncReport(run_id=run_id, considered=len(orders), pushed=pushed, failed=failed)
+    return SyncReport(
+        run_id=run_id, considered=len(orders), pushed=pushed, failed=failed, skipped=skipped
+    )
 
 
 async def reconcile_sync_status(

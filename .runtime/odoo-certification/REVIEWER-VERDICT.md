@@ -31,3 +31,21 @@ run the documented deployment checklist against a real Odoo sandbox
 (scoped service user authenticates; one full sync produces a draft vendor
 bill; one re-run proves zero duplicates). No live Odoo was reachable in this
 environment (EXTERNAL_DEPENDENCY_BLOCKED).
+
+---
+
+## Post-verdict remediation note — 2026-07-29 (NOT a reviewer statement)
+
+After this verdict, an **implementer** remediation (branch
+`recovery/odoo-integration-clean-pr38`) addressed the independent re-review's
+sandbox blockers: mandatory supplier `partner_id` binding on vendor bills,
+search-based create recovery (no blind re-send on lost responses, for both
+account.move and res.partner), TWD-only currency fence, zero-amount PO skip,
+`invoice_date`, tenant-qualified source markers, and a scheduler-registration
+test. Implementer gate results live in TEST-RESULTS.txt and RISK-REGISTER.md
+(R7–R13).
+
+This note is written by the remediation implementer. It does NOT upgrade or
+re-issue the verdict above: **CONDITIONALLY_CERTIFIED stands unchanged**, the
+live-Odoo sandbox condition remains unexecuted, and the remediation itself
+requires a fresh independent re-review.

@@ -40,3 +40,28 @@ Evidence that it is unrelated to the Odoo work:
 
 - `pytest --collect-only`: 683 tests collected.
 - Progress-marker tally of the run log: 681 `.` + 1 `F` + 1 `s` = 683. Consistent.
+
+---
+
+## Remediation re-run — 2026-07-29 (sandbox-blocker fixes on this branch)
+
+All gates re-executed after the `fix(odoo)` remediation commit (not carried
+over from the table above):
+
+| Gate | Result |
+|---|---|
+| ruff check | All checks passed |
+| pyright | 0 errors, 0 warnings |
+| Full pytest | **697 passed, 1 failed, 1 skipped (699 collected)** |
+| Sole failure | `tests/routers/test_growth_endpoints.py::test_http_segments_and_broadcast` — EXTERNAL_DEPENDENCY_BLOCKED (live LINE call, sandbox egress proxy 403); pre-existing on base, untouched by this diff. NOT full green. |
+| Odoo suite (unit + policy + sync + E2E + scheduler test) | **61 passed, 0 failed** |
+| alembic upgrade head | at head, OK |
+| alembic check | No new upgrade operations detected |
+| db-smoke | PASS |
+| Secret scan | 0 true high-confidence hits (1 self-referential match: the literal pattern list in this document) |
+
+Remediation content: supplier partner_id binding (pre-egress validated,
+non-injectable), search-based create recovery for lost responses (account.move
+and res.partner; mandatory server-created-response-lost E2E variant), TWD-only
+fence, zero-amount PO skip, invoice_date, tenant-qualified source marker,
+scheduler-registration test. Live Odoo sandbox: still NOT executed.

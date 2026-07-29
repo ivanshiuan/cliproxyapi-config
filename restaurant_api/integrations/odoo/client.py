@@ -33,6 +33,7 @@ is enforced in code, not left to prose:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -43,6 +44,16 @@ import httpx
 from .postings import JournalEntry
 
 logger = logging.getLogger("restaurant_api.integrations.odoo")
+
+# Correlates client-level retry/recovery log lines with the sync run that
+# triggered them. The sync service sets this around each batch; outside a
+# batch it is simply empty.
+odoo_run_id: contextvars.ContextVar[str] = contextvars.ContextVar("odoo_run_id", default="")
+
+# The only currency this bridge accepts today. Anything else is refused before
+# any network egress — silently booking an unconverted foreign-currency amount
+# in the company currency would be a mis-statement, not a convenience.
+ALLOWED_CURRENCIES: frozenset[str] = frozenset({"TWD"})
 
 
 # Models this integration is ever allowed to touch. The allow-list IS the
@@ -141,6 +152,36 @@ class OdooApiError(RuntimeError):
         super().__init__(message)
 
 
+class OdooTransientError(OdooApiError):
+    """Transient transport/server failure (timeout, connection loss, 5xx,
+    malformed response) — the request MAY have succeeded server-side.
+
+    ``_create_move`` treats this as "outcome unknown" and recovers by searching
+    for the source marker instead of blindly re-sending the create.
+    """
+
+
+class InvalidPartnerError(ValueError):
+    """Raised when an ``in_invoice`` move lacks a controlled positive partner id."""
+
+    def __init__(self, partner_id: object) -> None:
+        super().__init__(
+            "a vendor bill (in_invoice) requires a positive integer partner_id "
+            f"obtained from upsert_supplier; got {partner_id!r}"
+        )
+
+
+class UnsupportedCurrencyError(ValueError):
+    """Raised before any egress when an entry's currency is not allow-listed."""
+
+    def __init__(self, currency_code: str) -> None:
+        self.currency_code = currency_code
+        super().__init__(
+            f"currency {currency_code!r} is not supported by the Odoo bridge "
+            f"(allowed: {sorted(ALLOWED_CURRENCIES)}); refusing before egress"
+        )
+
+
 class ModelNotAllowedError(PermissionError):
     """Raised when a call targets a model outside ``ALLOWED_MODELS``."""
 
@@ -157,6 +198,26 @@ class PostingNotPermittedError(PermissionError):
             "posting to the Odoo ledger requires allow_auto_post=True "
             "(set ODOO_ALLOW_AUTO_POST); create as draft instead"
         )
+
+
+def _validate_move_inputs(entry: JournalEntry, partner_id: int | None) -> None:
+    """Every pre-egress guard a move must pass, shared by stub and HTTP backend.
+
+    Runs before any network call: balance, currency allow-list, journal fence,
+    and — for vendor bills — the controlled partner binding. ``partner_id`` may
+    only originate from ``upsert_supplier``'s return value; the JournalEntry
+    itself deliberately has no partner-id field, so a PO payload cannot inject
+    one.
+    """
+    entry.assert_balanced()
+    if entry.currency_code not in ALLOWED_CURRENCIES:
+        raise UnsupportedCurrencyError(entry.currency_code)
+    if entry.journal_code not in ALLOWED_JOURNAL_CODES:
+        raise OperationNotAllowedError("account.move", f"journal:{entry.journal_code}")
+    if entry.move_type == "in_invoice" and (
+        isinstance(partner_id, bool) or not isinstance(partner_id, int) or partner_id <= 0
+    ):
+        raise InvalidPartnerError(partner_id)
 
 
 # ---------------------------------------------------------------------------
@@ -187,8 +248,15 @@ class OdooClient(ABC):
         """Create or update a supplier; returns the Odoo record id (as str)."""
 
     @abstractmethod
-    async def create_vendor_bill(self, entry: JournalEntry, *, post: bool = False) -> str:
-        """Create an AP vendor bill from a balanced entry. Draft unless post=True."""
+    async def create_vendor_bill(
+        self, entry: JournalEntry, *, partner_id: int, post: bool = False
+    ) -> str:
+        """Create an AP vendor bill from a balanced entry. Draft unless post=True.
+
+        ``partner_id`` must be the id returned by ``upsert_supplier`` — the
+        bill is always bound to a controlled supplier partner, never to a
+        caller-chosen value.
+        """
 
     @abstractmethod
     async def post_journal_entry(self, entry: JournalEntry, *, post: bool = False) -> str:
@@ -246,10 +314,10 @@ class StubOdooClient(OdooClient):
         logger.info("odoo upsert_supplier (stub) ref=%s -> %s", supplier.ref, rec_id)
         return rec_id
 
-    def _record_move(self, op: str, entry: JournalEntry, post: bool) -> str:
-        entry.assert_balanced()
-        if entry.journal_code not in ALLOWED_JOURNAL_CODES:
-            raise OperationNotAllowedError("account.move", f"journal:{entry.journal_code}")
+    def _record_move(
+        self, op: str, entry: JournalEntry, post: bool, partner_id: int | None = None
+    ) -> str:
+        _validate_move_inputs(entry, partner_id)
         if post and not self.allow_auto_post:
             raise PostingNotPermittedError()
         existing = self._moves_by_ext.get(entry.external_id)
@@ -266,6 +334,7 @@ class StubOdooClient(OdooClient):
                 "external_id": entry.external_id,
                 "posted": post and self.allow_auto_post,
                 "entry": entry,
+                "partner_id": partner_id,
                 "id": rec_id,
             }
         )
@@ -273,8 +342,10 @@ class StubOdooClient(OdooClient):
         logger.info("odoo %s (stub) ext=%s state=%s -> %s", op, entry.external_id, state, rec_id)
         return rec_id
 
-    async def create_vendor_bill(self, entry: JournalEntry, *, post: bool = False) -> str:
-        return self._record_move("create_vendor_bill", entry, post)
+    async def create_vendor_bill(
+        self, entry: JournalEntry, *, partner_id: int, post: bool = False
+    ) -> str:
+        return self._record_move("create_vendor_bill", entry, post, partner_id)
 
     async def post_journal_entry(self, entry: JournalEntry, *, post: bool = False) -> str:
         return self._record_move("post_journal_entry", entry, post)
@@ -359,45 +430,80 @@ class HttpOdooClient(OdooClient):
             await self._client.aclose()
             self._client = None
 
-    async def _rpc(self, service: str, method: str, args: list[object]) -> object:
+    async def _rpc(
+        self,
+        service: str,
+        method: str,
+        args: list[object],
+        *,
+        max_attempts: int | None = None,
+    ) -> object:
+        """One JSON-RPC call with bounded retry on *transient* failures only.
+
+        ``max_attempts=1`` disables in-call retry — used for non-idempotent
+        writes (``create``), whose retry is handled by search-based recovery in
+        ``_create_move`` instead of blind re-send. Application errors (4xx,
+        JSON-RPC error body) never retry; exhausted transient failures raise
+        ``OdooTransientError`` so callers can distinguish "outcome unknown"
+        from a definitive rejection.
+        """
         payload = {
             "jsonrpc": "2.0",
             "method": "call",
             "params": {"service": service, "method": method, "args": args},
         }
+        attempts_allowed = self.max_retries + 1 if max_attempts is None else max_attempts
         last_error = "unknown"
-        for attempt in range(self.max_retries + 1):
+        for attempt in range(attempts_allowed):
             if attempt:
                 await asyncio.sleep(self.retry_backoff_seconds * (2 ** (attempt - 1)))
             try:
                 resp = await self._get_client().post("/jsonrpc", json=payload)
             except httpx.TransportError as exc:
-                # network-level: timeout, connect refused, proxy hiccup — retry
+                # network-level: timeout, connect refused, proxy hiccup — transient
                 last_error = type(exc).__name__
                 logger.warning(
                     "odoo rpc transport error, attempt %d/%d: %s",
                     attempt + 1,
-                    self.max_retries + 1,
+                    attempts_allowed,
                     last_error,
+                    extra={"run_id": odoo_run_id.get()},
                 )
                 continue
             if resp.status_code >= 500:
-                # server-side transient — retry
+                # server-side transient
                 last_error = f"HTTP {resp.status_code}"
                 logger.warning(
-                    "odoo rpc %s, attempt %d/%d", last_error, attempt + 1, self.max_retries + 1
+                    "odoo rpc %s, attempt %d/%d",
+                    last_error,
+                    attempt + 1,
+                    attempts_allowed,
+                    extra={"run_id": odoo_run_id.get()},
                 )
                 continue
             if resp.status_code >= 400:
                 raise OdooApiError(f"Odoo HTTP {resp.status_code}: {resp.text[:300]}")
-            body = resp.json()
+            try:
+                body = resp.json()
+            except ValueError:
+                # 2xx with an unparseable body: the request may have been
+                # applied server-side — treat as transient/outcome-unknown,
+                # never as a definitive result.
+                last_error = "malformed JSON response"
+                logger.warning(
+                    "odoo rpc malformed response, attempt %d/%d",
+                    attempt + 1,
+                    attempts_allowed,
+                    extra={"run_id": odoo_run_id.get()},
+                )
+                continue
             if "error" in body:
                 err = body["error"]
                 msg = err.get("data", {}).get("message") if isinstance(err, dict) else str(err)
                 raise OdooApiError(f"Odoo JSON-RPC error: {msg}", data=err)
             return body.get("result")
-        raise OdooApiError(
-            f"Odoo unreachable after {self.max_retries + 1} attempts (last: {last_error})"
+        raise OdooTransientError(
+            f"Odoo unreachable after {attempts_allowed} attempts (last: {last_error})"
         )
 
     async def _authenticate(self) -> int:
@@ -416,6 +522,8 @@ class HttpOdooClient(OdooClient):
         method: str,
         args: list[object],
         kwargs: dict[str, object] | None = None,
+        *,
+        max_attempts: int | None = None,
     ) -> object:
         enforce_operation_policy(model, method)
         uid = await self._authenticate()
@@ -423,6 +531,7 @@ class HttpOdooClient(OdooClient):
             "object",
             "execute_kw",
             [self.db, uid, self.api_key, model, method, args, kwargs or {}],
+            max_attempts=max_attempts,
         )
 
     async def _resolve_account_id(self, code: str) -> int:
@@ -462,12 +571,15 @@ class HttpOdooClient(OdooClient):
             return str(rows[0]["id"])
         return None
 
-    async def _create_move(self, entry: JournalEntry, op: str, post: bool) -> str:
-        entry.assert_balanced()
-        if entry.journal_code not in ALLOWED_JOURNAL_CODES:
-            raise OperationNotAllowedError("account.move", f"journal:{entry.journal_code}")
+    async def _create_move(
+        self, entry: JournalEntry, op: str, post: bool, partner_id: int | None = None
+    ) -> str:
+        # All guards fire before any network egress: balance, currency fence,
+        # journal fence, controlled partner binding for vendor bills.
+        _validate_move_inputs(entry, partner_id)
         if post and not self.allow_auto_post:
             raise PostingNotPermittedError()
+        marker = f"[src:{entry.external_id}]"
         # Duplicate guard: a crash after Odoo-create but before our DB commit
         # must not create a second draft on re-run. The external_id is embedded
         # in the move's ref as a searchable marker.
@@ -491,35 +603,89 @@ class HttpOdooClient(OdooClient):
                     },
                 )
             )
-        vals = {
+        vals: dict[str, object] = {
             "move_type": entry.move_type,
             "date": entry.entry_date.isoformat(),
             # the [src:...] suffix is the idempotency marker find_move queries
-            "ref": f"{entry.ref} [src:{entry.external_id}]",
+            "ref": f"{entry.ref} {marker}",
             "journal_id": journal_id,
             "line_ids": line_cmds,
         }
-        created = await self._execute_kw("account.move", "create", [vals])
-        move_id = created[0] if isinstance(created, list) else created
+        if entry.move_type == "in_invoice":
+            # partner binding comes only from upsert_supplier's result, and the
+            # invoice date is the controlled business date, not caller input.
+            vals["partner_id"] = partner_id
+            vals["invoice_date"] = entry.entry_date.isoformat()
+
+        # create is NOT idempotent, so it never blind-retries. On a transient
+        # failure the outcome is unknown (Odoo may have committed the move and
+        # lost the response), so recovery is: search the source marker; reuse
+        # the move if found; only re-send create when the search proves the
+        # server never created it. Total attempts stay bounded.
+        move_id: object | None = None
+        for create_attempt in range(1, self.max_retries + 2):
+            try:
+                created = await self._execute_kw(
+                    "account.move", "create", [vals], max_attempts=1
+                )
+                move_id = created[0] if isinstance(created, list) else created
+                break
+            except OdooTransientError:
+                logger.warning(
+                    "odoo.create_outcome_unknown",
+                    extra={
+                        "run_id": odoo_run_id.get(),
+                        "marker": marker,
+                        "attempt": create_attempt,
+                        "action": "search_marker_before_any_recreate",
+                    },
+                )
+                recovered = await self.find_move(entry.external_id)
+                if recovered is not None:
+                    logger.info(
+                        "odoo.create_recovered",
+                        extra={
+                            "run_id": odoo_run_id.get(),
+                            "marker": marker,
+                            "attempt": create_attempt,
+                            "action": "reuse_server_created_move",
+                            "odoo_move_id": recovered,
+                        },
+                    )
+                    return recovered
+                if create_attempt > self.max_retries:
+                    raise
+                await asyncio.sleep(self.retry_backoff_seconds * (2 ** (create_attempt - 1)))
+        if move_id is None:
+            raise OdooTransientError(
+                f"Odoo create unresolved after {self.max_retries + 1} bounded attempts"
+            )
         if post and self.allow_auto_post:
             await self._execute_kw("account.move", "action_post", [[move_id]])
         state = "posted" if (post and self.allow_auto_post) else "draft"
         logger.info("odoo %s ext=%s state=%s -> %s", op, entry.external_id, state, move_id)
         return str(move_id)
 
-    async def create_vendor_bill(self, entry: JournalEntry, *, post: bool = False) -> str:
-        return await self._create_move(entry, "create_vendor_bill", post)
+    async def create_vendor_bill(
+        self, entry: JournalEntry, *, partner_id: int, post: bool = False
+    ) -> str:
+        return await self._create_move(entry, "create_vendor_bill", post, partner_id)
 
     async def post_journal_entry(self, entry: JournalEntry, *, post: bool = False) -> str:
         return await self._create_move(entry, "post_journal_entry", post)
 
-    async def upsert_supplier(self, supplier: SupplierRecord) -> str:
+    async def _find_partner(self, ref: str) -> int | None:
         found = await self._execute_kw(
             "res.partner",
             "search_read",
-            [[["ref", "=", supplier.ref]]],
+            [[["ref", "=", ref]]],
             {"fields": ["id"], "limit": 1},
         )
+        if isinstance(found, list) and found:
+            return int(found[0]["id"])
+        return None
+
+    async def upsert_supplier(self, supplier: SupplierRecord) -> str:
         vals: dict[str, object] = {
             "name": supplier.name,
             "ref": supplier.ref,
@@ -527,12 +693,34 @@ class HttpOdooClient(OdooClient):
         }
         if supplier.tax_id:
             vals["vat"] = supplier.tax_id
-        if isinstance(found, list) and found:
-            rec_id = int(found[0]["id"])
+        rec_id = await self._find_partner(supplier.ref)
+        if rec_id is not None:
             await self._execute_kw("res.partner", "write", [[rec_id], vals])
             return str(rec_id)
-        created = await self._execute_kw("res.partner", "create", [vals])
-        return str(created[0] if isinstance(created, list) else created)
+        # Same no-blind-retry policy as moves: a transient failure on create
+        # means "outcome unknown" — re-search the unique ref before ever
+        # re-sending create, so a lost response cannot duplicate a partner.
+        for create_attempt in range(1, self.max_retries + 2):
+            try:
+                created = await self._execute_kw("res.partner", "create", [vals], max_attempts=1)
+                return str(created[0] if isinstance(created, list) else created)
+            except OdooTransientError:
+                logger.warning(
+                    "odoo.partner_create_outcome_unknown",
+                    extra={
+                        "run_id": odoo_run_id.get(),
+                        "supplier_ref": supplier.ref,
+                        "attempt": create_attempt,
+                        "action": "search_ref_before_any_recreate",
+                    },
+                )
+                recovered = await self._find_partner(supplier.ref)
+                if recovered is not None:
+                    return str(recovered)
+                if create_attempt > self.max_retries:
+                    raise
+                await asyncio.sleep(self.retry_backoff_seconds * (2 ** (create_attempt - 1)))
+        raise OdooTransientError("unreachable")  # pragma: no cover
 
     async def get_ap_aging(self, supplier_ref: str | None = None) -> list[dict[str, object]]:
         domain: list[object] = [
@@ -584,20 +772,25 @@ def reset_odoo() -> None:
 
 
 __all__ = [
+    "ALLOWED_CURRENCIES",
     "ALLOWED_JOURNAL_CODES",
     "ALLOWED_MODELS",
     "ALLOWED_WRITE_OPERATIONS",
     "FORBIDDEN_METHODS",
     "READ_METHODS",
     "HttpOdooClient",
+    "InvalidPartnerError",
     "ModelNotAllowedError",
     "OdooApiError",
     "OdooClient",
+    "OdooTransientError",
     "OperationNotAllowedError",
     "PostingNotPermittedError",
     "StubOdooClient",
     "SupplierRecord",
+    "UnsupportedCurrencyError",
     "enforce_operation_policy",
     "get_odoo",
+    "odoo_run_id",
     "reset_odoo",
 ]

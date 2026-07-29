@@ -69,6 +69,11 @@ class FakeOdooServer:
         self.posted_move_ids: list[int] = []
         self.request_log: list[tuple[str, str]] = []
         self.fail_creates_with_timeout = 0
+        # account.move-specific failure modes for the retry-recovery contract:
+        # fail BEFORE creating (server never committed) vs. create-then-drop
+        # the response (server committed, client never saw the id).
+        self.fail_move_creates_with_timeout = 0
+        self.drop_move_create_response = 0
         self._next = 500
 
     def _nid(self) -> int:
@@ -118,10 +123,17 @@ class FakeOdooServer:
                 if self.fail_creates_with_timeout > 0:
                     self.fail_creates_with_timeout -= 1
                     raise httpx.ConnectTimeout("simulated odoo outage")
+                if self.fail_move_creates_with_timeout > 0:
+                    self.fail_move_creates_with_timeout -= 1
+                    raise httpx.ConnectTimeout("simulated odoo outage (move create)")
                 mid = self._nid()
                 vals = dict(args[0])
                 vals["state"] = "draft"
                 self.moves[mid] = vals
+                if self.drop_move_create_response > 0:
+                    # the move IS committed server-side; only the response dies
+                    self.drop_move_create_response -= 1
+                    raise httpx.ReadTimeout("response lost after server-side create")
                 return httpx.Response(200, json={"result": mid})
             if method == "action_post":
                 self.posted_move_ids.extend(args[0])
@@ -221,6 +233,10 @@ async def test_e2e_receipt_to_draft_vendor_bill_with_rerun_and_crash_replay(
     assert move["state"] == "draft"
     assert fake.posted_move_ids == []
     assert move["move_type"] == "in_invoice"
+    # 2b. the bill is bound to the upserted supplier partner and carries the
+    #     controlled invoice date (the local receiving date)
+    assert move["partner_id"] == partner_ids[0]
+    assert move["invoice_date"] == move["date"]
 
     # 3. debits equal credits on the wire
     lines = [cmd[2] for cmd in move["line_ids"]]
@@ -238,7 +254,8 @@ async def test_e2e_receipt_to_draft_vendor_bill_with_rerun_and_crash_replay(
     # 6. source linkage recorded on both sides
     assert po.odoo_move_id == str(move_id)
     assert po.odoo_synced_at is not None
-    assert f"[src:{po.id}]" in str(move["ref"])
+    # tenant-qualified marker — a PO number alone could repeat across tenants
+    assert f"[src:purchase_order:{seed_tenant.id}:{po.id}]" in str(move["ref"])
 
     # 7a. plain re-run: nothing new pushed
     report2 = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=odoo)
@@ -297,6 +314,55 @@ async def test_e2e_timeout_retry_creates_no_duplicate(
     report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=odoo)
     assert report.pushed == 1 and report.failed == 0
     assert len(fake.moves) == 1  # retried safely, exactly one draft
+    await odoo.aclose()
+
+
+async def test_e2e_move_created_but_response_lost_recovers_without_duplicate(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """MANDATORY variant: Odoo commits the vendor bill but the response dies.
+
+    The client must NOT blind-recreate: it searches the source marker, finds
+    the server-committed move, and the local PO is stamped with that exact id.
+    """
+    fake = FakeOdooServer()
+    odoo = fake.client()
+    _, po = await _scenario(db_session, seed_tenant, seed_store)
+
+    fake.drop_move_create_response = 1  # commit server-side, then lose response
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=odoo)
+    assert report.pushed == 1 and report.failed == 0
+
+    move_creates = [r for r in fake.request_log if r == ("account.move", "create")]
+    assert len(move_creates) == 1  # create was NEVER re-sent
+    assert len(fake.moves) == 1  # exactly one stored move
+    stored_move_id = next(iter(fake.moves))
+    assert po.odoo_move_id == str(stored_move_id)  # recovered id == stored id
+    assert fake.moves[stored_move_id]["state"] == "draft"
+    assert fake.posted_move_ids == []
+    await odoo.aclose()
+
+
+async def test_e2e_persistent_move_timeout_fails_bounded_into_retry_path(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """Create times out every attempt and the server never commits: the client
+    fails after a bounded number of creates, and the PO takes one failure
+    attempt toward dead-letter — no unbounded retry, no phantom move."""
+    fake = FakeOdooServer()
+    odoo = fake.client()
+    _, po = await _scenario(db_session, seed_tenant, seed_store)
+
+    fake.fail_move_creates_with_timeout = 99  # every account.move create dies
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=odoo)
+    assert report.pushed == 0 and report.failed == 1
+
+    move_creates = [r for r in fake.request_log if r == ("account.move", "create")]
+    assert len(move_creates) == 4  # default max_retries=3 -> 4 bounded attempts
+    assert len(fake.moves) == 0
+    assert po.odoo_synced_at is None
+    assert po.odoo_sync_attempts == 1  # one failure attempt toward dead-letter
+    assert po.odoo_last_sync_error is not None
     await odoo.aclose()
 
 

@@ -86,9 +86,13 @@ async def test_sync_pushes_received_po_and_stamps_it(
 
     ops = [c["op"] for c in stub.calls]
     assert "upsert_supplier" in ops
+    upsert = next(c for c in stub.calls if c["op"] == "upsert_supplier")
     bills = [c for c in stub.calls if c["op"] == "create_vendor_bill"]
     assert len(bills) == 1
-    assert bills[0]["external_id"] == str(po.id)
+    # tenant-qualified idempotency marker — never just a PO number
+    assert bills[0]["external_id"] == f"purchase_order:{seed_tenant.id}:{po.id}"
+    # the bill is bound to the partner id the upsert returned
+    assert bills[0]["partner_id"] == int(str(upsert["id"]))
     assert bills[0]["posted"] is False  # draft — auto-post off by default
     entry = bills[0]["entry"]
     assert isinstance(entry, JournalEntry)
@@ -129,10 +133,12 @@ class _FailOnStub(StubOdooClient):
 
     fail_ext: str = ""
 
-    async def create_vendor_bill(self, entry: JournalEntry, *, post: bool = False) -> str:
-        if entry.external_id == self.fail_ext:
+    async def create_vendor_bill(
+        self, entry: JournalEntry, *, partner_id: int, post: bool = False
+    ) -> str:
+        if self.fail_ext in entry.external_id:
             raise RuntimeError("odoo unreachable")
-        return await super().create_vendor_bill(entry, post=post)
+        return await super().create_vendor_bill(entry, partner_id=partner_id, post=post)
 
 
 async def test_per_item_error_isolation(
@@ -215,3 +221,96 @@ async def test_report_carries_run_id(
         tenant_id=seed_tenant.id, session=db_session, odoo=StubOdooClient()
     )
     assert len(report.run_id) == 12  # traceable correlation id on every run
+
+
+async def test_zero_amount_po_is_skipped_not_failed(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """A zero-value PO must never reach Odoo, never burn a failure attempt,
+    and never dead-letter — it is explicitly skipped with an audit log."""
+    sup = await _supplier(db_session, seed_tenant.id)
+    po = await _po(
+        db_session,
+        seed_tenant,
+        seed_store,
+        sup,
+        subtotal=Decimal("0"),
+        tax=Decimal("0"),
+    )
+    stub = StubOdooClient()
+
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+
+    assert report.skipped == 1
+    assert report.failed == 0
+    assert report.pushed == 0
+    assert stub.calls == []  # no Odoo call at all
+    assert po.odoo_sync_attempts == 0  # not a failure
+    assert po.odoo_synced_at is None
+    counts = await reconcile_sync_status(db_session, tenant_id=seed_tenant.id)
+    assert counts["dead_letter"] == 0
+
+
+async def test_non_twd_po_is_refused_before_any_odoo_call(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    sup = await _supplier(db_session, seed_tenant.id)
+    po = await _po(db_session, seed_tenant, seed_store, sup)
+    po.currency_code = "USD"
+    stub = StubOdooClient()
+
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+
+    assert report.failed == 1
+    assert report.pushed == 0
+    assert stub.calls == []  # refused before any egress
+    assert po.odoo_last_sync_error is not None
+    assert "USD" in po.odoo_last_sync_error
+
+
+async def test_partner_binding_is_consistent_across_crash_replay(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """If the stamp is lost after a successful push (crash before commit), the
+    re-run reuses the SAME move and the SAME supplier partner id."""
+    sup = await _supplier(db_session, seed_tenant.id)
+    po = await _po(db_session, seed_tenant, seed_store, sup)
+    stub = StubOdooClient()
+
+    first = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+    assert first.pushed == 1
+    first_move = po.odoo_move_id
+    first_partner = next(c for c in stub.calls if c["op"] == "upsert_supplier")["id"]
+
+    # simulate the crash: Odoo has the move, our stamp is lost
+    po.odoo_move_id = None
+    po.odoo_synced_at = None
+    await db_session.flush()
+
+    second = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+    assert second.pushed == 1
+    assert po.odoo_move_id == first_move  # deduped to the same move
+    partners = [c["id"] for c in stub.calls if c["op"] == "upsert_supplier"]
+    assert partners == [first_partner, first_partner]  # same controlled partner
+    bills = [c for c in stub.calls if c["op"] == "create_vendor_bill" and not c.get("dedup")]
+    assert len(bills) == 1  # only ever one real create
+
+
+async def test_sync_uses_upsert_result_not_po_data_for_partner(
+    db_session: AsyncSession, seed_tenant: Tenant, seed_store: Store
+) -> None:
+    """Adversarial PO text fields cannot steer the partner binding — the bill's
+    partner id is exactly what upsert_supplier returned."""
+    sup = await _supplier(db_session, seed_tenant.id)
+    po = await _po(db_session, seed_tenant, seed_store, sup)
+    po.notes = "partner_id: 999999"  # attacker-controlled free text
+    po.invoice_number = "partner_id=888888"
+    stub = StubOdooClient()
+
+    report = await sync_purchase_orders(tenant_id=seed_tenant.id, session=db_session, odoo=stub)
+
+    assert report.pushed == 1
+    upsert_id = next(c for c in stub.calls if c["op"] == "upsert_supplier")["id"]
+    bill = next(c for c in stub.calls if c["op"] == "create_vendor_bill")
+    assert bill["partner_id"] == int(str(upsert_id))
+    assert bill["partner_id"] not in (999999, 888888)

@@ -82,5 +82,31 @@
     "product_code_modified": false,
     "any_pr_merged": false,
     "zhipu_task_executed": false
+  },
+  "remediation_2026_07_29": {
+    "role": "implementer (NOT independent reviewer); independent re-review required",
+    "base_head_before": "d68af381f4a01d645b5451ecc6a5d60feecd8140",
+    "commit_subject": "fix(odoo): bind supplier and make create retry idempotent",
+    "fixes": [
+      "vendor bill partner_id binding: required positive int from upsert_supplier, pre-egress validated, not injectable via PO payload",
+      "method-aware create retry: no blind re-send; transient failure -> search source marker / partner ref -> reuse server-committed record; bounded",
+      "mandatory E2E variant: server-created-but-response-lost recovers to the same move, create sent exactly once",
+      "TWD-only currency fence in service and client, refused before egress",
+      "zero-amount PO skipped without failure attempts or dead-letter, audit-logged",
+      "invoice_date set to controlled local receiving date",
+      "source marker tenant-qualified: [src:purchase_order:<tenant_id>:<po_id>]",
+      "scheduler registration test (04:45 Asia/Taipei, guards)"
+    ],
+    "gates": {
+      "ruff_check": "pass",
+      "pyright": "0 errors, 0 warnings",
+      "pytest_full": { "passed": 697, "failed": 1, "skipped": 1, "collected": 699 },
+      "pytest_failure_detail": "test_http_segments_and_broadcast — EXTERNAL_DEPENDENCY_BLOCKED (pre-existing live-LINE egress block); NOT full green",
+      "pytest_odoo_suite": { "passed": 61, "failed": 0 },
+      "alembic": "upgrade head OK; check: no new upgrade operations",
+      "db_smoke": "pass",
+      "secret_scan_true_hits": 0
+    },
+    "live_odoo_sandbox_executed": false
   }
 }
