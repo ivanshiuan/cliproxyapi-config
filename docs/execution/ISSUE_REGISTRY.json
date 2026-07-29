@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "last_updated": "2026-07-29",
+  "project": "lovart-plus",
+  "issues": [
+    {
+      "id": "SEC-001",
+      "title": "Unauthorized Asset Read",
+      "severity": "P1",
+      "status": "OPEN",
+      "created_date": "2026-07-29",
+      "last_updated": "2026-07-29",
+      "assigned_to": "pending",
+      "evidence": {
+        "local_unauthorized_access": "CONFIRMED",
+        "cloud_function_missing_auth_guard": "CONFIRMED",
+        "production_unauthorized_access": "NOT_TESTED",
+        "cache_control_public_exposure": "CONFIRMED",
+        "actual_cloudflare_cdn_cache_hit": "NOT_TESTED",
+        "cache_isolation": "FAIL"
+      },
+      "root_cause_file": "docs/execution/SEC-001-ROOT-CAUSE.md",
+      "remediation_file": "docs/execution/SEC-001-REMEDIATION-PLAN.md",
+      "adr_file": "docs/governance/ADR-SEC-001-PRIVATE-ASSET-DELIVERY.md",
+      "product_code_modified": false,
+      "commit_created": false,
+      "push_status": "NOT_PUSHED",
+      "deployment_status": "NOT_DEPLOYED",
+      "remediation_phases": [
+        {
+          "phase": 1,
+          "name": "Immediate Mitigation",
+          "status": "READY",
+          "description": "Add LP_CODE auth guard to asset endpoint; change Cache-Control to private, no-store; add X-Content-Type-Options; purge CDN cache",
+          "completion_state": "MITIGATED_NOT_CLOSED",
+          "authorized": false,
+          "implemented": false,
+          "tested": false
+        },
+        {
+          "phase": 2,
+          "name": "Complete Signed URL",
+          "status": "BLOCKED",
+          "blocked_by": [
+            "data_model_readiness_unknown",
+            "r2_key_schema_not_inspected",
+            "canvas_persistence_format_unknown",
+            "phase_1_not_complete"
+          ],
+          "completion_state": "CLOSED",
+          "authorized": false,
+          "implemented": false,
+          "tested": false
+        }
+      ],
+      "founder_decisions_required": [
+        {
+          "id": "FD-001",
+          "question": "Single-user LP_CODE mode vs. future multi-tenant: must the current architecture be backward-compatible with a multi-tenant migration, or is a clean-break migration acceptable?",
+          "default": "backward_compatible",
+          "status": "PENDING"
+        },
+        {
+          "id": "FD-002",
+          "question": "Project Delete: when a project is deleted, should its R2 assets be deleted immediately, soft-deleted with a retention period, or access-revoked but data retained?",
+          "default": null,
+          "status": "PENDING"
+        },
+        {
+          "id": "FD-003",
+          "question": "Export: does export require a separate permission tier, or does any LP_CODE holder who can access a project have export rights?",
+          "default": null,
+          "status": "PENDING"
+        },
+        {
+          "id": "FD-004",
+          "question": "Share feature: if a user shares a canvas, does the share link (a) require the recipient to authenticate with LP_CODE, (b) generate a separate temporary-public URL for the shared canvas assets, or (c) embed assets inline in the share export?",
+          "default": null,
+          "status": "PENDING"
+        },
+        {
+          "id": "FD-005",
+          "question": "Public mode: is there any use case where assets should be publicly cacheable (e.g., a public portfolio mode)? If yes, this requires explicit architecture decision separate from LP_CODE mode.",
+          "default": "no_public_mode",
+          "status": "PENDING"
+        }
+      ],
+      "open_security_issues_not_addressed": [
+        "SEC-002",
+        "SEC-ASSET-SSRF-001",
+        "SEC-ZHIPU-KEY-001"
+      ]
+    },
+    {
+      "id": "SEC-002",
+      "title": "API Key Architecture (details TBD)",
+      "severity": "UNKNOWN",
+      "status": "OPEN",
+      "created_date": "2026-07-29",
+      "last_updated": "2026-07-29",
+      "notes": "Not authorized to address in this work package. Referenced as open issue.",
+      "authorized_this_package": false
+    },
+    {
+      "id": "SEC-ZHIPU-KEY-001",
+      "title": "Zhipu API Key Security",
+      "severity": "UNKNOWN",
+      "status": "OPEN",
+      "created_date": "2026-07-29",
+      "last_updated": "2026-07-29",
+      "notes": "Not authorized to address in this work package. Must remain OPEN.",
+      "authorized_this_package": false
+    },
+    {
+      "id": "SEC-ASSET-SSRF-001",
+      "title": "Asset Download SSRF Risk",
+      "severity": "UNKNOWN",
+      "status": "OPEN",
+      "created_date": "2026-07-29",
+      "last_updated": "2026-07-29",
+      "notes": "Not authorized to modify SSRF download logic in this work package. Must remain OPEN.",
+      "authorized_this_package": false
+    }
+  ]
+}
