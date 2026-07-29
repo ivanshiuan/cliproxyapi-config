@@ -1,0 +1,86 @@
+{
+  "incident": "PR-38-SCOPE-CONTAMINATION",
+  "date": "2026-07-29",
+  "repository": "ivanshiuan/cliproxyapi-config",
+  "original_pr": {
+    "number": 38,
+    "state_at_recovery": "open (draft)",
+    "head_branch": "claude/odoo-inventory-integration-s4olur",
+    "head_sha_at_recovery": "2163fef944c3d46d11323d9045822ac97d04a7b4",
+    "base_branch": "claude/autonomous-resttech-enterprise-oW9jp",
+    "base_sha": "2778d163ba086114198d298ffec877978c70c647",
+    "disposition": "preserved unmodified as incident evidence; do not merge"
+  },
+  "contaminating_commits": [
+    {
+      "sha": "c4f1a7c23f989730042677ab674ef1f2768a9bf3",
+      "subject": "docs(sec-001): add complete remediation specification for unauthorized asset read",
+      "classification": "UNRELATED_TO_PR_38",
+      "files": [
+        "docs/execution/CURRENT_WORK_PACKAGE.md",
+        "docs/execution/EXECUTION_LOG.md",
+        "docs/execution/ISSUE_REGISTRY.json",
+        "docs/execution/SEC-001-REMEDIATION-PLAN.md",
+        "docs/execution/SEC-001-ROOT-CAUSE.md",
+        "docs/execution/TEST_EVIDENCE.md",
+        "docs/governance/ADR-SEC-001-PRIVATE-ASSET-DELIVERY.md"
+      ]
+    },
+    {
+      "sha": "2163fef944c3d46d11323d9045822ac97d04a7b4",
+      "subject": "chore(evidence): add ZHIPU fix Phase 1 scope reconciliation evidence",
+      "classification": "UNRELATED_TO_PR_38",
+      "files": [
+        "Evidence/Zhipu-Fix/SCOPE-RECONCILIATION.md",
+        "Evidence/Zhipu-Fix/SECURITY-STATUS.md",
+        "Evidence/Zhipu-Fix/git-diff-before.patch",
+        "Evidence/Zhipu-Fix/git-status-before.txt"
+      ]
+    }
+  ],
+  "recovery": {
+    "strategy": "clean branch from last clean commit; original branch and PR untouched; no history rewrite",
+    "branch": "recovery/odoo-integration-clean-pr38",
+    "created_from_sha": "dfc18c60b03c8eff5178cd2aa8d9b74536f99b3c",
+    "clean_odoo_commits_relative_to_base": [
+      "aaacea63abf79c68b198fd54ada7e1cf2e4a59a5",
+      "16959495ce1d7b41ba4fe8bfe7ee13fd2a014938",
+      "25c807c381bc82d0d13e9c571cc3ecaaf3ca794b",
+      "7caee33ca3e79b12433e209663e67ab49955ee67",
+      "67e9e0f48125b3cd7251ae6b79a9a8ed4793985e",
+      "dfc18c60b03c8eff5178cd2aa8d9b74536f99b3c"
+    ],
+    "exclusion_proof": {
+      "c4f1a7c_is_ancestor_of_recovery_head": false,
+      "2163fef_is_ancestor_of_recovery_head": false,
+      "contaminating_files_in_tree": 0,
+      "contaminating_files_on_disk": 0
+    }
+  },
+  "quality_gates_rerun": {
+    "ruff_check": "pass",
+    "ruff_format_check_informational": "51 files would be reformatted (ruff 0.16.0 latest, not an enforced gate, no product code modified)",
+    "pyright": "0 errors, 0 warnings",
+    "pytest_full": { "passed": 681, "failed": 1, "skipped": 1, "collected": 683 },
+    "pytest_failure_detail": {
+      "test": "tests/routers/test_growth_endpoints.py::test_http_segments_and_broadcast",
+      "cause": "httpx.ProxyError 403 — sandbox egress proxy blocks live LINE HTTP call",
+      "pre_existing": true,
+      "touched_by_odoo_commits": false
+    },
+    "pytest_odoo_suite": { "passed": 45, "failed": 0 },
+    "alembic_upgrade_head": "pass (at head)",
+    "alembic_no_drift": "pass (No new upgrade operations detected)",
+    "db_smoke": "pass",
+    "secret_scan_high_confidence_hits": 0
+  },
+  "constraints_observed": {
+    "pr_38_modified": false,
+    "pr_38_closed": false,
+    "original_branch_modified": false,
+    "force_push_performed": false,
+    "product_code_modified": false,
+    "any_pr_merged": false,
+    "zhipu_task_executed": false
+  }
+}
