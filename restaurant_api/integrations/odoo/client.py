@@ -24,8 +24,10 @@ is enforced in code, not left to prose:
    run. Actually *posting* a move to the ledger is high-risk and only happens
    when the caller passes ``post=True`` AND the client was built with
    ``allow_auto_post=True``. The nightly sync leaves everything as drafts for
-   human review; flipping one config flag (``ODOO_ALLOW_AUTO_POST``) is how you
-   opt into full automation -- decided once, never prompted per event.
+   human review and never passes ``post=True`` -- so flipping
+   ``ODOO_ALLOW_AUTO_POST`` alone changes nothing (fail-safe); full automation
+   additionally requires a deliberate code change at the call site passing
+   ``post=True``. Decided once, never prompted per event.
 """
 
 from __future__ import annotations

@@ -7,12 +7,13 @@
     "0_discovery": "COMPLETE",
     "1_claim_verification": "COMPLETE",
     "2_baseline": "COMPLETE",
-    "3_security_audit": "IN_PROGRESS",
-    "4_reliability": "PENDING",
-    "5_e2e_sandbox": "PENDING",
-    "6_mission_controls": "PENDING",
-    "7_full_gate": "PENDING",
-    "8_independent_review": "PENDING"
+    "3_security_audit": "COMPLETE",
+    "4_reliability": "COMPLETE",
+    "5_e2e_sandbox": "COMPLETE",
+    "6_mission_controls": "COMPLETE",
+    "7_full_gate": "COMPLETE",
+    "8_independent_review": "COMPLETE"
   },
-  "heartbeat_utc": "2026-07-29T07:28:22Z"
+  "heartbeat_utc": "2026-07-29T07:46:23Z",
+  "final_status": "CONDITIONALLY_CERTIFIED"
 }
