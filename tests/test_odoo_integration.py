@@ -286,10 +286,119 @@ def test_http_create_vendor_bill_sends_balanced_move():
     assert vals["journal_id"] == 3
     assert vals["partner_id"] == 13  # supplier binding travels on the wire
     assert vals["invoice_date"] == "2026-07-28"  # controlled business date
-    # debits equal credits on the wire too
-    total_debit = sum(cmd[2]["debit"] for cmd in vals["line_ids"])
-    total_credit = sum(cmd[2]["credit"] for cmd in vals["line_ids"])
-    assert total_debit == total_credit == 105.0
+    # vendor bills go on the wire as Odoo-native invoice lines — no raw journal
+    # items, and no manual accounts-payable line (Odoo generates that).
+    assert "line_ids" not in vals
+    inv_lines = [cmd[2] for cmd in vals["invoice_line_ids"]]
+    assert all(ln["price_unit"] > 0 and ln["quantity"] == 1.0 for ln in inv_lines)
+    assert 13 not in [ln["account_id"] for ln in inv_lines]  # 2100 AP not sent
+    # invoice-line total equals the entry's debit total; Odoo's payable matches
+    assert sum(ln["price_unit"] * ln["quantity"] for ln in inv_lines) == 105.0
+
+
+def _general_entry(move_type: str = "entry") -> JournalEntry:
+    """A balanced misc journal entry on accounts the mock knows (1310/2100)."""
+    return JournalEntry(
+        external_id="je-1",
+        entry_date=date(2026, 7, 28),
+        journal_code="MISC",
+        ref="misc",
+        move_type=move_type,
+        lines=(
+            JournalLine("1310", debit=Decimal("100"), description="dr"),
+            JournalLine("2100", credit=Decimal("100"), description="cr"),
+        ),
+    )
+
+
+def test_vendor_bill_uses_invoice_line_ids_not_raw_line_ids():
+    """Odoo 17 compatibility: vendor bills are sent as invoice lines."""
+    handler, seen = _odoo_handler()
+
+    async def _run() -> None:
+        client = _http_client(handler)
+        try:
+            await client.create_vendor_bill(_bill(), partner_id=13)
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    vals = seen["created_vals"]
+    assert vals["move_type"] == "in_invoice"
+    assert "invoice_line_ids" in vals
+    assert "line_ids" not in vals  # NOT raw journal items
+    assert vals["partner_id"] == 13
+    assert vals["invoice_date"] == vals["date"]
+
+
+def test_vendor_bill_excludes_manual_payable_line():
+    """The manual accounts-payable (2100) credit line is never sent; Odoo owns it."""
+    handler, seen = _odoo_handler()
+
+    async def _run() -> None:
+        client = _http_client(handler)
+        try:
+            await client.create_vendor_bill(_bill(), partner_id=13)
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    inv_lines = [cmd[2] for cmd in seen["created_vals"]["invoice_line_ids"]]
+    # only the two debit business lines (1310 inventory, 1360 input VAT); the
+    # 2100 payable line (mock id 13) is absent.
+    assert 13 not in [ln["account_id"] for ln in inv_lines]
+    assert {ln["account_id"] for ln in inv_lines} == {11, 12}
+    assert all("debit" not in ln and "credit" not in ln for ln in inv_lines)
+
+
+def test_vendor_bill_invoice_lines_sum_to_balanced_total():
+    """sum(price_unit * quantity) equals the entry's Decimal debit total."""
+    handler, seen = _odoo_handler()
+    bill = _bill()  # subtotal 100 + tax 5 -> debit total 105
+
+    async def _run() -> None:
+        client = _http_client(handler)
+        try:
+            await client.create_vendor_bill(bill, partner_id=13)
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    inv_lines = [cmd[2] for cmd in seen["created_vals"]["invoice_line_ids"]]
+    total = sum(ln["price_unit"] * ln["quantity"] for ln in inv_lines)
+    assert total == float(bill.total_debit()) == 105.0
+
+
+def test_general_entry_still_uses_raw_line_ids():
+    """move_type='entry' keeps raw balanced debit/credit line_ids."""
+    handler, seen = _odoo_handler()
+
+    async def _run() -> None:
+        client = _http_client(handler)
+        try:
+            await client.post_journal_entry(_general_entry())
+        finally:
+            await client.aclose()
+
+    asyncio.run(_run())
+    vals = seen["created_vals"]
+    assert vals["move_type"] == "entry"
+    assert "line_ids" in vals
+    assert "invoice_line_ids" not in vals
+    lines = [cmd[2] for cmd in vals["line_ids"]]
+    assert sum(ln["debit"] for ln in lines) == sum(ln["credit"] for ln in lines) == 100.0
+
+
+def test_unsupported_move_type_rejected_pre_egress():
+    """Any move type other than in_invoice/entry is refused before egress."""
+    # _no_egress_handler raises AssertionError on any HTTP request.
+    http = _http_client(_no_egress_handler)
+    stub = StubOdooClient()
+    bogus = _general_entry(move_type="out_invoice")
+    with pytest.raises(OperationNotAllowedError):
+        asyncio.run(http.post_journal_entry(bogus))
+    with pytest.raises(OperationNotAllowedError):
+        asyncio.run(stub.post_journal_entry(bogus))
 
 
 def test_http_execute_kw_blocks_disallowed_model():

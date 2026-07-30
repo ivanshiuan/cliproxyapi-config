@@ -215,6 +215,23 @@ restaurant_api 進貨紀錄        Odoo 廠商發票            進項統一發�
 - **網址 / TLS**：Cloudflare（你 `docs/11` / `deploy-sid` 已在用 Cloudflare Pages/DNS），一個 `.com` 年約 NT$300，串 Odoo 子網域如 `erp.yourdomain.com`。
 - **憑證**：`ODOO_URL / ODOO_DB / ODOO_API_KEY` 進 `.env`（gitignore 已擋）。**Odoo API key 用最小權限帳號**（只給會計/採購模組），不給 admin。
 
+### 8.1 服務帳號最小權限（Live Sandbox 實測，Odoo 17.0）
+
+Live sandbox run `sbx20260730090315` 實測，專用非 admin 服務帳號需要且僅需要：
+
+- **Accounting**（`account.group_account_user`）：讀 journal/account、建立 draft 廠商發票與分錄。
+- **Contact Creation**（`base.group_partner_manager`）：upsert 供應商 `res.partner`。缺這個權限 `res.partner.create` 會被 Odoo 拒（"not allowed to create Contact"）。Odoo 亦可用 **Purchase / Administrator** 授予此權限；本橋接改用 Contact Creation，**不需要 Purchase app**（本橋接不碰 Odoo 的 `purchase.order`）。
+
+明確**不得**授予：Administration/Settings、User management、付款建立、Bank/Cash 操作、刪除或取消已過帳單據。
+
+### 8.2 Odoo 17 廠商發票 wire 格式（相容性鐵律）
+
+- **廠商發票**（`move_type="in_invoice"`）必須用 **`invoice_line_ids`**（每個借方業務行一筆：存貨 + 進項稅額），由 **Odoo 自動生成應付（AP）對方帳**（依 `partner_id` + 行合計）。
+- **不得**對發票傳原始 `debit`/`credit` 的 `line_ids`——Odoo 17 的 invoice engine 會重算並以「借貸不平衡」拒絕（借方 invoice line 歸零）。此缺陷已由 live sandbox 實證並修正。
+- **一般分錄**（`move_type="entry"`，如報廢、薪資）維持使用原始 `line_ids`。
+- 進項稅額以獨立 invoice line 記在科目 `1360`（`EXPLICIT_INPUT_VAT_LINE_COMPATIBILITY_MODE`）；此模式**不設定 Odoo tax 物件**，刻意**不是**完整台灣稅務配置，屬後續工作。
+- `move_type` 只允許 `in_invoice` / `entry`，其他型別在 egress 前於 `_validate_move_inputs` 直接拒絕。
+
 ---
 
 ## 9. 風險紅線 / 反模式（違反任一條，整合就會變災難）

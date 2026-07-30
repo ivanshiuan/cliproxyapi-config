@@ -44,6 +44,11 @@ from restaurant_api.services.odoo_sync_service import sync_purchase_orders
 pytestmark = pytest.mark.asyncio
 
 
+class _LegacyPayloadRejected(Exception):
+    """The fake Odoo refuses a payload real Odoo 17 would reject (e.g. a vendor
+    bill sent as raw journal ``line_ids`` instead of ``invoice_line_ids``)."""
+
+
 class FakeOdooServer:
     """Stateful in-process Odoo JSON-RPC double.
 
@@ -66,6 +71,7 @@ class FakeOdooServer:
     def __init__(self) -> None:
         self.partners: dict[int, dict[str, object]] = {}
         self.moves: dict[int, dict[str, object]] = {}
+        self.move_create_payloads: list[dict[str, object]] = []
         self.posted_move_ids: list[int] = []
         self.request_log: list[tuple[str, str]] = []
         self.fail_creates_with_timeout = 0
@@ -79,6 +85,46 @@ class FakeOdooServer:
     def _nid(self) -> int:
         self._next += 1
         return self._next
+
+    def _materialize_move(self, payload: dict[str, object]) -> dict[str, object]:
+        """Model Odoo's ``account.move`` create semantics.
+
+        - ``in_invoice``: expand ``invoice_line_ids`` into debit journal items
+          and generate exactly one accounts-payable credit counterpart for the
+          partner (as real Odoo does). Reject a legacy raw-``line_ids`` vendor
+          bill — that shape is silently rebalanced (and then refused) by Odoo.
+        - ``entry``: store the raw balanced ``line_ids`` verbatim.
+        """
+        move_type = payload.get("move_type")
+        stored = dict(payload)
+        stored["state"] = "draft"
+        if move_type == "in_invoice":
+            if "line_ids" in payload:
+                raise _LegacyPayloadRejected(
+                    "The move is not balanced: a vendor bill must use "
+                    "invoice_line_ids, not raw debit/credit line_ids."
+                )
+            inv = [cmd[2] for cmd in payload.get("invoice_line_ids", [])]  # type: ignore[union-attr]
+            items: list[dict[str, object]] = []
+            debit_total = 0.0
+            for ln in inv:
+                amount = float(ln["price_unit"]) * float(ln.get("quantity", 1.0))
+                debit_total += amount
+                items.append({"account_id": ln["account_id"], "name": ln.get("name"),
+                              "debit": amount, "credit": 0.0, "display_type": "product"})
+            # Odoo generates ONE payable counterpart; amount == invoice debit total.
+            items.append({"account_id": self.ACCOUNTS["2100"], "name": "Payable (Odoo-generated)",
+                          "debit": 0.0, "credit": debit_total, "display_type": "payment_term",
+                          "auto_generated": True, "partner_id": payload.get("partner_id")})
+            assert debit_total == sum(i["credit"] for i in items), "fake invoice imbalance"
+            stored["line_ids"] = [(0, 0, it) for it in items]
+            stored["amount_total"] = debit_total
+            stored["amount_residual"] = debit_total
+        else:  # "entry" — raw journal items only
+            if "invoice_line_ids" in payload:
+                raise _LegacyPayloadRejected("a general entry must use raw line_ids")
+            stored["line_ids"] = payload.get("line_ids", [])
+        return stored
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         params = json.loads(request.content)["params"]
@@ -126,10 +172,15 @@ class FakeOdooServer:
                 if self.fail_move_creates_with_timeout > 0:
                     self.fail_move_creates_with_timeout -= 1
                     raise httpx.ConnectTimeout("simulated odoo outage (move create)")
+                payload = dict(args[0])
+                self.move_create_payloads.append(payload)
+                try:
+                    stored = self._materialize_move(payload)
+                except _LegacyPayloadRejected as exc:
+                    # Odoo 17 refuses this shape (unbalanced invoice) — JSON-RPC error.
+                    return httpx.Response(200, json={"error": {"data": {"message": str(exc)}}})
                 mid = self._nid()
-                vals = dict(args[0])
-                vals["state"] = "draft"
-                self.moves[mid] = vals
+                self.moves[mid] = stored
                 if self.drop_move_create_response > 0:
                     # the move IS committed server-side; only the response dies
                     self.drop_move_create_response -= 1
@@ -250,6 +301,17 @@ async def test_e2e_receipt_to_draft_vendor_bill_with_rerun_and_crash_replay(
         ln["debit"] == 120.0 and ln_acct == FakeOdooServer.ACCOUNTS["1360"]
         for ln, ln_acct in ((ln, ln["account_id"]) for ln in lines)
     )
+
+    # 5b. the wire payload is Odoo-native invoice lines — NOT raw journal items,
+    #     and NO manual payable line; Odoo generated the AP counterpart.
+    payload = fake.move_create_payloads[0]
+    assert "invoice_line_ids" in payload and "line_ids" not in payload
+    inv_lines = [cmd[2] for cmd in payload["invoice_line_ids"]]
+    assert all(ln["price_unit"] > 0 for ln in inv_lines)
+    assert FakeOdooServer.ACCOUNTS["2100"] not in [ln["account_id"] for ln in inv_lines]
+    assert sum(ln["price_unit"] * ln["quantity"] for ln in inv_lines) == 2520.0
+    payable = [cmd[2] for cmd in move["line_ids"] if cmd[2].get("auto_generated")]
+    assert len(payable) == 1 and payable[0]["credit"] == 2520.0  # Odoo-generated
 
     # 6. source linkage recorded on both sides
     assert po.odoo_move_id == str(move_id)
@@ -400,3 +462,29 @@ async def test_e2e_secrets_absent_from_logs(
     assert secret not in caplog.text
     assert secret not in repr(odoo)
     await odoo.aclose()
+
+
+async def test_fake_odoo_rejects_legacy_raw_vendor_bill_payload() -> None:
+    """The fake models Odoo 17: a vendor bill sent as raw journal ``line_ids``
+    (the pre-remediation payload) is refused as unbalanced, not silently
+    accepted. This guards against a regression back to the broken shape."""
+    fake = FakeOdooServer()
+    legacy_payload = {
+        "move_type": "in_invoice",
+        "partner_id": 501,
+        "journal_id": FakeOdooServer.JOURNALS["PUR"],
+        "ref": "進貨 AB-1 [src:purchase_order:t:po]",
+        "line_ids": [
+            (0, 0, {"account_id": 11, "name": "存貨", "debit": 1000.0, "credit": 0.0}),
+            (0, 0, {"account_id": 13, "name": "應付", "debit": 0.0, "credit": 1000.0}),
+        ],
+    }
+    request = httpx.Request(
+        "POST", "https://odoo-sandbox.example.com/jsonrpc",
+        json={"params": {"service": "object", "method": "execute_kw",
+                         "args": ["db", 7, "k", "account.move", "create", [legacy_payload], {}]}},
+    )
+    resp = fake.handler(request)
+    body = resp.json()
+    assert "error" in body  # rejected, not accepted
+    assert fake.moves == {}  # nothing stored

@@ -108,6 +108,12 @@ FORBIDDEN_METHODS: frozenset[str] = frozenset(
 # deliberately absent: money movement is not this bridge's job.
 ALLOWED_JOURNAL_CODES: frozenset[str] = frozenset({"PUR", "SAL", "MISC"})
 
+# Move types this bridge knows how to build a wire payload for. ``in_invoice``
+# is a vendor bill (Odoo-native invoice lines); ``entry`` is a miscellaneous
+# journal entry (raw balanced debit/credit lines). Any other type is refused
+# before egress — we will not send a shape Odoo would silently reinterpret.
+SUPPORTED_MOVE_TYPES: frozenset[str] = frozenset({"in_invoice", "entry"})
+
 
 class OperationNotAllowedError(PermissionError):
     """Raised when a (model, method) pair is outside the operation policy."""
@@ -212,6 +218,11 @@ def _validate_move_inputs(entry: JournalEntry, partner_id: int | None) -> None:
     entry.assert_balanced()
     if entry.currency_code not in ALLOWED_CURRENCIES:
         raise UnsupportedCurrencyError(entry.currency_code)
+    if entry.move_type not in SUPPORTED_MOVE_TYPES:
+        # An unknown move type would be built into a payload Odoo could
+        # reinterpret (e.g. an invoice engine silently rebalancing raw lines).
+        # Refuse before any network egress.
+        raise OperationNotAllowedError("account.move", f"move_type:{entry.move_type}")
     if entry.journal_code not in ALLOWED_JOURNAL_CODES:
         raise OperationNotAllowedError("account.move", f"journal:{entry.journal_code}")
     if entry.move_type == "in_invoice" and (
@@ -571,23 +582,15 @@ class HttpOdooClient(OdooClient):
             return str(rows[0]["id"])
         return None
 
-    async def _create_move(
-        self, entry: JournalEntry, op: str, post: bool, partner_id: int | None = None
-    ) -> str:
-        # All guards fire before any network egress: balance, currency fence,
-        # journal fence, controlled partner binding for vendor bills.
-        _validate_move_inputs(entry, partner_id)
-        if post and not self.allow_auto_post:
-            raise PostingNotPermittedError()
-        marker = f"[src:{entry.external_id}]"
-        # Duplicate guard: a crash after Odoo-create but before our DB commit
-        # must not create a second draft on re-run. The external_id is embedded
-        # in the move's ref as a searchable marker.
-        existing = await self.find_move(entry.external_id)
-        if existing is not None:
-            logger.info("odoo %s dedup ext=%s -> existing %s", op, entry.external_id, existing)
-            return existing
-        journal_id = await self._resolve_journal_id(entry.journal_code)
+    async def _build_journal_entry_vals(
+        self, entry: JournalEntry, journal_id: int, marker: str
+    ) -> dict[str, object]:
+        """Miscellaneous journal entry (``move_type='entry'``): raw line_ids.
+
+        Balanced debit/credit journal items are the correct Odoo shape for a
+        general entry, and Odoo stores them verbatim. This shape is deliberately
+        NOT used for vendor bills — see ``_build_invoice_vals``.
+        """
         line_cmds: list[object] = []
         for ln in entry.lines:
             account_id = await self._resolve_account_id(ln.account_code)
@@ -603,7 +606,7 @@ class HttpOdooClient(OdooClient):
                     },
                 )
             )
-        vals: dict[str, object] = {
+        return {
             "move_type": entry.move_type,
             "date": entry.entry_date.isoformat(),
             # the [src:...] suffix is the idempotency marker find_move queries
@@ -611,11 +614,83 @@ class HttpOdooClient(OdooClient):
             "journal_id": journal_id,
             "line_ids": line_cmds,
         }
-        if entry.move_type == "in_invoice":
+
+    async def _build_invoice_vals(
+        self, entry: JournalEntry, partner_id: int | None, journal_id: int, marker: str
+    ) -> dict[str, object]:
+        """Vendor bill (``move_type='in_invoice'``): Odoo-native invoice lines.
+
+        Odoo 17's invoice engine recomputes the journal items of an invoice-type
+        move from its invoice lines, so raw debit/credit ``line_ids`` are
+        rejected as unbalanced (confirmed against live Odoo 17, sandbox run
+        sbx20260730090315: debits collapsed to 0). We therefore send only the
+        **debit** business lines as ``invoice_line_ids`` and let Odoo generate
+        the accounts-payable counterpart from ``partner_id`` + the line total.
+
+        EXPLICIT_INPUT_VAT_LINE_COMPATIBILITY_MODE: input VAT is booked as its
+        own invoice line on its own account (1360), NOT as an Odoo tax object —
+        no ``tax_ids`` are set. The manual accounts-payable credit line (2100)
+        from the balanced ``JournalEntry`` is intentionally omitted; that line
+        is Odoo's to generate. The entry has already passed Decimal balance
+        validation, so ``sum(invoice line price_unit) == entry.total_debit()``
+        and Odoo's generated payable equals that same total.
+        """
+        invoice_lines: list[object] = []
+        for ln in entry.lines:
+            if ln.debit <= 0:
+                # credit lines (the accounts-payable counterpart) are generated
+                # by Odoo from the partner + total — never sent by us.
+                continue
+            account_id = await self._resolve_account_id(ln.account_code)
+            invoice_lines.append(
+                (
+                    0,
+                    0,
+                    {
+                        "name": ln.description,
+                        "account_id": account_id,
+                        "quantity": 1.0,
+                        "price_unit": _to_wire(ln.debit),
+                    },
+                )
+            )
+        iso = entry.entry_date.isoformat()
+        return {
+            "move_type": entry.move_type,
             # partner binding comes only from upsert_supplier's result, and the
-            # invoice date is the controlled business date, not caller input.
-            vals["partner_id"] = partner_id
-            vals["invoice_date"] = entry.entry_date.isoformat()
+            # invoice/accounting dates are the controlled business date.
+            "partner_id": partner_id,
+            "invoice_date": iso,
+            "date": iso,
+            "journal_id": journal_id,
+            # the [src:...] suffix is the idempotency marker find_move queries
+            "ref": f"{entry.ref} {marker}",
+            "invoice_line_ids": invoice_lines,
+        }
+
+    async def _create_move(
+        self, entry: JournalEntry, op: str, post: bool, partner_id: int | None = None
+    ) -> str:
+        # All guards fire before any network egress: balance, currency fence,
+        # move-type fence, journal fence, controlled partner binding for bills.
+        _validate_move_inputs(entry, partner_id)
+        if post and not self.allow_auto_post:
+            raise PostingNotPermittedError()
+        marker = f"[src:{entry.external_id}]"
+        # Duplicate guard: a crash after Odoo-create but before our DB commit
+        # must not create a second draft on re-run. The external_id is embedded
+        # in the move's ref as a searchable marker.
+        existing = await self.find_move(entry.external_id)
+        if existing is not None:
+            logger.info("odoo %s dedup ext=%s -> existing %s", op, entry.external_id, existing)
+            return existing
+        journal_id = await self._resolve_journal_id(entry.journal_code)
+        # Vendor bills use Odoo-native invoice lines; general entries use raw
+        # balanced journal items. Unsupported types were already refused above.
+        if entry.move_type == "in_invoice":
+            vals = await self._build_invoice_vals(entry, partner_id, journal_id, marker)
+        else:  # "entry"
+            vals = await self._build_journal_entry_vals(entry, journal_id, marker)
 
         # create is NOT idempotent, so it never blind-retries. On a transient
         # failure the outcome is unknown (Odoo may have committed the move and
