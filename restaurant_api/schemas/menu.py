@@ -77,7 +77,7 @@ _KitchenStationLiteral = Literal["kitchen", "bar", "dessert", "counter"]
 class MenuItemCreate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    sku: str = Field(min_length=1, max_length=64)
+    sku: str | None = Field(default=None, min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=120)
     price: StrictDecimal = Field(ge=Decimal("0"))
     store_id: UUID | None = None

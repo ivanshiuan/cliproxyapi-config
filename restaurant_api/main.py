@@ -40,6 +40,7 @@ from .routers import pos_auth as pos_auth_router
 from .routers import reports as reports_router
 from .routers import reservations as reservations_router
 from .routers import stock as stock_router
+from .routers import stores as stores_router
 from .routers import table_order as table_order_router
 from .routers import tables as tables_router
 from .routers import ugc as ugc_router
@@ -106,6 +107,7 @@ _mount_router(discount_rules_router, "/discount-rules")
 _mount_router(online_takeout_router, "/online-takeout")
 _mount_router(table_order_router, "/t")
 _mount_router(stock_router, "/stock")
+_mount_router(stores_router, "/stores")
 _mount_router(clock_router, "/clock")
 _mount_router(events_router, "/events")
 _mount_router(kitchen_router, "/kitchen")
@@ -194,6 +196,13 @@ if _WAITLIST_DIR.is_dir():
 _POS_V2_DIR = Path(__file__).parent / "pos_ui_v2"
 if _POS_V2_DIR.is_dir():
     app.mount("/pos-v2", StaticFiles(directory=str(_POS_V2_DIR), html=True), name="pos-v2")
+
+# P11 後台管理畫面 — /admin-ui/?store=<uuid>: 菜單分類/品項、桌位、自動折扣規則的
+# 圖形化 CRUD (本來只有 REST API 沒有管理介面). 同一套 Apple HIG 設計語言, 接真
+# /menu /tables /discount-rules /stores 端點. 這是「前台後台」完整拼圖的最後一塊.
+_ADMIN_UI_DIR = Path(__file__).parent / "admin_ui"
+if _ADMIN_UI_DIR.is_dir():
+    app.mount("/admin-ui", StaticFiles(directory=str(_ADMIN_UI_DIR), html=True), name="admin-ui")
 
 
 @app.get("/version", tags=["meta"])

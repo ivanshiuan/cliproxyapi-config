@@ -175,7 +175,8 @@ async def create_item(
     *,
     tenant_id: uuid.UUID,
 ) -> MenuItemResponse:
-    await _guard_sku_unique(session, tenant_id=tenant_id, sku=payload.sku)
+    sku = payload.sku or uuid.uuid4().hex[:8].upper()
+    await _guard_sku_unique(session, tenant_id=tenant_id, sku=sku)
     if payload.category_id is not None:
         await _load_category(session, payload.category_id, tenant_id)
     _guard_availability_window(payload.available_start_time, payload.available_end_time)
@@ -183,7 +184,7 @@ async def create_item(
         tenant_id=tenant_id,
         store_id=payload.store_id,
         category_id=payload.category_id,
-        sku=payload.sku,
+        sku=sku,
         name=payload.name,
         description=payload.description,
         price=payload.price,
@@ -202,7 +203,7 @@ async def create_item(
         tenant_id=tenant_id,
         store_id=payload.store_id,
         target=("menu_items", row.id),
-        after={"sku": payload.sku, "name": payload.name, "price": str(payload.price)},
+        after={"sku": sku, "name": payload.name, "price": str(payload.price)},
     )
     return MenuItemResponse.model_validate(row)
 

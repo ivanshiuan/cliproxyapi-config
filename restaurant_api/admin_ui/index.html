@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>後台管理 · restaurant_api</title>
+<style>
+:root{
+  --bg:#F2F2F7; --surf:#FFFFFF; --surf2:#F7F7F9; --key:#EDEDF0;
+  --fill:rgba(120,120,128,.12); --fill2:rgba(120,120,128,.2);
+  --line:rgba(60,60,67,.1); --line2:rgba(60,60,67,.2);
+  --ink:#1C1C1E; --ink2:rgba(60,60,67,.64); --ink3:rgba(60,60,67,.4);
+  --cta:#1C1C1E; --cta-ink:#FFFFFF;
+  --blue:#007AFF; --green:#34C759; --orange:#FF9500; --red:#FF3B30;
+  --glass:rgba(249,249,251,.82);
+  --r:16px; --r2:24px;
+  --shadow-card:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05);
+  --shadow-pop:0 24px 70px rgba(0,0,0,.26);
+  --ease:cubic-bezier(.25,.1,.25,1);
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#000; --surf:#1C1C1E; --surf2:#242426; --key:#2C2C2E;
+  --fill:rgba(120,120,128,.24); --fill2:rgba(120,120,128,.34);
+  --line:rgba(84,84,88,.48); --line2:rgba(84,84,88,.7);
+  --ink:#F2F2F7; --ink2:rgba(235,235,245,.64); --ink3:rgba(235,235,245,.34);
+  --cta:#FFFFFF; --cta-ink:#000;
+  --blue:#0A84FF; --green:#30D158; --orange:#FF9F0A; --red:#FF453A;
+  --glass:rgba(24,24,26,.76);
+  --shadow-card:0 1px 2px rgba(0,0,0,.45),0 6px 20px rgba(0,0,0,.35);
+  --shadow-pop:0 24px 70px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --bg:#000; --surf:#1C1C1E; --surf2:#242426; --key:#2C2C2E;
+  --fill:rgba(120,120,128,.24); --fill2:rgba(120,120,128,.34);
+  --line:rgba(84,84,88,.48); --line2:rgba(84,84,88,.7);
+  --ink:#F2F2F7; --ink2:rgba(235,235,245,.64); --ink3:rgba(235,235,245,.34);
+  --cta:#FFFFFF; --cta-ink:#000;
+  --blue:#0A84FF; --green:#30D158; --orange:#FF9F0A; --red:#FF453A;
+  --glass:rgba(24,24,26,.76);
+}
+:root[data-theme="light"]{
+  --bg:#F2F2F7; --surf:#FFFFFF; --surf2:#F7F7F9; --key:#EDEDF0;
+  --fill:rgba(120,120,128,.12); --fill2:rgba(120,120,128,.2);
+  --line:rgba(60,60,67,.1); --line2:rgba(60,60,67,.2);
+  --ink:#1C1C1E; --ink2:rgba(60,60,67,.64); --ink3:rgba(60,60,67,.4);
+  --cta:#1C1C1E; --cta-ink:#FFFFFF; --glass:rgba(249,249,251,.82);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro TC","PingFang TC","Noto Sans TC",system-ui,sans-serif;
+  background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased;font-size:16px}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.app{display:flex;height:100vh;height:100dvh}
+
+/* sidebar */
+.side{width:232px;flex-shrink:0;background:var(--surf);border-right:.5px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
+.side .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.3px;padding:6px 8px 18px}
+.side .brand .dot{width:32px;height:32px;border-radius:8px;background:var(--cta);color:var(--cta-ink);display:grid;place-items:center;font-size:16px}
+.side .brand small{display:block;font-weight:400;color:var(--ink3);font-size:11.5px;margin-top:1px}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;border:0;background:none;color:var(--ink2);font-size:15px;font-weight:600;cursor:pointer;text-align:left;transition:background .16s var(--ease),color .16s var(--ease)}
+.nav button .ic{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:14px;background:var(--fill);flex-shrink:0}
+.nav button.on{background:var(--fill);color:var(--ink)}
+.nav button.on .ic{background:var(--blue);color:#fff}
+.side .foot{margin-top:auto;font-size:11.5px;color:var(--ink3);padding:8px}
+
+/* main */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.hd{display:flex;align-items:center;gap:14px;padding:16px 26px;background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(22px);backdrop-filter:saturate(180%) blur(22px);border-bottom:.5px solid var(--line)}
+.hd h1{font-size:22px;font-weight:700;letter-spacing:-.4px}
+.hd .sub{color:var(--ink3);font-size:13px;margin-top:1px}
+.hd .sp{flex:1}
+.storepick{display:flex;align-items:center;gap:8px;background:var(--fill);border-radius:99px;padding:6px 8px 6px 14px;font-size:13.5px;font-weight:600}
+.storepick select{border:0;background:none;color:var(--ink);font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;padding:2px}
+.btn{border:0;border-radius:12px;font-weight:600;cursor:pointer;font-size:15px;transition:transform .14s var(--ease),opacity .14s;letter-spacing:-.2px;font-family:inherit}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--cta);color:var(--cta-ink);padding:10px 18px}
+.btn-ghost{background:var(--fill);color:var(--ink);padding:10px 16px}
+.btn-danger{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red);padding:10px 16px}
+.body{flex:1;overflow-y:auto;padding:24px 26px 60px}
+.page{display:none} .page.on{display:block}
+
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.toolbar h2{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.toolbar .cnt{font-size:13px;color:var(--ink2);background:var(--fill);padding:3px 11px;border-radius:99px;font-weight:600}
+.toolbar .sp{flex:1}
+
+.card{background:var(--surf);border-radius:var(--r);box-shadow:var(--shadow-card);border:.5px solid var(--line);overflow:hidden}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th{background:var(--surf2);text-align:left;font-size:12.5px;color:var(--ink2);font-weight:600;letter-spacing:.02em;padding:11px 16px;border-bottom:.5px solid var(--line)}
+td{padding:13px 16px;border-bottom:.5px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr{transition:background .12s var(--ease)}
+tbody tr:hover{background:var(--surf2)}
+td.num{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+td .nm{font-weight:600}
+td .sub{font-size:12.5px;color:var(--ink3);margin-top:1px}
+.tag{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.tag.on{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.tag.off{background:var(--fill);color:var(--ink3)}
+.tag.blue{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue)}
+.tag.orange{background:color-mix(in srgb,var(--orange) 15%,transparent);color:var(--orange)}
+.rowact{display:flex;gap:6px;justify-content:flex-end}
+.iconbtn{width:32px;height:32px;border-radius:9px;border:0;background:var(--fill);color:var(--ink2);cursor:pointer;font-size:14px;transition:background .13s,color .13s}
+.iconbtn:hover{background:var(--fill2);color:var(--ink)}
+.iconbtn.del:hover{background:color-mix(in srgb,var(--red) 14%,transparent);color:var(--red)}
+.empty{padding:60px 20px;text-align:center;color:var(--ink3);font-size:14.5px;line-height:1.7}
+
+/* sheet / form */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;z-index:60;padding:20px}
+.overlay.on{display:flex}
+.sheet{background:var(--bg);border-radius:var(--r2);width:100%;max-width:540px;box-shadow:var(--shadow-pop);overflow:hidden;animation:in .3s var(--ease);max-height:90vh;display:flex;flex-direction:column}
+@keyframes in{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:none}}
+.sh-h{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 12px;position:relative}
+.sh-h::before{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);width:38px;height:5px;border-radius:3px;background:var(--fill2)}
+.sh-h h3{font-size:19px;font-weight:700;letter-spacing:-.3px;margin-top:6px}
+.sh-h .x{background:var(--fill);border:0;color:var(--ink2);width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;margin-top:6px}
+.sh-b{padding:6px 22px 8px;overflow-y:auto}
+.fld{margin-bottom:15px}
+.fld label{display:block;font-size:13px;font-weight:600;color:var(--ink2);margin-bottom:7px;letter-spacing:-.1px}
+.fld input,.fld select,.fld textarea{width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid var(--line);background:var(--surf);color:var(--ink);font-size:15.5px;font-family:inherit;transition:border-color .15s var(--ease)}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:0;border-color:var(--blue)}
+.fld .row{display:flex;gap:11px}
+.fld .row>*{flex:1}
+.seg{display:flex;gap:2px;background:var(--fill);padding:2.5px;border-radius:11px}
+.seg button{flex:1;padding:9px;border-radius:9px;border:0;background:none;color:var(--ink2);font-size:14px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+.seg button.on{background:var(--surf);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.togg{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surf);border:1.5px solid var(--line);border-radius:12px}
+.togg .lb{font-size:14.5px;font-weight:500}
+.sw{width:50px;height:30px;border-radius:99px;background:var(--fill2);position:relative;cursor:pointer;transition:background .2s var(--ease);flex-shrink:0}
+.sw.on{background:var(--green)}
+.sw::after{content:"";position:absolute;top:2.5px;left:2.5px;width:25px;height:25px;border-radius:50%;background:#fff;transition:transform .2s var(--ease);box-shadow:0 2px 5px rgba(0,0,0,.2)}
+.sw.on::after{transform:translateX(20px)}
+.sh-f{padding:14px 22px 20px;display:flex;gap:10px}
+.sh-f .btn{flex:1;padding:14px}
+.hint{font-size:12px;color:var(--ink3);margin-top:6px}
+
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(16px);background:var(--glass);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border:.5px solid var(--line);color:var(--ink);padding:12px 24px;border-radius:99px;font-size:14.5px;font-weight:600;opacity:0;transition:.28s var(--ease);z-index:90;box-shadow:0 8px 30px rgba(0,0,0,.18);pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{color:var(--red)}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--fill2);border-radius:5px}::-webkit-scrollbar-track{background:transparent}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2.5px solid var(--blue);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media(max-width:760px){.side{width:64px;padding:14px 8px}.side .brand span,.nav button span,.side .foot{display:none}.nav button{justify-content:center}.tbwrap{overflow-x:auto}}
+.tbwrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="dot">⚙︎</span><span>後台管理<small>restaurant_api</small></span></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="foot">/admin-ui · 接真 REST API</div>
+  </aside>
+  <main class="main">
+    <header class="hd">
+      <div><h1 id="pgTitle">菜單品項</h1><div class="sub" id="pgSub">管理店內販售的餐點與價格</div></div>
+      <div class="sp"></div>
+      <div class="storepick">門市 <select id="storeSel" onchange="switchStore()"></select></div>
+      <button class="btn btn-primary" id="addBtn" onclick="openForm()">＋ 新增</button>
+    </header>
+    <div class="body">
+      <section class="page on" id="p-items"><div class="toolbar"><h2>菜單品項</h2><span class="cnt" id="c-items"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>品項</th><th>分類</th><th>售價</th><th>出餐站</th><th>狀態</th><th></th></tr></thead><tbody id="t-items"></tbody></table></div></div></section>
+      <section class="page" id="p-cats"><div class="toolbar"><h2>菜單分類</h2><span class="cnt" id="c-cats"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>分類名稱</th><th>排序</th><th>狀態</th><th></th></tr></thead><tbody id="t-cats"></tbody></table></div></div></section>
+      <section class="page" id="p-tables"><div class="toolbar"><h2>桌位管理</h2><span class="cnt" id="c-tables"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>桌號</th><th>區域</th><th>座位</th><th>排序</th><th></th></tr></thead><tbody id="t-tables"></tbody></table></div></div></section>
+      <section class="page" id="p-disc"><div class="toolbar"><h2>自動折扣規則</h2><span class="cnt" id="c-disc"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>規則名稱</th><th>類型</th><th>折扣值</th><th>滿額門檻</th><th>時段</th><th>狀態</th><th></th></tr></thead><tbody id="t-disc"></tbody></table></div></div></section>
+    </div>
+  </main>
+</div>
+<div class="overlay" id="ov"><div class="sheet" id="ovSheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const qs=new URLSearchParams(location.search);
+let storeId=qs.get("store")||"";
+function toast(m,err){const t=$("toast");t.textContent=m;t.className="toast on"+(err?" err":"");clearTimeout(t._);t._=setTimeout(()=>t.className="toast",2400)}
+async function api(path,opts){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});
+  if(!r.ok){let d=r.statusText;try{const j=await r.json();const raw=j.error?.message||j.detail;d=Array.isArray(raw)?raw.map(x=>x.msg||JSON.stringify(x)).join('; '):(raw||d)}catch(e){}throw new Error(d)}
+  return r.status===204?null:r.json()}
+
+const PAGES=[
+  {k:"items",ic:"🍽️",t:"菜單品項",sub:"管理店內販售的餐點與價格",add:"新增品項"},
+  {k:"cats",ic:"🗂️",t:"菜單分類",sub:"餐點的分類頁籤（麵飯 / 小菜 / 飲料…）",add:"新增分類"},
+  {k:"tables",ic:"🪑",t:"桌位管理",sub:"店內桌位、區域與座位數",add:"新增桌位"},
+  {k:"disc",ic:"🏷️",t:"自動折扣規則",sub:"滿額 / 時段自動套用的折扣",add:"新增規則"},
+];
+let page="items";
+$("nav").innerHTML=PAGES.map(p=>`<button data-k="${p.k}" onclick="go('${p.k}')"><span class="ic">${p.ic}</span><span>${p.t}</span></button>`).join("");
+function go(k){page=k;const p=PAGES.find(x=>x.k===k);
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));
+  document.querySelectorAll(".page").forEach(s=>s.classList.remove("on"));$("p-"+k).classList.add("on");
+  $("pgTitle").textContent=p.t;$("pgSub").textContent=p.sub;$("addBtn").textContent="＋ "+p.add;
+  load();}
+
+const S={stores:[],cats:[],items:[],tables:[],disc:[]};
+const NT=n=>"$"+Math.round(Number(n)).toLocaleString("en-US");
+const KIND={percent:"百分比折扣",amount:"定額折扣",comp:"招待",allowance:"津貼",employee:"員工價"};
+
+async function boot(){
+  // discover stores via floor? We only have store list through menu? Use a stores endpoint if present; else derive from URL.
+  try{S.stores=await api(`/stores`).catch(()=>[]);}catch(e){S.stores=[]}
+  if(!S.stores.length&&storeId)S.stores=[{id:storeId,name:"目前門市"}];
+  $("storeSel").innerHTML=S.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")||`<option>（請在網址帶 ?store=）</option>`;
+  if(!storeId&&S.stores[0])storeId=S.stores[0].id;
+  if(storeId)$("storeSel").value=storeId;
+  go("items");
+}
+function switchStore(){storeId=$("storeSel").value;load()}
+
+async function load(){
+  if(!storeId){document.querySelectorAll("tbody").forEach(b=>b.innerHTML=`<tr><td colspan="7"><div class="empty">請在網址加上 ?store=&lt;門市UUID&gt;<br>或用右上角切換門市</div></td></tr>`);return}
+  try{
+    if(page==="items"){
+      const[items,cats]=await Promise.all([api(`/menu/items?store_id=${storeId}`),api(`/menu/categories?store_id=${storeId}`)]);
+      S.items=items;S.cats=cats;renderItems();
+    }else if(page==="cats"){S.cats=await api(`/menu/categories?store_id=${storeId}`);renderCats();}
+    else if(page==="tables"){S.tables=await api(`/tables?store_id=${storeId}`);renderTables();}
+    else if(page==="disc"){S.disc=await api(`/discount-rules?store_id=${storeId}&include_inactive=true`).catch(()=>api(`/discount-rules?store_id=${storeId}`));renderDisc();}
+  }catch(e){toast("載入失敗: "+e.message,true)}
+}
+const catName=id=>{const c=S.cats.find(x=>x.id===id);return c?c.name:"—"};
+
+function renderItems(){
+  $("c-items").textContent=S.items.length+" 項";
+  $("t-items").innerHTML=S.items.length?S.items.map(m=>`<tr>
+    <td><div class="nm">${esc(m.name)}</div><div class="sub">${m.sku?esc(m.sku):""}</div></td>
+    <td>${esc(catName(m.category_id))}</td>
+    <td class="num">${NT(m.price)}</td>
+    <td>${m.default_kitchen_station?`<span class="tag blue">${esc(m.default_kitchen_station)}</span>`:"—"}</td>
+    <td>${m.is_available?'<span class="tag on">供應中</span>':'<span class="tag off">停售</span>'}</td>
+    <td><div class="rowact"><button class="iconbtn" onclick='openForm("items",${J(m)})'>✎</button><button class="iconbtn del" onclick='del("items","${m.id}","${esc(m.name)}")'>🗑</button></div></td></tr>`).join("")
+    :emptyRow(6,"還沒有品項，點右上角新增");
+}
+function renderCats(){
+  $("c-cats").textContent=S.cats.length+" 類";
+  $("t-cats").innerHTML=S.cats.length?S.cats.map(c=>`<tr>
+    <td><div class="nm">${esc(c.name)}</div></td><td class="num">${c.sort_order??0}</td>
+    <td>${c.is_active!==false?'<span class="tag on">啟用</span>':'<span class="tag off">停用</span>'}</td>
+    <td><div class="rowact"><button class="iconbtn" onclick='openForm("cats",${J(c)})'>✎</button><button class="iconbtn del" onclick='del("cats","${c.id}","${esc(c.name)}")'>🗑</button></div></td></tr>`).join("")
+    :emptyRow(4,"還沒有分類");
+}
+function renderTables(){
+  $("c-tables").textContent=S.tables.length+" 桌";
+  $("t-tables").innerHTML=S.tables.length?S.tables.map(t=>`<tr>
+    <td><div class="nm">${esc(t.name)}</div></td><td>${t.zone?esc(t.zone):"—"}</td>
+    <td class="num">${t.seats} 位</td><td class="num">${t.sort_order??0}</td>
+    <td><div class="rowact"><button class="iconbtn" onclick='openForm("tables",${J(t)})'>✎</button><button class="iconbtn del" onclick='del("tables","${t.id}","${esc(t.name)}")'>🗑</button></div></td></tr>`).join("")
+    :emptyRow(5,"還沒有桌位");
+}
+function renderDisc(){
+  $("c-disc").textContent=S.disc.length+" 條";
+  $("t-disc").innerHTML=S.disc.length?S.disc.map(d=>{
+    const v=d.kind==="percent"?`${Math.round(Number(d.value)*100)}%`:NT(d.value);
+    const win=(d.start_time||d.end_time)?`${(d.start_time||"").slice(0,5)||"00:00"}–${(d.end_time||"").slice(0,5)||"24:00"}`:"全日";
+    return `<tr><td><div class="nm">${esc(d.name)}</div></td>
+    <td><span class="tag orange">${KIND[d.kind]||d.kind}</span></td>
+    <td class="num">${v}</td><td class="num">${Number(d.min_subtotal)>0?NT(d.min_subtotal):"—"}</td>
+    <td>${win}</td>
+    <td>${d.is_active!==false?'<span class="tag on">啟用</span>':'<span class="tag off">停用</span>'}</td>
+    <td><div class="rowact"><button class="iconbtn" onclick='toggleDisc("${d.id}",${d.is_active===false})'>${d.is_active===false?"▶":"⏸"}</button><button class="iconbtn del" onclick='del("disc","${d.id}","${esc(d.name)}")'>🗑</button></div></td></tr>`}).join("")
+    :emptyRow(7,"還沒有折扣規則");
+}
+function emptyRow(cols,msg){return `<tr><td colspan="${cols}"><div class="empty">${msg}</div></td></tr>`}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function J(o){return esc(JSON.stringify(o)).replace(/&#39;/g,"\\'")}
+
+/* ── forms ── */
+let editItem=null;
+function openForm(k,row){k=k||page;editItem=row||null;const isEdit=!!row;
+  let title,html;
+  if(k==="items"){
+    const opts=S.cats.map(c=>`<option value="${c.id}" ${row&&row.category_id===c.id?"selected":""}>${esc(c.name)}</option>`).join("");
+    title=(isEdit?"編輯":"新增")+"品項";
+    html=`<div class="fld"><label>品項名稱</label><input id="f_name" value="${row?esc(row.name):""}" placeholder="紅燒牛肉麵"></div>
+    <div class="fld"><div class="row"><div><label>售價</label><input id="f_price" type="number" inputmode="decimal" value="${row?row.price:""}" placeholder="180"></div>
+    <div><label>分類</label><select id="f_cat"><option value="">未分類</option>${opts}</select></div></div></div>
+    <div class="fld"><div class="row"><div><label>商品編號 SKU（選填）</label><input id="f_sku" value="${row&&row.sku?esc(row.sku):""}" placeholder="A001"></div>
+    <div><label>出餐站（選填）</label><input id="f_station" value="${row&&row.default_kitchen_station?esc(row.default_kitchen_station):""}" placeholder="熱廚 / 飲料吧"></div></div></div>
+    <div class="fld"><div class="togg"><span class="lb">供應中</span><div class="sw ${!row||row.is_available!==false?"on":""}" id="f_avail" onclick="this.classList.toggle('on')"></div></div></div>`;
+  }else if(k==="cats"){
+    title=(isEdit?"編輯":"新增")+"分類";
+    html=`<div class="fld"><label>分類名稱</label><input id="f_name" value="${row?esc(row.name):""}" placeholder="麵飯 / 小菜 / 飲料"></div>
+    <div class="fld"><label>排序（數字越小越前面）</label><input id="f_sort" type="number" value="${row?row.sort_order??0:0}"></div>
+    <div class="fld"><div class="togg"><span class="lb">啟用</span><div class="sw ${!row||row.is_active!==false?"on":""}" id="f_active" onclick="this.classList.toggle('on')"></div></div></div>`;
+  }else if(k==="tables"){
+    title=(isEdit?"編輯":"新增")+"桌位";
+    html=`<div class="fld"><label>桌號</label><input id="f_name" value="${row?esc(row.name):""}" placeholder="A1 / B2"></div>
+    <div class="fld"><div class="row"><div><label>區域（選填）</label><input id="f_zone" value="${row&&row.zone?esc(row.zone):""}" placeholder="內用 / 包廂 / 外帶"></div>
+    <div><label>座位數</label><input id="f_seats" type="number" value="${row?row.seats:2}"></div></div></div>
+    <div class="fld"><label>排序</label><input id="f_sort" type="number" value="${row?row.sort_order??0:0}"></div>`;
+  }else if(k==="disc"){
+    title=(isEdit?"編輯":"新增")+"折扣規則";
+    const kind=row?row.kind:"percent";
+    html=`<div class="fld"><label>規則名稱</label><input id="f_name" value="${row?esc(row.name):""}" placeholder="平日午餐 9 折"></div>
+    <div class="fld"><label>折扣類型</label><div class="seg" id="f_kind">
+      ${[["percent","百分比"],["amount","定額"],["comp","招待"]].map(o=>`<button type="button" data-v="${o[0]}" class="${kind===o[0]?"on":""}" onclick="segPick(this)">${o[1]}</button>`).join("")}</div></div>
+    <div class="fld"><div class="row"><div><label>折扣值 <span class="hint" style="display:inline">（%數 或 金額）</span></label><input id="f_value" type="number" value="${row?(row.kind==="percent"?Math.round(Number(row.value)*100):row.value):""}" placeholder="10"></div>
+    <div><label>滿額門檻（選填）</label><input id="f_min" type="number" value="${row&&row.min_subtotal?row.min_subtotal:""}" placeholder="500"></div></div></div>
+    <div class="fld"><div class="row"><div><label>起始時段（選填）</label><input id="f_start" type="time" value="${row&&row.start_time?row.start_time.slice(0,5):""}"></div>
+    <div><label>結束時段（選填）</label><input id="f_end" type="time" value="${row&&row.end_time?row.end_time.slice(0,5):""}"></div></div><div class="hint">留空＝全日適用</div></div>
+    <div class="fld"><div class="togg"><span class="lb">啟用</span><div class="sw ${!row||row.is_active!==false?"on":""}" id="f_active" onclick="this.classList.toggle('on')"></div></div></div>`;
+  }
+  $("ovSheet").innerHTML=`<div class="sh-h"><h3>${title}</h3><button class="x" onclick="closeOv()">✕</button></div>
+    <div class="sh-b">${html}</div>
+    <div class="sh-f"><button class="btn btn-ghost" onclick="closeOv()">取消</button><button class="btn btn-primary" id="saveBtn" onclick="save('${k}')">${isEdit?"儲存變更":"新增"}</button></div>`;
+  $("ov").classList.add("on");setTimeout(()=>{const f=$("f_name");if(f)f.focus()},80);
+}
+function segPick(b){b.parentElement.querySelectorAll("button").forEach(x=>x.classList.remove("on"));b.classList.add("on")}
+function closeOv(){$("ov").classList.remove("on")}
+$("ov").addEventListener("click",e=>{if(e.target===$("ov"))closeOv()});
+const val=id=>{const e=$(id);return e?e.value.trim():""};
+const on=id=>$(id)?.classList.contains("on");
+
+async function save(k){
+  const btn=$("saveBtn");btn.disabled=true;
+  try{
+    if(k==="items"){
+      const b={name:val("f_name"),price:val("f_price"),store_id:storeId,
+        category_id:val("f_cat")||null,sku:val("f_sku")||null,
+        default_kitchen_station:val("f_station")||null,is_available:on("f_avail")};
+      if(!b.name||!b.price){toast("品名和售價必填",true);btn.disabled=false;return}
+      if(editItem)await api(`/menu/items/${editItem.id}`,{method:"PATCH",body:JSON.stringify(strip(b,["store_id"]))});
+      else await api(`/menu/items`,{method:"POST",body:JSON.stringify(b)});
+    }else if(k==="cats"){
+      const b={name:val("f_name"),store_id:storeId,sort_order:Number(val("f_sort")||0),is_active:on("f_active")};
+      if(!b.name){toast("分類名稱必填",true);btn.disabled=false;return}
+      if(editItem)await api(`/menu/categories/${editItem.id}`,{method:"PATCH",body:JSON.stringify(strip(b,["store_id"]))});
+      else await api(`/menu/categories`,{method:"POST",body:JSON.stringify(b)});
+    }else if(k==="tables"){
+      const b={name:val("f_name"),store_id:storeId,zone:val("f_zone")||null,seats:Number(val("f_seats")||2),sort_order:Number(val("f_sort")||0)};
+      if(!b.name){toast("桌號必填",true);btn.disabled=false;return}
+      if(editItem)await api(`/tables/${editItem.id}`,{method:"PATCH",body:JSON.stringify(strip(b,["store_id"]))});
+      else await api(`/tables`,{method:"POST",body:JSON.stringify(b)});
+    }else if(k==="disc"){
+      const kind=$("f_kind").querySelector(".on")?.dataset.v||"percent";
+      const rawV=val("f_value")||"0";
+      const b={name:val("f_name"),kind,value:kind==="percent"?String(Number(rawV)/100):rawV,store_id:storeId,
+        min_subtotal:val("f_min")||"0",start_time:val("f_start")?val("f_start")+":00":null,
+        end_time:val("f_end")?val("f_end")+":00":null,is_active:on("f_active")};
+      if(!b.name){toast("規則名稱必填",true);btn.disabled=false;return}
+      if(editItem){await api(`/discount-rules/${editItem.id}`,{method:"PATCH",body:JSON.stringify({is_active:b.is_active})});}
+      else await api(`/discount-rules`,{method:"POST",body:JSON.stringify(b)});
+    }
+    closeOv();toast("已儲存");load();
+  }catch(e){toast("儲存失敗: "+e.message,true);btn.disabled=false}
+}
+function strip(o,keys){const c={...o};keys.forEach(k=>delete c[k]);return c}
+
+async function del(k,id,name){
+  if(!confirm(`確定刪除「${name}」？`))return;
+  const url={items:`/menu/items/${id}`,cats:`/menu/categories/${id}`,tables:`/tables/${id}`,disc:`/discount-rules/${id}`}[k];
+  try{await api(url,{method:"DELETE"});toast("已刪除");load();}
+  catch(e){toast("刪除失敗: "+e.message,true)}
+}
+async function toggleDisc(id,turnOn){
+  try{await api(`/discount-rules/${id}`,{method:"PATCH",body:JSON.stringify({is_active:turnOn})});toast(turnOn?"已啟用":"已停用");load();}
+  catch(e){toast("失敗: "+e.message,true)}
+}
+boot();
+</script>
+</body>
+</html>
