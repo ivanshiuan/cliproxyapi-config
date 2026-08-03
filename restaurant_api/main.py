@@ -29,6 +29,7 @@ from .routers import cash_drawer as cash_drawer_router
 from .routers import clock as clock_router
 from .routers import customers as customers_router
 from .routers import discount_rules as discount_rules_router
+from .routers import employees as employees_router
 from .routers import events as events_router
 from .routers import kitchen as kitchen_router
 from .routers import line_webhook as line_webhook_router
@@ -104,6 +105,7 @@ _mount_router(reports_router, "/reports")
 _mount_router(pos_auth_router, "/pos-auth")
 _mount_router(cash_drawer_router, "/cash-drawer")
 _mount_router(discount_rules_router, "/discount-rules")
+_mount_router(employees_router, "/employees")
 _mount_router(online_takeout_router, "/online-takeout")
 _mount_router(table_order_router, "/t")
 _mount_router(stock_router, "/stock")

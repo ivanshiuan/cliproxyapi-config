@@ -52,6 +52,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro TC","PingFang TC","Not
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 .app{display:flex;height:100vh;height:100dvh}
 
+/* login screen */
+.login-screen{display:flex;align-items:center;justify-content:center;height:100vh;height:100dvh;background:var(--bg);padding:20px}
+.login-card{background:var(--surf);border-radius:var(--r2);box-shadow:var(--shadow-pop);padding:48px 40px 40px;width:100%;max-width:380px;text-align:center}
+.login-card .logo{width:56px;height:56px;border-radius:14px;background:var(--cta);color:var(--cta-ink);display:inline-grid;place-items:center;font-size:26px;margin-bottom:18px}
+.login-card h1{font-size:22px;font-weight:700;letter-spacing:-.4px;margin-bottom:6px}
+.login-card .desc{font-size:14px;color:var(--ink3);margin-bottom:28px;line-height:1.5}
+.login-card input{width:100%;padding:14px 16px;border-radius:12px;border:1.5px solid var(--line);background:var(--surf2);color:var(--ink);font-size:17px;font-family:inherit;text-align:center;letter-spacing:6px;margin-bottom:16px;transition:border-color .15s var(--ease)}
+.login-card input:focus{outline:0;border-color:var(--blue)}
+.login-card .login-btn{width:100%;padding:15px;border-radius:12px;border:0;background:var(--cta);color:var(--cta-ink);font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .14s var(--ease),opacity .14s}
+.login-card .login-btn:active{transform:scale(.97)}
+.login-card .login-btn:disabled{opacity:.5;cursor:default}
+.login-card .login-err{color:var(--red);font-size:13.5px;margin-top:12px;min-height:20px}
+
 /* sidebar */
 .side{width:232px;flex-shrink:0;background:var(--surf);border-right:.5px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
 .side .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:-.3px;padding:6px 8px 18px}
@@ -62,7 +75,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"SF Pro TC","PingFang TC","Not
 .nav button .ic{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:14px;background:var(--fill);flex-shrink:0}
 .nav button.on{background:var(--fill);color:var(--ink)}
 .nav button.on .ic{background:var(--blue);color:#fff}
-.side .foot{margin-top:auto;font-size:11.5px;color:var(--ink3);padding:8px}
+.side .foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px}
+.side .foot .logout-btn{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:9px;border:0;background:none;color:var(--ink3);font-size:13px;cursor:pointer;transition:background .14s,color .14s}
+.side .foot .logout-btn:hover{background:var(--fill);color:var(--red)}
+.side .foot .ver{font-size:11.5px;color:var(--ink3)}
 
 /* main */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
@@ -100,6 +116,7 @@ td .sub{font-size:12.5px;color:var(--ink3);margin-top:1px}
 .tag.off{background:var(--fill);color:var(--ink3)}
 .tag.blue{background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue)}
 .tag.orange{background:color-mix(in srgb,var(--orange) 15%,transparent);color:var(--orange)}
+.tag.red{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .rowact{display:flex;gap:6px;justify-content:flex-end}
 .iconbtn{width:32px;height:32px;border-radius:9px;border:0;background:var(--fill);color:var(--ink2);cursor:pointer;font-size:14px;transition:background .13s,color .13s}
 .iconbtn:hover{background:var(--fill2);color:var(--ink)}
@@ -146,11 +163,30 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2.5px soli
 </style>
 </head>
 <body>
-<div class="app">
+
+<!-- Login Screen -->
+<div id="loginScreen" class="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="logo">⚙︎</div>
+    <h1>後台管理</h1>
+    <div class="desc">請輸入管理通行碼登入</div>
+    <form onsubmit="doLogin(event)">
+      <input id="loginPass" type="password" placeholder="通行碼" autocomplete="current-password" autofocus />
+      <button type="submit" class="login-btn" id="loginBtn">登入</button>
+    </form>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- App -->
+<div class="app" id="appRoot" style="display:none">
   <aside class="side">
     <div class="brand"><span class="dot">⚙︎</span><span>後台管理<small>restaurant_api</small></span></div>
     <nav class="nav" id="nav"></nav>
-    <div class="foot">/admin-ui · 接真 REST API</div>
+    <div class="foot">
+      <button class="logout-btn" onclick="doLogout()">↩ 登出</button>
+      <div class="ver">/admin-ui · 接真 REST API</div>
+    </div>
   </aside>
   <main class="main">
     <header class="hd">
@@ -164,6 +200,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2.5px soli
       <section class="page" id="p-cats"><div class="toolbar"><h2>菜單分類</h2><span class="cnt" id="c-cats"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>分類名稱</th><th>排序</th><th>狀態</th><th></th></tr></thead><tbody id="t-cats"></tbody></table></div></div></section>
       <section class="page" id="p-tables"><div class="toolbar"><h2>桌位管理</h2><span class="cnt" id="c-tables"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>桌號</th><th>區域</th><th>座位</th><th>排序</th><th></th></tr></thead><tbody id="t-tables"></tbody></table></div></div></section>
       <section class="page" id="p-disc"><div class="toolbar"><h2>自動折扣規則</h2><span class="cnt" id="c-disc"></span></div><div class="card"><div class="tbwrap"><table><thead><tr><th>規則名稱</th><th>類型</th><th>折扣值</th><th>滿額門檻</th><th>時段</th><th>狀態</th><th></th></tr></thead><tbody id="t-disc"></tbody></table></div></div></section>
+      <section class="page" id="p-staff"><div class="toolbar"><h2>員工管理</h2><span class="cnt" id="c-staff"></span><div class="sp"></div><label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink2);cursor:pointer"><input type="checkbox" id="staffShowAll" onchange="load()"> 顯示離職</label></div><div class="card"><div class="tbwrap"><table><thead><tr><th>姓名</th><th>職位</th><th>時薪</th><th>月薪</th><th>到職日</th><th>狀態</th><th></th></tr></thead><tbody id="t-staff"></tbody></table></div></div></section>
+      <section class="page" id="p-store"><div class="toolbar"><h2>門市設定</h2></div><div id="storeDetail"></div></section>
     </div>
   </main>
 </div>
@@ -176,31 +214,61 @@ const $=id=>document.getElementById(id);
 const qs=new URLSearchParams(location.search);
 let storeId=qs.get("store")||"";
 function toast(m,err){const t=$("toast");t.textContent=m;t.className="toast on"+(err?" err":"");clearTimeout(t._);t._=setTimeout(()=>t.className="toast",2400)}
-async function api(path,opts){const r=await fetch(path,{headers:{"Content-Type":"application/json"},...opts});
+async function api(path,opts){const r=await fetch(path,{headers:{"Content-Type":"application/json"},credentials:"same-origin",...opts});
   if(!r.ok){let d=r.statusText;try{const j=await r.json();const raw=j.error?.message||j.detail;d=Array.isArray(raw)?raw.map(x=>x.msg||JSON.stringify(x)).join('; '):(raw||d)}catch(e){}throw new Error(d)}
   return r.status===204?null:r.json()}
+
+/* ── Auth gate ── */
+async function checkAuth(){
+  try{await api("/admin/session");showApp()}
+  catch(e){showLogin()}
+}
+function showLogin(){$("loginScreen").style.display="";$("appRoot").style.display="none";setTimeout(()=>{const p=$("loginPass");if(p)p.focus()},100)}
+function showApp(){$("loginScreen").style.display="none";$("appRoot").style.display="";boot()}
+async function doLogin(ev){
+  ev.preventDefault();
+  const btn=$("loginBtn");btn.disabled=true;$("loginErr").textContent="";
+  try{
+    await api("/admin/login",{method:"POST",body:JSON.stringify({passcode:$("loginPass").value})});
+    showApp();
+  }catch(e){$("loginErr").textContent=e.message||"登入失敗";btn.disabled=false}
+}
+async function doLogout(){
+  try{await api("/admin/logout",{method:"POST"})}catch(e){}
+  showLogin();$("loginPass").value="";
+}
 
 const PAGES=[
   {k:"items",ic:"🍽️",t:"菜單品項",sub:"管理店內販售的餐點與價格",add:"新增品項"},
   {k:"cats",ic:"🗂️",t:"菜單分類",sub:"餐點的分類頁籤（麵飯 / 小菜 / 飲料…）",add:"新增分類"},
   {k:"tables",ic:"🪑",t:"桌位管理",sub:"店內桌位、區域與座位數",add:"新增桌位"},
   {k:"disc",ic:"🏷️",t:"自動折扣規則",sub:"滿額 / 時段自動套用的折扣",add:"新增規則"},
+  {k:"staff",ic:"👤",t:"員工管理",sub:"員工檔案、職位、薪資與在職狀態",add:"新增員工"},
+  {k:"store",ic:"🏪",t:"門市設定",sub:"門市基本資料與營業設定",add:null},
 ];
 let page="items";
-$("nav").innerHTML=PAGES.map(p=>`<button data-k="${p.k}" onclick="go('${p.k}')"><span class="ic">${p.ic}</span><span>${p.t}</span></button>`).join("");
+
+function buildNav(){
+  $("nav").innerHTML=PAGES.map(p=>`<button data-k="${p.k}" onclick="go('${p.k}')"><span class="ic">${p.ic}</span><span>${p.t}</span></button>`).join("");
+}
 function go(k){page=k;const p=PAGES.find(x=>x.k===k);
   document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("on",b.dataset.k===k));
   document.querySelectorAll(".page").forEach(s=>s.classList.remove("on"));$("p-"+k).classList.add("on");
-  $("pgTitle").textContent=p.t;$("pgSub").textContent=p.sub;$("addBtn").textContent="＋ "+p.add;
+  $("pgTitle").textContent=p.t;$("pgSub").textContent=p.sub;
+  if(p.add){$("addBtn").style.display="";$("addBtn").textContent="＋ "+p.add}
+  else{$("addBtn").style.display="none"}
   load();}
 
-const S={stores:[],cats:[],items:[],tables:[],disc:[]};
+const S={stores:[],cats:[],items:[],tables:[],disc:[],staff:[]};
 const NT=n=>"$"+Math.round(Number(n)).toLocaleString("en-US");
 const KIND={percent:"百分比折扣",amount:"定額折扣",comp:"招待",allowance:"津貼",employee:"員工價"};
+const ROLE_LABEL={owner:"老闆",manager:"店長",chef:"廚師",staff:"正職",parttime:"兼職"};
 
+let _booted=false;
 async function boot(){
-  // discover stores via floor? We only have store list through menu? Use a stores endpoint if present; else derive from URL.
-  try{S.stores=await api(`/stores`).catch(()=>[]);}catch(e){S.stores=[]}
+  if(_booted)return;_booted=true;
+  buildNav();
+  try{S.stores=await api("/stores").catch(()=>[]);}catch(e){S.stores=[]}
   if(!S.stores.length&&storeId)S.stores=[{id:storeId,name:"目前門市"}];
   $("storeSel").innerHTML=S.stores.map(s=>`<option value="${s.id}">${s.name}</option>`).join("")||`<option>（請在網址帶 ?store=）</option>`;
   if(!storeId&&S.stores[0])storeId=S.stores[0].id;
@@ -218,6 +286,8 @@ async function load(){
     }else if(page==="cats"){S.cats=await api(`/menu/categories?store_id=${storeId}`);renderCats();}
     else if(page==="tables"){S.tables=await api(`/tables?store_id=${storeId}`);renderTables();}
     else if(page==="disc"){S.disc=await api(`/discount-rules?store_id=${storeId}&include_inactive=true`).catch(()=>api(`/discount-rules?store_id=${storeId}`));renderDisc();}
+    else if(page==="staff"){const inc=$("staffShowAll")?.checked;S.staff=await api(`/employees?store_id=${storeId}${inc?"&include_inactive=true":""}`);renderStaff();}
+    else if(page==="store"){renderStore();}
   }catch(e){toast("載入失敗: "+e.message,true)}
 }
 const catName=id=>{const c=S.cats.find(x=>x.id===id);return c?c.name:"—"};
@@ -262,6 +332,30 @@ function renderDisc(){
     <td><div class="rowact"><button class="iconbtn" onclick='toggleDisc("${d.id}",${d.is_active===false})'>${d.is_active===false?"▶":"⏸"}</button><button class="iconbtn del" onclick='del("disc","${d.id}","${esc(d.name)}")'>🗑</button></div></td></tr>`}).join("")
     :emptyRow(7,"還沒有折扣規則");
 }
+function renderStaff(){
+  $("c-staff").textContent=S.staff.length+" 人";
+  $("t-staff").innerHTML=S.staff.length?S.staff.map(e=>{
+    const role=ROLE_LABEL[e.role]||e.role;
+    const pin=e.has_pin?'<span class="tag blue">PIN</span>':'';
+    const status=e.is_active?'<span class="tag on">在職</span>':'<span class="tag red">離職</span>';
+    return `<tr>
+    <td><div class="nm">${esc(e.full_name)}</div>${pin}</td>
+    <td><span class="tag orange">${esc(role)}</span></td>
+    <td class="num">${NT(e.hourly_wage)}/hr</td>
+    <td class="num">${e.monthly_salary!=null?NT(e.monthly_salary):"—"}</td>
+    <td>${e.hired_on||"—"}</td>
+    <td>${status}</td>
+    <td><div class="rowact"><button class="iconbtn" onclick='openForm("staff",${J(e)})'>✎</button><button class="iconbtn del" onclick='del("staff","${e.id}","${esc(e.full_name)}")'>🗑</button></div></td></tr>`}).join("")
+    :emptyRow(7,"還沒有員工，點右上角新增");
+}
+function renderStore(){
+  const s=S.stores.find(x=>x.id===storeId);
+  $("storeDetail").innerHTML=s?`<div class="card" style="max-width:640px;padding:28px 26px">
+    <div class="fld"><label>門市名稱</label><div style="font-size:18px;font-weight:700">${esc(s.name)}</div></div>
+    <div class="fld"><label>門市 ID</label><div style="font-size:13px;color:var(--ink3);font-family:monospace;user-select:all">${esc(s.id)}</div></div>
+    <div class="fld"><label>狀態</label><div>${s.is_active!==false?'<span class="tag on">營業中</span>':'<span class="tag off">暫停營業</span>'}</div></div>
+  </div>`:`<div class="empty">尚未選取門市</div>`;
+}
 function emptyRow(cols,msg){return `<tr><td colspan="${cols}"><div class="empty">${msg}</div></td></tr>`}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function J(o){return esc(JSON.stringify(o)).replace(/&#39;/g,"\\'")}
@@ -301,6 +395,18 @@ function openForm(k,row){k=k||page;editItem=row||null;const isEdit=!!row;
     <div class="fld"><div class="row"><div><label>起始時段（選填）</label><input id="f_start" type="time" value="${row&&row.start_time?row.start_time.slice(0,5):""}"></div>
     <div><label>結束時段（選填）</label><input id="f_end" type="time" value="${row&&row.end_time?row.end_time.slice(0,5):""}"></div></div><div class="hint">留空＝全日適用</div></div>
     <div class="fld"><div class="togg"><span class="lb">啟用</span><div class="sw ${!row||row.is_active!==false?"on":""}" id="f_active" onclick="this.classList.toggle('on')"></div></div></div>`;
+  }else if(k==="staff"){
+    title=(isEdit?"編輯":"新增")+"員工";
+    const roles=[["owner","老闆"],["manager","店長"],["chef","廚師"],["staff","正職"],["parttime","兼職"]];
+    const curRole=row?row.role:"staff";
+    html=`<div class="fld"><label>姓名</label><input id="f_name" value="${row?esc(row.full_name):""}" placeholder="王小明"></div>
+    <div class="fld"><label>職位</label><div class="seg" id="f_role">
+      ${roles.map(o=>`<button type="button" data-v="${o[0]}" class="${curRole===o[0]?"on":""}" onclick="segPick(this)">${o[1]}</button>`).join("")}</div></div>
+    <div class="fld"><div class="row"><div><label>時薪</label><input id="f_wage" type="number" inputmode="decimal" value="${row?row.hourly_wage:""}" placeholder="183"></div>
+    <div><label>月薪（選填）</label><input id="f_salary" type="number" inputmode="decimal" value="${row&&row.monthly_salary!=null?row.monthly_salary:""}" placeholder="28000"></div></div></div>
+    <div class="fld"><div class="row"><div><label>到職日</label><input id="f_hired" type="date" value="${row?row.hired_on:new Date().toISOString().slice(0,10)}"></div>
+    <div><label>離職日（選填）</label><input id="f_termed" type="date" value="${row&&row.terminated_on?row.terminated_on:""}"></div></div></div>
+    <div class="fld"><div class="togg"><span class="lb">在職</span><div class="sw ${!row||row.is_active!==false?"on":""}" id="f_active" onclick="this.classList.toggle('on')"></div></div></div>`;
   }
   $("ovSheet").innerHTML=`<div class="sh-h"><h3>${title}</h3><button class="x" onclick="closeOv()">✕</button></div>
     <div class="sh-b">${html}</div>
@@ -342,6 +448,21 @@ async function save(k){
       if(!b.name){toast("規則名稱必填",true);btn.disabled=false;return}
       if(editItem){await api(`/discount-rules/${editItem.id}`,{method:"PATCH",body:JSON.stringify({is_active:b.is_active})});}
       else await api(`/discount-rules`,{method:"POST",body:JSON.stringify(b)});
+    }else if(k==="staff"){
+      const role=$("f_role").querySelector(".on")?.dataset.v||"staff";
+      const b={full_name:val("f_name"),role,store_id:storeId,
+        hourly_wage:val("f_wage")||"0",
+        monthly_salary:val("f_salary")?val("f_salary"):null,
+        hired_on:val("f_hired")||new Date().toISOString().slice(0,10),
+        is_active:on("f_active")};
+      if(!b.full_name){toast("姓名必填",true);btn.disabled=false;return}
+      if(editItem){
+        const patch={...b,terminated_on:val("f_termed")||null};
+        delete patch.store_id;
+        await api(`/employees/${editItem.id}`,{method:"PATCH",body:JSON.stringify(patch)});
+      }else{
+        await api(`/employees`,{method:"POST",body:JSON.stringify(b)});
+      }
     }
     closeOv();toast("已儲存");load();
   }catch(e){toast("儲存失敗: "+e.message,true);btn.disabled=false}
@@ -350,7 +471,7 @@ function strip(o,keys){const c={...o};keys.forEach(k=>delete c[k]);return c}
 
 async function del(k,id,name){
   if(!confirm(`確定刪除「${name}」？`))return;
-  const url={items:`/menu/items/${id}`,cats:`/menu/categories/${id}`,tables:`/tables/${id}`,disc:`/discount-rules/${id}`}[k];
+  const url={items:`/menu/items/${id}`,cats:`/menu/categories/${id}`,tables:`/tables/${id}`,disc:`/discount-rules/${id}`,staff:`/employees/${id}`}[k];
   try{await api(url,{method:"DELETE"});toast("已刪除");load();}
   catch(e){toast("刪除失敗: "+e.message,true)}
 }
@@ -358,7 +479,8 @@ async function toggleDisc(id,turnOn){
   try{await api(`/discount-rules/${id}`,{method:"PATCH",body:JSON.stringify({is_active:turnOn})});toast(turnOn?"已啟用":"已停用");load();}
   catch(e){toast("失敗: "+e.message,true)}
 }
-boot();
+
+checkAuth();
 </script>
 </body>
 </html>
