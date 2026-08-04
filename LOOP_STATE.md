@@ -3,7 +3,7 @@
 > Auto-updated by `daily-brief` workflow. Do not edit manually.
 > Manual trigger: GitHub Actions → Daily Brief → Run workflow.
 
-last_run: 2026-08-03 01:22 UTC
+last_run: 2026-08-04 01:13 UTC
 pending_specs: 10
 open_decisions: 0
 
@@ -21,13 +21,13 @@ _(none found in COMMANDER_HANDOFF.md)_
 
 ### Last 7 Commits
 ```
+fcdc6a8 chore(loop): daily brief 2026-08-03 [skip ci]
 9ef1988 chore(loop): daily brief 2026-07-31 [skip ci]
 9b44c6f chore(loop): daily brief 2026-07-30 [skip ci]
 2778d16 chore(loop): daily brief 2026-07-29 [skip ci]
 a37c218 chore(loop): daily brief 2026-07-28 [skip ci]
 656ed1f chore(loop): daily brief 2026-07-27 [skip ci]
 1ce9017 chore(loop): daily brief 2026-07-24 [skip ci]
-e39d288 chore(loop): daily brief 2026-07-23 [skip ci]
 ```
 
 ### Specs (10 total)
@@ -42,4 +42,4 @@ e39d288 chore(loop): daily brief 2026-07-23 [skip ci]
 - `stock_intake_router`
 - `uniform_invoice_validator`
 
-*2026-08-03 01:22 UTC / 09:22 Taipei*
+*2026-08-04 01:13 UTC / 09:13 Taipei*
