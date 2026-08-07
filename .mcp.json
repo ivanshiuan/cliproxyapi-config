@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "notion": {
+      "type": "http",
+      "url": "https://mcp.notion.com/mcp"
+    },
+    "granola": {
+      "type": "http",
+      "url": "https://mcp.granola.ai/mcp"
+    },
+    "perplexity": {
+      "type": "http",
+      "url": "https://api.perplexity.ai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PERPLEXITY_API_KEY:-}"
+      }
+    },
+    "zapier": {
+      "type": "http",
+      "url": "${ZAPIER_MCP_URL:-https://mcp.zapier.com/api/mcp/mcp}"
+    },
+    "higgsfield": {
+      "type": "http",
+      "url": "${HIGGSFIELD_MCP_URL:-https://mcp.higgsfield.ai/mcp}"
+    }
+  }
+}

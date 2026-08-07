@@ -266,6 +266,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「分析這場球 / 賽前 memo / 盤口」 | 用 `match-intel` skill（僅分析，不推薦下注） |
 | 「賽後覆盤 / 準備比賽輸入」 | 用 `tiger-pm` agent |
 | 「食安 / 勞基法 / 發票 / 對帳的領域問題」 | 用 `restaurant-domain-expert` agent |
+| 「Claude 工具棧 / 裝了什麼外掛·技能·MCP」 | 看 `docs/20_claude_stack.md`（全盤點 + Ivan 要親手做的 OAuth 清單） |
 
 ---
 

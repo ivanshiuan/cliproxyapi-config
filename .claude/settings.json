@@ -1,5 +1,40 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "extraKnownMarketplaces": {
+    "marketingskills": {
+      "source": { "source": "github", "repo": "coreyhaines31/marketingskills" }
+    },
+    "humanizer": {
+      "source": { "source": "github", "repo": "blader/humanizer" }
+    },
+    "social-media-skills": {
+      "source": { "source": "github", "repo": "social-media-skills/skills" }
+    },
+    "superpowers-marketplace": {
+      "source": { "source": "github", "repo": "obra/superpowers-marketplace" }
+    },
+    "agricidaniel-claude-seo": {
+      "source": { "source": "github", "repo": "AgricIDaniel/claude-seo" }
+    },
+    "hyperframes": {
+      "source": { "source": "github", "repo": "heygen-com/hyperframes" }
+    },
+    "claude-for-legal": {
+      "source": { "source": "github", "repo": "anthropics/claude-for-legal" }
+    },
+    "claude-code-skills": {
+      "source": { "source": "github", "repo": "alirezarezvani/claude-skills" }
+    },
+    "openai-codex": {
+      "source": { "source": "github", "repo": "openai/codex-plugin-cc" }
+    }
+  },
+  "enabledPlugins": {
+    "marketing-skills@marketingskills": true,
+    "humanizer@humanizer": true,
+    "social-media-skills@social-media-skills": true
+  },
+  "enableAllProjectMcpServers": true,
   "permissions": {
     "allow": [
       "Bash(make help:*)",
