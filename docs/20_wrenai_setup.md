@@ -80,6 +80,19 @@ wren serve mcp                           # 把 Wren 當 MCP server 給 agent 用
 
 ---
 
+## 手把手 demo(零依賴,現在就能跑)
+
+`wren/demo/` 是一個自足的範例專案(餐飲形狀假資料 → 本地 DuckDB),用來證明整條路
+是通的、也當作接真資料前的沙盒:
+
+```bash
+make wren-install   # 首次 / 新容器:裝 wren CLI
+make wren-demo      # 重建資料 + 編譯 MDL + 跑「每家店營收」查詢
+```
+
+會印出三家店的營收排行(逢甲 3090 / 信義 2730 / 西門 430)。細節與如何改成真實
+資料庫見 `wren/demo/README.md`。
+
 ## 把本專案的 restaurant Postgres 接上
 
 `restaurant_api` 的開發 PG 預設（見 `restaurant_api/config.py`，SessionStart hook 會起它）：
