@@ -1,6 +1,20 @@
 # STAGING-DEPLOYMENT-RUNBOOK — 12-Step Pipeline
 
-**Prerequisites:**
+> **⚡ 你（Ivan）不用手動照做這 12 步。** 這份文件現在是自動化的**規格說明**，
+> 不是操作手冊。實際執行是一條可重跑的指令：
+>
+> ```bash
+> make deploy-staging          # PLAN：唯讀，印出會做什麼（先看這個）
+> make deploy-staging-apply    # 在 staging host 上收斂到目標狀態（idempotent，可重跑）
+> make deploy-staging-verify   # 跑 46 項驗收 → 證據 JSON + SHA256
+> make deploy-staging-verify   # 全綠後加 --approve 才蓋「STAGING READY」章（你的閘門）
+> ```
+>
+> 由 `scripts/deploy_staging.py` 實作：每步先查現狀再收斂（create-if-absent、
+> secret 不 rotate、內容一致就 no-op），所有不可逆/對外動作都要你 `--approve`。
+> 下面的步驟說明「這支自動化在每一步做什麼」，供審查與排錯用。
+
+**Prerequisites（apply 前一次性備妥，非每次手動）：**
 
 - VM provisioned and SSH access confirmed
 - Docker installed on VM (with `mirror.gcr.io` access confirmed:
