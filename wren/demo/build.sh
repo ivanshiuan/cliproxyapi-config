@@ -4,6 +4,7 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$here"
 uv run --no-project --quiet --with duckdb python seed/build_duckdb.py
+wren context validate   # 先驗證 MDL(YAML 結構 + view dry-plan),再編譯
 wren context build
 echo
 echo "查詢範例:"

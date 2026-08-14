@@ -17,6 +17,7 @@
 #      把本檔內容整段貼上（或跑一行：bash scripts/setup_wren.sh）。
 #   2. 需要的網路白名單（Network access = Custom）至少要放行：
 #        pypi.org  files.pythonhosted.org        # pip / uv 下載 wrenai
+#        astral.sh                                # uv 未預裝時才需要(下載 uv 安裝器)
 #        github.com *.githubusercontent.com       # npx skills 重新同步技能（選用）
 #      要真正用 `wren ask` / genbi 讓 Claude 產 SQL，還要放行 LLM 供應商：
 #        api.anthropic.com                        # 用 Claude 當 text-to-SQL 引擎
@@ -37,18 +38,20 @@ if ! command -v uv >/dev/null 2>&1; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# 安裝（或升級）wren CLI。已安裝時不視為錯誤。
-echo "[setup] 安裝 ${WREN_SPEC}…"
+# 安裝(或升級)wren CLI。已裝時 install 會失敗 → 退回 upgrade;成敗留給最後檢查判定。
+echo "[setup] 安裝/升級 ${WREN_SPEC}…"
 uv tool install "${WREN_SPEC}" 2>/dev/null \
   || uv tool upgrade wrenai 2>/dev/null \
   || true
 
-# 確保 ~/.local/bin 這類 uv tool bin 路徑進到 session 的 PATH。
+# 把 uv tool 的 bin 目錄放進「本行程」PATH(update-shell 只對之後開的 shell 生效)。
 uv tool update-shell 2>/dev/null || true
+export PATH="$(uv tool dir --bin 2>/dev/null || echo "$HOME/.local/bin"):$PATH"
 
 if command -v wren >/dev/null 2>&1; then
-  echo "[setup] wren 就緒：$(command -v wren) （$(wren --version 2>/dev/null)）"
-  echo "[setup] 下一步：wren skills get onboarding  # 端到端把資料庫接上"
+  echo "[setup] wren 就緒:$(command -v wren) ($(wren --version 2>/dev/null))"
 else
-  echo "[setup] 警告：wren 不在 PATH，檢查 ~/.local/bin 是否已加入 PATH"
+  # 真正失敗才非零離開,讓 make wren-install / wren_up.sh 明確中止(不再被 || true 蓋掉)。
+  echo "[setup] 失敗:wren 不在 PATH(網路白名單?見檔頭;或 uv tool bin 未加入 PATH)" >&2
+  exit 1
 fi

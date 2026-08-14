@@ -45,7 +45,7 @@ extras 說明：`postgres`=接本專案 PG、`memory`=LanceDB 語意記憶（`wr
 
 | 用途 | 要放行 |
 |---|---|
-| 裝 `wren`（pip/uv 下載） | `pypi.org` `files.pythonhosted.org` |
+| 裝 `wren`（pip/uv 下載） | `pypi.org` `files.pythonhosted.org`（uv 未預裝再加 `astral.sh`） |
 | `npx skills` 重新同步技能（選用，已進版控可略） | `github.com` `*.githubusercontent.com` |
 | `wren ask` / genbi 讓 Claude 產 SQL | `api.anthropic.com`（或你用的 LLM 供應商） |
 
@@ -86,12 +86,11 @@ wren serve mcp                           # 把 Wren 當 MCP server 給 agent 用
 是通的、也當作接真資料前的沙盒:
 
 ```bash
-make wren-install   # 首次 / 新容器:裝 wren CLI
-make wren-demo      # 重建資料 + 編譯 MDL + 跑「每家店營收」查詢
+make wren   # 一鍵冪等:裝 CLI + 重建資料 + 編譯 MDL + 跑驗證查詢(可重複跑)
 ```
 
-會印出三家店的營收排行(逢甲 3090 / 信義 2730 / 西門 430)。細節與如何改成真實
-資料庫見 `wren/demo/README.md`。
+會印出三家店營收排行(逢甲 3090.00 / 信義 2730.00 / 西門 430.00,金額為 DECIMAL)。
+細節與如何改成真實資料庫見 `wren/demo/README.md`。
 
 ## 把本專案的 restaurant Postgres 接上
 
@@ -105,21 +104,20 @@ make wren-demo      # 重建資料 + 編譯 MDL + 跑「每家店營收」查詢
 | user | `resto` |
 | password | `resto_dev_password`（dev 預設，正式環境用 `.env` 覆蓋） |
 
-最快的一次性驗證（`--connection-info` 吃 inline JSON；欄位以
-`wren docs connection-info postgres` 為準）：
+連線欄位以 `wren docs connection-info postgres` 為準(host / port / database / user / password)。
+接上去的正路(agent 驅動,一步一步):
 
 ```bash
-wren --sql 'SELECT count(*) FROM stores' \
-  --connection-info '{"host":"localhost","port":"5432","database":"resto_dev","user":"resto","password":"resto_dev_password"}'
+wren profile add resto        # 建 resto profile(帳密走 .env,不在對話裡輸入)
+wren profile switch resto     # 切成 active
+wren skills get generate-mdl  # 讓 /wren 技能探索 schema、自動產 models/
+wren context build            # 編譯 MDL
+WREN_PROJECT_HOME=$PWD wren --sql 'SELECT ...' \
+  --connection-info '{"datasource":"postgres","host":"localhost","port":"5432","database":"resto_dev","user":"resto"}'
 ```
 
-要固定下來就存成 profile（互動式，會問連線資訊）：
-
-```bash
-wren profile add        # 建 resto 這個 profile
-wren profile switch     # 切成 active
-wren skills get onboarding   # 接著產 MDL、加語境
-```
+> 註:`wren --sql` 要在有 `wren_project.yml` 的專案內跑(或設 `WREN_PROJECT_HOME`);
+> `--connection-info` 的 JSON 一定要含 `"datasource":"postgres"` 這個 key(缺了會報錯)。
 
 > ⚠️ 帝國鐵律沿用：正式資料庫連線資訊走 `.env`、**永不進 git**；
 > DevSwarm/工具**永遠不要指到 production credentials**。上面是 dev 預設值才敢寫死。

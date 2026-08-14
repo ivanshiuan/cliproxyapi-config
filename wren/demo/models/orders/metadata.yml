@@ -7,5 +7,5 @@ columns:
   - {name: order_id, type: INTEGER, is_primary_key: true, not_null: true}
   - {name: store_id, type: INTEGER}
   - {name: order_date, type: DATE}
-  - {name: total, type: INTEGER}
+  - {name: total, type: DECIMAL}   # 金額 = Decimal(帝國鐵律),單位新台幣(元)
 primary_key: order_id

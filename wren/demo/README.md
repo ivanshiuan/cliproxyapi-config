@@ -4,20 +4,21 @@
 轉成受治理的 SQL → 打進本地 DuckDB → 回答案。當作學習 / 擴充 Wren 用法的沙盒,
 之後接真實資料庫時照這個結構複製即可。
 
-## 一鍵跑
+## 一鍵跑(冪等,可重複)
 
 ```bash
-make wren-install      # 首次 / 新容器:裝 wren CLI(見 scripts/setup_wren.sh)
-make wren-demo         # 重建資料 + 編譯 MDL + 跑「每家店營收」範例查詢
+make wren     # 裝 CLI + 重建資料 + 編譯 MDL + 跑「每家店營收」驗證查詢,一條指令搞定
 ```
 
-預期輸出:
+拆步(選用):`make wren-install`=只裝 CLI、`make wren-demo`=只建+查。
 
-```
-store   city  orders revenue
-逢甲店   台中     2     3090
-信義店   台北     3     2730
-西門店   台北     1      430
+預期輸出(金額為 DECIMAL,單位元):
+
+```text
+store city  orders revenue
+逢甲店   台中     2 3090.00
+信義店   台北     3 2730.00
+西門店   台北     1  430.00
 ```
 
 ## 自己問
@@ -45,7 +46,7 @@ wren --sql "SELECT city, SUM(total) AS revenue FROM orders o JOIN stores s ON o.
 ## 換成真實資料庫怎麼做
 
 1. `wren_project.yml` 的 `data_source` 改成 `postgres`(或 mysql/bigquery…)。
-2. 連線帳密走 `.env`(**永不進 git**;Wren 的安全模型:你填、agent 看不到值)。
+2. 連線帳密走 `.env`(gitignored、**永不進 git**);用最小權限(唯讀)帳號,不要把密碼貼進對話。
 3. 模型不用手寫 —— 叫 Claude 用 `/wren` 技能跑 `wren skills get generate-mdl`,
    它會探索 schema 自動產 `models/`。
 4. `wren context build` → 開始問。
