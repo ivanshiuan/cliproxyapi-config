@@ -27,6 +27,13 @@ Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 
 LINE_OA_ADD_FRIEND_URL=https://lin.ee/你的短碼
 ```
 
+> **✅ 已確認的值（2026-08，BUFFHOTPOT 官方帳號）：**
+> ```
+> LINE_OA_ADD_FRIEND_URL=https://lin.ee/rxhm8gg
+> ```
+> 已在本機實測：此值正確流進門口 QR 邏輯，`_door_qr_target()` 回 `(url, is_add_friend=True)`，海報自動切「掃我加 LINE 抽大獎」。只等把它貼進 Render Environment 存檔即生效。
+> （註：`https://line.me/ti/p/ssUwBsYC6F` 是個人帳號連結、非官方帳號，勿用。）
+
 （或用 `https://line.me/R/ti/p/@你的BasicID` 格式，兩種 LINE 給的格式都吃。）存檔後 Render 會自動重新部署。設定好之後，門口海報 QR 會自動改成「掃了先加好友」，`GET /admin/line/finalize` 或 `/admin/line/status` 的回應也會反映這個狀態（`door_qr_add_friend_url` 欄位）。**這件事我這邊做不到**——LINE 沒有 API 可以查或產生這個連結，只能你登入後台看。
 
 ### 1. 印海報（設定好上面那個值之後再印，或先印應急版也可以）
