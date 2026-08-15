@@ -16,8 +16,8 @@
             {
               "type": "box", "layout": "vertical", "margin": "lg", "spacing": "sm",
               "contents": [
-                { "type": "text", "text": "📍 【地址】", "size": "xs", "color": "#b6a8da", "wrap": true },
-                { "type": "text", "text": "🕙 【營業時間】", "size": "xs", "color": "#b6a8da", "wrap": true }
+                { "type": "text", "text": "📍 台中市西屯區漢口路二段21號", "size": "xs", "color": "#b6a8da", "wrap": true },
+                { "type": "text", "text": "🕙 每日 17:00–24:00（下午5點～凌晨12點）", "size": "xs", "color": "#b6a8da", "wrap": true }
               ]
             }
           ]

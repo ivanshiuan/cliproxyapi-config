@@ -237,11 +237,13 @@ function renderWheel() {
     : `conic-gradient(${stops})`;
   wheel.innerHTML = segments.map((s, i) => {
     const mid = i * seg + seg / 2;
-    // Wedge i (conic-gradient) is centred at `mid` clockwise from the TOP, and
-    // the pointer/landing math uses the same frame. A label's local X axis
-    // starts pointing east (+90deg from top), so rotate by (mid - 90) to land it
-    // on its own wedge; the trailing rotate(90deg) makes the text read outward.
-    return `<span class="seg-label" style="transform: rotate(${mid - 90}deg) translate(70px) rotate(90deg)">${escapeHtml(shorten(s.name))}</span>`;
+    // Wedge i (conic-gradient) is centred at `mid` clockwise from the TOP. Align
+    // the label's local X axis to its wedge radius (rotate mid-90), push it out
+    // (translate), then rotate the text to read radially. Labels whose wedge sits
+    // on the BOTTOM half (90°<mid<270°) would otherwise render upside-down, so
+    // flip those an extra 180° (90→270) to keep every label right-side-up.
+    const endRot = (mid > 90 && mid < 270) ? 270 : 90;
+    return `<span class="seg-label" style="transform: rotate(${mid - 90}deg) translate(74px) rotate(${endRot}deg)">${escapeHtml(shorten(s.name))}</span>`;
   }).join("");
 }
 function shorten(s) { return s.length > 7 ? s.slice(0, 6) + "…" : s; }
