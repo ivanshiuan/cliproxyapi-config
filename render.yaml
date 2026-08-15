@@ -47,5 +47,9 @@ services:
       # LINE 推播金鑰：手動填（你已經有的那把 channel access token）
       - key: LINE_CHANNEL_ACCESS_TOKEN
         sync: false
+      # 官方帳號「加好友」連結（公開值，非密碼）：門口海報 QR 指向這裡，
+      # 客人掃碼先加好友 → 自動歡迎訊息 → LIFF 免打字進輪盤。
+      - key: LINE_OA_ADD_FRIEND_URL
+        value: https://lin.ee/rxhm8gg
       - key: RESTO_ENV
         value: prod
