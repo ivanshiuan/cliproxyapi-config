@@ -25,17 +25,41 @@
 - ✅ **LINE 推播金鑰**：`LINE_CHANNEL_ACCESS_TOKEN` 已設進 Render
 - ✅ 輪盤頁 `…/demo/campaign/grand-open`、店長後台 `…/demo/admin.html` 都在線上
 
-**卡在這一步（webhook Verify 回 403）：**
-- LINE channel = 「周霸虎老火鍋 BUFF HOTPOT」，Bot basic ID `@763yjise`
-- webhook URL 已改成 `https://chouhutiger.onrender.com/line/webhook`，Use webhook 已開
-- 但 Verify 回 **403**。程式碼邏輯：secret 沒設→503、secret 設了但對不上→**403**。
-  ⇒ **Render 的 `LINE_CHANNEL_SECRET` 值錯了**（不是這個 channel 的）。
-- **修法**：LINE Console →「Basic settings」複製正確 Channel secret →
-  更新 Render `LINE_CHANNEL_SECRET` → Save/redeploy → 再 Verify（應回 Success）。
+**✅ webhook 已通、整條漏斗已真人驗證上線（2026-08-15 稍晚）：**
+- LINE channel =「周霸虎老火鍋 BUFF HOTPOT」，Bot basic ID `@763yjise`
+- webhook URL = `https://chouhutiger.onrender.com/line/webhook`，Use webhook 已開
+- **403 已解**：Render 的 `LINE_CHANNEL_SECRET` 原本是錯的（舊值 `c1eff…`）。
+  換成這個 channel 正確的 secret `7913e1e6bae3d3fce4fc2604ff008686` 後,
+  LINE Verify **回 Success ✅**。（`LINE_CHANNEL_ACCESS_TOKEN` 也已設,同一 channel。）
+- **Ivan 手機實測整條通**:掃碼→加好友→**自動歡迎訊息**→點按鈕**免打字進輪盤**
+  (LIFF 自動帶入 LINE ID `Uf76f816a88bee8`)→**轉盤抽獎中「招待飲料一杯」**→
+  顯示「明天再抽一次」(每日一抽)。開幕引流主線正式可用。
+- 收尾修正(commit `3f3b703`):歡迎訊息填真實地址「台中市西屯區漢口路二段21號」
+  + 營業時間「每日 17:00–24:00」;輪盤下半部倒置標籤翻正。
 
-**Verify 過之後剩下：**
-1. 手機掃海報 QR / 點 lin.ee 連結 → 加好友 → 應收到歡迎訊息（follow webhook 自動發）
-2. 走完 掃碼→加好友→歡迎訊息→玩輪盤→領券→核銷→成為會員 真人驗一遍
+**店長後台登入**:`…/demo/admin.html`,密碼 = Render 環境變數 `RESTO_ADMIN_PASSCODE`
+(Render→Environment→點眼睛圖示看明碼,或 Edit 改成好記的值後 redeploy)。
+
+---
+
+## 🗺️ Ivan 的完整藍圖待辦（2026-08-15 現場口述，依優先序待排）
+
+主線已上線,以下是 Ivan 要的加值功能,**每項都需要他決定優先序或提供 UX 細節**:
+
+| # | 項目 | 現況 / 要做什麼 |
+|---|---|---|
+| 1 | 抽到的券變 **QR、櫃檯/POS 掃碼核銷** + 記錄客流 | 核銷邏輯已有;要補「券的 QR 顯示」+ POS 掃碼流程 + 到店人數統計 |
+| 2 | **分享裂變**:抽到的東西送朋友 → 朋友加好友也能立即抽 | 後端已建(`voucher_gift_service`/`voucher_grant_service`,docs/18),**未接到輪盤 UI** |
+| 3 | 抽中獎品**當週限期核銷**(逼當週來店) | campaign `voucher_validity_days` 現 14 天;改 7 天即可(admin.html 可直接改) |
+| 4 | 加入後**精準 retarget**(不每天煩、抓準時機) | 分眾推播引擎(RFM broadcast)已有;要接觸發時機/排程 |
+| 5 | 每日回訪連續度(天天上來抽) | 每日一抽已有;streak 加碼點數服務已有,可串 |
+| 6 | 後台調中獎機率(這週想做滿就調高) | ✅ 已有(admin.html 改權重);Ivan 待熟悉操作 |
+| 7 | 輪盤整體美化成「設計過的壁畫」 | 字體已翻正;整體視覺(壁畫感)可再設計 |
+| 8 | **霸虎中控室**連到此行銷後台調參數 | 未來整合;需中控室 API 對接 |
+
+**⚠️ 沙盒限制**:Claude 的執行環境**連不到** `chouhutiger.onrender.com`(egress 403),
+所以「線上查驗」都要 Ivan 用瀏覽器/手機做;程式面 Claude 可在本機重現驗證後 push,
+Render 自動部署。
 
 **⚠️ 重大整合議題（webhook 只能設一個）：**
 - 這個 LINE channel 的 webhook 之前指向「全域餐飲管理系統」
