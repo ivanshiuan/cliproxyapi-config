@@ -7,6 +7,45 @@
 
 ---
 
+## 🟢 開幕輪盤上線現況（2026-08-15 session，最新）
+
+線上服務 = `https://chouhutiger.onrender.com`（Render, **歐霸's workspace**，
+不是 buffhotpot 那個空 workspace；Blueprint 自動部署，push 到
+`claude/launch-wheel-game-campaign-t7octp` 會自動 redeploy）。
+
+**已完成並驗證：**
+- ✅ **修好線上 500**：Render 免費 Postgres 過期重建成空庫後建表失敗。根因兩個
+  已修（commit `3e57592`）：① 遷移漏建 `citext` 擴充（customers 表要用）
+  ② `start.sh` 用 `|| true` 吞掉建表失敗。已用全新無擴充 DB 重現並驗證修好。
+- ✅ **門口海報**（加好友模式 + 周霸虎品牌）：
+  `…/campaigns/by-slug/grand-open/poster?brand=周霸虎老火鍋&tagline=Buff Hotpot&slogan=川味本真`
+  （commit `a82cafd` 美化：主標放大上紅、BUFF HOTPOT 全大寫、川味本真置底）
+- ✅ **LINE 加好友連結**：`https://lin.ee/rxhm8gg` → 已設進 Render
+  `LINE_OA_ADD_FRIEND_URL`（door QR 自動切加好友模式）
+- ✅ **LINE 推播金鑰**：`LINE_CHANNEL_ACCESS_TOKEN` 已設進 Render
+- ✅ 輪盤頁 `…/demo/campaign/grand-open`、店長後台 `…/demo/admin.html` 都在線上
+
+**卡在這一步（webhook Verify 回 403）：**
+- LINE channel = 「周霸虎老火鍋 BUFF HOTPOT」，Bot basic ID `@763yjise`
+- webhook URL 已改成 `https://chouhutiger.onrender.com/line/webhook`，Use webhook 已開
+- 但 Verify 回 **403**。程式碼邏輯：secret 沒設→503、secret 設了但對不上→**403**。
+  ⇒ **Render 的 `LINE_CHANNEL_SECRET` 值錯了**（不是這個 channel 的）。
+- **修法**：LINE Console →「Basic settings」複製正確 Channel secret →
+  更新 Render `LINE_CHANNEL_SECRET` → Save/redeploy → 再 Verify（應回 Success）。
+
+**Verify 過之後剩下：**
+1. 手機掃海報 QR / 點 lin.ee 連結 → 加好友 → 應收到歡迎訊息（follow webhook 自動發）
+2. 走完 掃碼→加好友→歡迎訊息→玩輪盤→領券→核銷→成為會員 真人驗一遍
+
+**⚠️ 重大整合議題（webhook 只能設一個）：**
+- 這個 LINE channel 的 webhook 之前指向「全域餐飲管理系統」
+  `https://super-ops-monitor.ivanshiuan.workers.dev/webhook/line`（Cloudflare Worker）。
+- 一個 channel **只能一個 webhook URL**。改成 chouhutiger = super-ops-monitor 收不到事件。
+- 若兩套都要收 → 要做 **fan-out 轉發**（一個當總機收到後轉發另一個）。這段待做，
+  等開幕活動上線後再接。**先確認 super-ops-monitor 是否正式運作中再決定要不要保留轉發。**
+
+---
+
 ## 🔴 現在最急：開幕輪盤上線，LIFF + 圖文選單已經不用登入 LINE Console 了
 
 Render 已經部署成功（`https://chouhutiger.onrender.com`，`/health/live` 回 200，本地端跑過 120 人份完整壓測全過）。**重大進展**：LIFF 建立跟圖文選單上架這兩件事，原本以為一定要你登入 LINE Developers Console / Official Account Manager 手動點——後來發現 LINE 這兩個功能都有對應的 API，而且你已經有的 `LINE_CHANNEL_ACCESS_TOKEN` 就能呼叫，所以我直接把它們做成兩個後端端點。**Render 的伺服器連得到 LINE 的 API（我這邊的沙盒連不到，但這不影響 Render 本身）**，所以你只要對已上線的 Render 服務打 2 個 API 就好，不用開瀏覽器登入 LINE。
