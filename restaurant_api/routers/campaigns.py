@@ -374,7 +374,7 @@ async def redeem_voucher(
 
 # Brand passthrough params baked into the demo URL (and the poster), so one
 # QR carries the store's theme. All optional; the page has tasteful defaults.
-_BRAND_PARAMS = ("brand", "tagline", "logo", "primary", "accent", "bg")
+_BRAND_PARAMS = ("brand", "tagline", "logo", "primary", "accent", "bg", "slogan")
 
 
 def _demo_url(request: Request, campaign_id: uuid.UUID, base_url: str | None, brand: dict[str, str]) -> str:
@@ -470,50 +470,72 @@ def _render_poster(
     logo: str | None,
     primary: str | None,
     accent: str | None,
+    slogan: str | None = None,
 ) -> HTMLResponse:
     url, is_add_friend = _door_qr_target(request, campaign_id, base_url, brand_params)
     svg = make_qr_svg(url, box_size=8).decode("utf-8")
 
     title = html.escape(brand or campaign_name)
-    default_sub = "掃碼加入 LINE 好友 · 立即抽獎" if is_add_friend else "掃碼抽獎 · 加入會員 · 來店兌換"
-    sub = html.escape(tagline or default_sub)
-    cta_text = "📱 掃我加 LINE 抽大獎" if is_add_friend else "📱 掃我抽大獎"
-    primary_c = primary or "#ff5d8f"
-    accent_c = accent or "#ffd34e"
+    # English sub-brand line, rendered ALL-CAPS with wide tracking (the modern
+    # look). ``tagline`` is intended for the romanised brand (e.g. "Buff Hotpot").
+    sub = html.escape(tagline) if tagline else ""
+    cta_text = "掃我加 LINE 抽大獎" if is_add_friend else "掃我抽大獎"
+    hint = "掃碼加入 LINE 好友 · 立即抽獎" if is_add_friend else "掃碼抽獎 · 加入會員 · 來店兌換"
+    # Bottom slogan line — the Chinese tagline (e.g. "川味本真"). Falls back to the
+    # standard prize footnote when not supplied.
+    foot = html.escape(slogan) if slogan else "最大獎 免單四人套餐 · 每日一抽 · 抽中即加入會員"
+    primary_c = primary or "#C8102E"
+    accent_c = accent or "#F2A900"
     logo_html = (
-        f'<img src="{html.escape(logo)}" alt="logo" style="max-height:90px;margin-bottom:18px" />'
+        f'<img src="{html.escape(logo)}" alt="logo" class="logo" />'
         if logo
         else ""
     )
+    sub_html = f'<div class="sub">{sub}</div>' if sub else ""
     page = f"""<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>{title} · 開幕輪盤海報</title>
 <style>
   @page {{ size: A4; margin: 0; }}
+  * {{ box-sizing:border-box; }}
   body {{ margin:0; font-family:"PingFang TC","Noto Sans TC",system-ui,sans-serif;
     min-height:100vh; display:grid; place-items:center;
-    background:linear-gradient(160deg,{accent_c}22,{primary_c}22); color:#1b1033; }}
-  .poster {{ width:min(92vw,640px); aspect-ratio:1/1.414; background:#fff; border-radius:24px;
-    box-shadow:0 20px 60px rgba(0,0,0,.18); padding:48px 40px; text-align:center;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; }}
-  .kicker {{ letter-spacing:6px; color:{primary_c}; font-weight:800; font-size:16px; }}
-  h1 {{ font-size:40px; margin:6px 0; line-height:1.15; }}
-  .sub {{ color:#555; font-size:18px; }}
-  .qr {{ width:320px; height:320px; margin:14px auto; padding:16px; border:6px solid {accent_c};
-    border-radius:18px; }}
-  .qr svg {{ width:100%; height:100%; }}
-  .cta {{ font-size:22px; font-weight:900; color:{primary_c}; }}
-  .foot {{ color:#888; font-size:13px; }}
+    background:linear-gradient(160deg,{accent_c}18,{primary_c}18); color:#1b1033; }}
+  .poster {{ width:min(92vw,640px); aspect-ratio:1/1.414; background:#fff; border-radius:28px;
+    box-shadow:0 24px 70px rgba(0,0,0,.20); padding:56px 48px 44px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; justify-content:space-between; }}
+  .top {{ display:flex; flex-direction:column; align-items:center; gap:10px; }}
+  .logo {{ max-height:84px; margin-bottom:6px; }}
+  .kicker {{ letter-spacing:8px; color:{primary_c}; font-weight:800; font-size:15px; }}
+  h1 {{ font-size:58px; margin:2px 0 0; line-height:1.05; font-weight:900;
+    letter-spacing:4px; color:{primary_c};
+    text-shadow:0 2px 0 {accent_c}44; }}
+  .sub {{ text-transform:uppercase; letter-spacing:7px; font-weight:800; font-size:19px;
+    color:#2b2b2b; margin-top:6px; }}
+  .divider {{ width:56px; height:4px; border-radius:99px; background:{accent_c}; margin:16px auto 0; }}
+  .qr {{ width:320px; height:320px; margin:6px auto 0; padding:18px; border:6px solid {accent_c};
+    border-radius:22px; background:#fff; }}
+  .qr svg {{ width:100%; height:100%; display:block; }}
+  .cta {{ font-size:24px; font-weight:900; color:{primary_c}; margin-top:14px; }}
+  .cta span {{ font-size:20px; }}
+  .hint {{ color:#666; font-size:15px; margin-top:4px; }}
+  .foot {{ color:#9a8f88; font-size:16px; letter-spacing:3px; margin-top:6px; }}
   @media print {{ body {{ background:#fff; }} .poster {{ box-shadow:none; }} }}
 </style></head>
 <body><div class="poster">
-  {logo_html}
-  <div class="kicker">GRAND OPENING</div>
-  <h1>{title}</h1>
-  <div class="sub">{sub}</div>
+  <div class="top">
+    {logo_html}
+    <div class="kicker">GRAND OPENING</div>
+    <h1>{title}</h1>
+    {sub_html}
+    <div class="divider"></div>
+  </div>
   <div class="qr">{svg}</div>
-  <div class="cta">{cta_text}</div>
-  <div class="foot">最大獎 免單四人套餐 · 每日一抽 · 抽中即加入會員</div>
+  <div class="mid">
+    <div class="cta"><span>📱</span> {cta_text}</div>
+    <div class="hint">{hint}</div>
+  </div>
+  <div class="foot">{foot}</div>
 </div></body></html>"""
     return HTMLResponse(content=page)
 
@@ -535,6 +557,7 @@ async def campaign_poster(
     primary: str | None = None,
     accent: str | None = None,
     bg: str | None = None,
+    slogan: str | None = None,
 ) -> HTMLResponse:
     """Render a printable A4 door poster with the campaign's embedded QR."""
     campaign = await campaigns_service.get_campaign(session, campaign_id, tenant_id=tenant_id)
@@ -542,6 +565,7 @@ async def campaign_poster(
     return _render_poster(
         campaign_id, campaign.name, request, base_url, brand_params,
         brand=brand, tagline=tagline, logo=logo, primary=primary, accent=accent,
+        slogan=slogan,
     )
 
 
@@ -562,6 +586,7 @@ async def campaign_poster_by_slug(
     primary: str | None = None,
     accent: str | None = None,
     bg: str | None = None,
+    slogan: str | None = None,
 ) -> HTMLResponse:
     """Same as ``/{campaign_id}/poster`` but resolved by the stable slug."""
     campaign = await campaigns_service.get_campaign_by_slug(session, slug, tenant_id=tenant_id)
@@ -569,6 +594,7 @@ async def campaign_poster_by_slug(
     return _render_poster(
         campaign.id, campaign.name, request, base_url, brand_params,
         brand=brand, tagline=tagline, logo=logo, primary=primary, accent=accent,
+        slogan=slogan,
     )
 
 
