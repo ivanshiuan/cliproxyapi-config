@@ -86,6 +86,7 @@
     <button id="navWheel" class="ghost sm" onclick="showView('wheel')">🎡 開幕輪盤</button>
     <button id="navShare" class="ghost sm" onclick="showView('share')">🔗 分享解鎖</button>
     <button id="navPush" class="ghost sm" onclick="showView('push')">📣 精準推播</button>
+    <button id="navUgc" class="ghost sm" onclick="showView('ugc')">📸 打卡評論</button>
   </nav>
   <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
 </header>
@@ -159,6 +160,9 @@
 
   <!-- ══ 📣 精準分眾推播：RFM 分眾 + LINE 推播 ══ -->
   <div id="viewPush" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
+
+  <!-- ══ 📸 打卡／評論換獎：UGC 審核佇列 ══ -->
+  <div id="viewUgc" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
 </div><!-- /app -->
 
 <div id="toast" class="toast"></div>
@@ -198,13 +202,16 @@ function showView(v){
   $("viewWheel").style.display = v==='wheel' ? 'grid'  : 'none';
   $("viewShare").style.display = v==='share' ? 'block' : 'none';
   $("viewPush").style.display  = v==='push'  ? 'block' : 'none';
+  $("viewUgc").style.display   = v==='ugc'   ? 'block' : 'none';
   $("navLib").classList.toggle('active-nav', v==='lib');
   $("navWheel").classList.toggle('active-nav', v==='wheel');
   $("navShare").classList.toggle('active-nav', v==='share');
   $("navPush").classList.toggle('active-nav', v==='push');
+  $("navUgc").classList.toggle('active-nav', v==='ugc');
   if(v==='lib') renderStrategyLibrary();
   if(v==='share') renderShare();
   if(v==='push') renderPush();
+  if(v==='ugc') renderUgc();
 }
 async function enter(){ showApp(); await loadCampaigns(); showView('lib'); }
 async function boot(){
@@ -250,10 +257,11 @@ const STRATEGIES = [
     goal:"一次鎖住未來多次消費",
     how:"儲 500 送 10%、1000 送 20%（級距加贈）",
     win:"提前回收現金、綁定回流" },
-  { icon:"📸", name:"打卡／評論換獎（UGC）",
+  { icon:"📸", name:"打卡／評論換獎（UGC）", live:true,
     goal:"用點數買口碑（Google 五星／IG 曝光）",
     how:"客人評論／打卡→店員審核→發點",
-    win:"自然流量＋社群曝光" },
+    win:"自然流量＋社群曝光",
+    cta:"進入審核 →", act:"showView('ugc')" },
   { icon:"🧾", name:"券 QR ＋ POS 掃碼核銷",
     goal:"櫃檯掃一下就消帳、量化行銷 ROI",
     how:"中獎券顯示成 QR→店員／POS 掃→核銷→計入客流",
@@ -398,6 +406,60 @@ async function sendBroadcast(){
       ✅ 已送達 <b>${r.delivered}</b> / ${r.audience_size} 人（${SEG_LABEL[r.segment]||r.segment}）</div>`;
     $("pushMsg").value="";
   }catch(e){ box.innerHTML=`<div class="empty">發送失敗：${esc(e.message)}</div>`; }
+}
+
+// ── 📸 打卡／評論換獎（走既有 /ugc/submissions）──
+const UGC_KIND = { google_review:"Google 評論", ig_post:"IG 貼文", checkin:"打卡" };
+const UGC_ST = { pending:"待審", approved:"已通過", rejected:"已拒絕" };
+function renderUgc(){
+  $("viewUgc").innerHTML = `
+  <div class="card">
+    <h2><span class="dot"></span>📸 打卡／評論換獎（UGC 審核）</h2>
+    <div class="muted" style="line-height:1.75">
+      客人在 Google 留五星、IG 發文或到店打卡 → 提交進待審佇列 → 店員按「通過」
+      自動發點並 LINE 道謝。用點數換口碑與社群曝光。
+    </div>
+  </div>
+  <div class="card">
+    <h2><span class="dot"></span>審核佇列
+      <span style="float:right">
+        <select id="ugcFilter" style="width:auto;display:inline-block" onchange="loadUgc()">
+          <option value="pending">待審</option>
+          <option value="approved">已通過</option>
+          <option value="rejected">已拒絕</option>
+          <option value="">全部</option>
+        </select>
+        <button class="ghost sm" onclick="loadUgc()">↻</button>
+      </span></h2>
+    <div id="ugcTable"><div class="empty">載入中…</div></div>
+  </div>`;
+  loadUgc();
+}
+async function loadUgc(){
+  const box=$("ugcTable"); if(!box) return;
+  const f=$("ugcFilter")?$("ugcFilter").value:"pending";
+  let list; try{ list=await api("/ugc/submissions"+(f?`?ugc_status=${f}`:"")); }
+  catch(e){ box.innerHTML=`<div class="empty">讀取失敗：${esc(e.message)}</div>`; return; }
+  if(!list.length){ box.innerHTML=`<div class="empty">目前沒有${f?(UGC_ST[f]||""):""}項目</div>`; return; }
+  box.innerHTML=`<table>
+    <tr><th>類型</th><th>證明</th><th>點數</th><th>狀態</th><th>時間</th><th></th></tr>
+    ${list.map(u=>`<tr>
+      <td>${UGC_KIND[u.kind]||esc(u.kind)}</td>
+      <td>${u.proof_url?`<a href="${esc(u.proof_url)}" target="_blank" style="color:var(--accent)">看證明</a>`:'<span class="muted">—</span>'}</td>
+      <td>${esc(String(u.reward_points))}</td>
+      <td><span class="pill ${u.status==='approved'?'active':u.status==='rejected'?'ended':'draft'}">${UGC_ST[u.status]||esc(u.status)}</span></td>
+      <td class="muted">${esc(String(u.created_at||"").slice(0,10))}</td>
+      <td style="white-space:nowrap">${u.status==='pending'?`
+        <button class="ghost sm" onclick="reviewUgc('${u.id}','approve')">通過</button>
+        <button class="ghost sm" onclick="reviewUgc('${u.id}','reject')">拒絕</button>`:''}</td>
+    </tr>`).join("")}
+  </table>`;
+}
+async function reviewUgc(id,action){
+  try{ await api(`/ugc/submissions/${id}/${action}`,{method:"POST",body:"{}"});
+    toast(action==='approve'?"已通過 · 發點+道謝 ✅":"已拒絕");
+    loadUgc();
+  }catch(e){ toast((action==='approve'?"審核":"拒絕")+"失敗："+e.message); }
 }
 async function loadGrants(){
   const box=$("grantTable"); if(!box) return;
