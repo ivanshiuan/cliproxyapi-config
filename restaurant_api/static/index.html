@@ -108,6 +108,13 @@
   <h1 id="title">開幕輪盤抽獎</h1>
   <div class="sub" id="subtitle">每日一抽 · 抽中即加入會員 · 來店核銷</div>
 
+  <!-- 🔗 分享解鎖：朋友從分享連結進來（?claim=<token>）時顯示 -->
+  <div class="card" id="claimBanner" style="display:none;border:1px solid var(--accent)">
+    <div style="font-weight:800">🎁 朋友送你一張見面禮</div>
+    <div class="v-meta" id="claimMsg" style="margin:6px 0">先加入會員（免費）即可領取。</div>
+    <button class="redeem-btn" id="claimBtn" style="border-radius:999px;width:100%;padding:12px">領取見面禮</button>
+  </div>
+
   <div class="stage">
     <div class="pointer"></div>
     <div class="wheel" id="wheel"></div>
@@ -135,6 +142,14 @@
     <div class="demo-note">來店時向店員出示券碼，由櫃台核銷（每次來店限一張，通常挑最大獎）。逾期券自動失效。</div>
   </div>
 
+  <!-- 🔗 分享解鎖：會員把見面禮送給非會員朋友 -->
+  <div class="card" id="shareCard" style="display:none">
+    <h2 style="font-size:16px;margin:0 0 8px">🔗 送券給朋友</h2>
+    <div class="v-meta">把見面禮分享給還不是會員的朋友。朋友來店消費，你就賺 <b style="color:var(--accent)">100 回饋點</b>——越揪越多 🎁</div>
+    <button class="spin-btn" id="shareBtn" style="margin-top:12px;font-size:16px;padding:14px">🔗 產生分享連結</button>
+    <div id="shareBox" style="margin-top:10px"></div>
+  </div>
+
   <div class="err" id="err"></div>
   <div class="demo-note">
     這是後端引擎的展示頁。門口 QR Code 指向本頁網址（帶 <code>?campaign=&lt;id&gt;</code>）。<br/>
@@ -156,6 +171,7 @@ const LIFF_ID = qs.get("liff") || "";
 let liffActive = false;
 let segments = [];           // [{id, name, sort_order}]
 let customerId = null;
+let pendingClaim = qs.get("claim") || null;  // 朋友從分享連結帶進來的 gift share_token
 let spinning = false;
 let wheelRotation = 0;
 
@@ -293,6 +309,7 @@ async function doSpin() {
     const r = await api(`/campaigns/${campaignId}/spin`, { method: "POST", body: JSON.stringify(payload) });
     customerId = r.customer_id;
     sessionStorage.setItem("wheel_demo_customer_" + campaignId, customerId);
+    reflectMember();  // 剛加入會員 → 顯示送券卡
 
     // Animate to the won segment (or a no-win segment).
     let idx = 0;
@@ -304,6 +321,7 @@ async function doSpin() {
       showResult(r);
       if (r.daily_message) toast("📣 " + r.daily_message);
       loadWallet();
+      if (pendingClaim) doClaim();  // 朋友剛加入會員 → 自動領取見面禮
       spinning = false; $("spinBtn").textContent = "明天再抽一次";
     }, 4800);
   } catch (e) {
@@ -345,12 +363,71 @@ async function loadWallet() {
 }
 function statusLabel(s){ return {active:"可用", redeemed:"已核銷", expired:"已過期", void:"作廢"}[s] || s; }
 
+// ── 🔗 分享解鎖（送券裂變，模式 A gifts）─────────────────────────────
+// 會員一旦有身分（customerId）就能送券；朋友從 ?claim=<token> 進來領取。
+function reflectMember(){ if (customerId) $("shareCard").style.display = "block"; }
+
+function initClaim(){
+  if (!pendingClaim) return;
+  $("claimBanner").style.display = "block";
+  $("claimMsg").textContent = customerId
+    ? "點下方領取，來店向店員出示即可。"
+    : "先抽一次加入會員（免費），即可領取這張見面禮。";
+}
+async function doClaim(){
+  if (!pendingClaim) return;
+  if (!customerId){
+    toast("先抽一次加入會員，就能領取 🎁");
+    document.querySelector(".stage").scrollIntoView({ behavior:"smooth", block:"center" });
+    return;
+  }
+  try{
+    await api(`/vouchers/gifts/${encodeURIComponent(pendingClaim)}/claim`,
+      { method:"POST", body: JSON.stringify({ recipient_id: customerId }) });
+    toast("領取成功！來店向店員出示即可 🎉");
+    pendingClaim = null; $("claimBanner").style.display = "none"; loadWallet();
+  }catch(e){
+    if (e.status === 409) toast(e.message || "這張見面禮已被領取或不可自己領");
+    else showErr("領取失敗：" + e.message);
+  }
+}
+
+async function shareGift(){
+  if (!customerId){ toast("先抽一次加入會員才能送券"); return; }
+  const btn = $("shareBtn"); btn.disabled = true;
+  try{
+    const g = await api(`/vouchers/gifts`,
+      { method:"POST", body: JSON.stringify({ sender_id: customerId }) });
+    const url = `${location.origin}${location.pathname}?campaign=${encodeURIComponent(campaignId)}&claim=${encodeURIComponent(g.share_token)}`;
+    renderShareLink(url);
+    if (liffActive && window.liff && liff.isApiAvailable && liff.isApiAvailable("shareTargetPicker")){
+      try{ await liff.shareTargetPicker([{ type:"text", text:`送你一張見面禮 🎁 點我領取：${url}` }]); toast("已開啟 LINE 分享"); }
+      catch(_){ /* user closed picker */ }
+    } else if (navigator.clipboard){
+      try{ await navigator.clipboard.writeText(url); toast("分享連結已複製，貼給朋友即可 🎁"); }catch(_){}
+    }
+  }catch(e){ showErr("產生分享連結失敗：" + e.message); }
+  finally{ btn.disabled = false; }
+}
+function renderShareLink(url){
+  const safe = url.replace(/"/g, "&quot;");
+  $("shareBox").innerHTML =
+    `<div class="v-meta" style="margin-bottom:6px">把這個連結貼給還不是會員的朋友：</div>
+     <input readonly value="${safe}" onclick="this.select()" />
+     <button class="redeem-btn" style="width:100%;border-radius:999px;margin-top:8px;padding:10px"
+       onclick="navigator.clipboard&&navigator.clipboard.writeText('${url}').then(()=>toast('已複製 🎁')).catch(()=>toast('請長按連結複製'))">複製連結</button>`;
+}
+
 $("spinBtn").addEventListener("click", doSpin);
+$("shareBtn").addEventListener("click", shareGift);
+$("claimBtn").addEventListener("click", doClaim);
 
 (async function boot() {
   await initLiff();                       // production: auto identity via LINE
   if (!liffActive) initDemoMember();      // fallback: manual/demo input
-  loadWheel();
+  await loadWheel();
+  reflectMember();                        // 已是會員 → 顯示送券卡
+  initClaim();                            // 有 ?claim → 顯示領取橫幅
 })();
 </script>
 </body>
