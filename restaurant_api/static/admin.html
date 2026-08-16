@@ -85,6 +85,7 @@
     <button id="navLib" class="ghost sm" onclick="showView('lib')">🏠 行銷策略庫</button>
     <button id="navWheel" class="ghost sm" onclick="showView('wheel')">🎡 開幕輪盤</button>
     <button id="navShare" class="ghost sm" onclick="showView('share')">🔗 分享解鎖</button>
+    <button id="navPush" class="ghost sm" onclick="showView('push')">📣 精準推播</button>
   </nav>
   <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
 </header>
@@ -155,6 +156,9 @@
 
   <!-- ══ 🔗 分享解鎖（送券裂變）：配額券包管理 ══ -->
   <div id="viewShare" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
+
+  <!-- ══ 📣 精準分眾推播：RFM 分眾 + LINE 推播 ══ -->
+  <div id="viewPush" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
 </div><!-- /app -->
 
 <div id="toast" class="toast"></div>
@@ -193,11 +197,14 @@ function showView(v){
   $("viewLib").style.display   = v==='lib'   ? 'block' : 'none';
   $("viewWheel").style.display = v==='wheel' ? 'grid'  : 'none';
   $("viewShare").style.display = v==='share' ? 'block' : 'none';
+  $("viewPush").style.display  = v==='push'  ? 'block' : 'none';
   $("navLib").classList.toggle('active-nav', v==='lib');
   $("navWheel").classList.toggle('active-nav', v==='wheel');
   $("navShare").classList.toggle('active-nav', v==='share');
+  $("navPush").classList.toggle('active-nav', v==='push');
   if(v==='lib') renderStrategyLibrary();
   if(v==='share') renderShare();
+  if(v==='push') renderPush();
 }
 async function enter(){ showApp(); await loadCampaigns(); showView('lib'); }
 async function boot(){
@@ -234,10 +241,11 @@ const STRATEGIES = [
     goal:"讓客人天天上來、養成習慣",
     how:"連續回訪／抽獎 N 天→解鎖加碼獎；斷了重來",
     win:"每日活躍、拉長生命週期" },
-  { icon:"📣", name:"精準分眾推播（Retarget）",
+  { icon:"📣", name:"精準分眾推播（Retarget）", live:true,
     goal:"對的人對的時間推，不每天洗版",
     how:"依 RFM 六分眾各推不同訊息：流失客召回、主力客升級",
-    win:"高精準、低反感、召回沉睡客" },
+    win:"高精準、低反感、召回沉睡客",
+    cta:"進入管理 →", act:"showView('push')" },
   { icon:"💰", name:"儲值加贈",
     goal:"一次鎖住未來多次消費",
     how:"儲 500 送 10%、1000 送 20%（級距加贈）",
@@ -332,6 +340,64 @@ async function redeemGift(){
     $("giftRedeemBox").innerHTML=`<div style="border:1px solid var(--good);border-radius:12px;padding:12px">✅ 核銷成功 · 送券人回饋 <b>${esc(String(g.reward_amount))} 點</b>已入帳</div>`;
     $("giftCode").value="";
   }catch(e){ $("giftRedeemBox").innerHTML=`<div class="empty">核銷失敗：${esc(e.message)}</div>`; }
+}
+
+// ── 📣 精準分眾推播（走既有 /membership/segments + broadcast）──
+const SEG_LABEL = { champion:"主力客（冠軍）", loyal:"忠誠客", potential:"潛力客", new:"新客", at_risk:"流失風險", dormant:"沉睡客" };
+const SEG_ORDER = ["champion","loyal","potential","new","at_risk","dormant"];
+function renderPush(){
+  $("viewPush").innerHTML = `
+  <div class="card">
+    <h2><span class="dot"></span>📣 精準分眾推播</h2>
+    <div class="muted" style="line-height:1.75">
+      依 RFM（最近消費／頻率／金額）把會員自動分成六群，對的人推對的訊息——
+      召回沉睡客、升級主力客，不用每天對全會員洗版。分眾即時計算。
+    </div>
+  </div>
+  <div class="card">
+    <h2><span class="dot"></span>分眾分布 <span class="muted" id="segTotal"></span>
+      <span style="float:right"><button class="ghost sm" onclick="loadSegments()">↻ 重新整理</button></span></h2>
+    <div id="segTable"><div class="empty">載入中…</div></div>
+  </div>
+  <div class="card">
+    <h2><span class="dot"></span>發送分眾推播（LINE）</h2>
+    <label>選擇分眾</label>
+    <select id="segSel">${SEG_ORDER.map(s=>`<option value="${s}">${SEG_LABEL[s]}</option>`).join("")}</select>
+    <label>訊息內容（≤500 字）</label>
+    <textarea id="pushMsg" rows="3" maxlength="500" placeholder="好久不見！本週回店消費送你一張限定券 🎁"
+      style="width:100%;padding:9px 11px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font:inherit"></textarea>
+    <div style="margin-top:12px"><button class="pink" onclick="sendBroadcast()">📣 發送給此分眾</button></div>
+    <div id="pushResult" style="margin-top:10px"></div>
+    <div class="hint">只發給該分眾中「有綁定 LINE」的會員；回傳實際送達數。</div>
+  </div>`;
+  loadSegments();
+}
+async function loadSegments(){
+  const box=$("segTable"); if(!box) return;
+  let data; try{ data=await api("/membership/segments"); }
+  catch(e){ box.innerHTML=`<div class="empty">讀取失敗：${esc(e.message)}</div>`; return; }
+  const counts={}; (data.segments||[]).forEach(b=>counts[b.segment]=b.count);
+  const total=$("segTotal"); if(total) total.textContent=`（已評分 ${data.total_scored} 人）`;
+  box.innerHTML=`<table>
+    <tr><th>分眾</th><th>人數</th><th></th></tr>
+    ${SEG_ORDER.map(s=>`<tr>
+      <td>${SEG_LABEL[s]}</td>
+      <td>${counts[s]||0}</td>
+      <td style="text-align:right"><button class="ghost sm" onclick="document.getElementById('segSel').value='${s}';document.getElementById('pushMsg').focus()">選此群 →</button></td>
+    </tr>`).join("")}
+  </table>`;
+  const sel=$("segSel"); if(sel) sel.innerHTML=SEG_ORDER.map(s=>`<option value="${s}">${SEG_LABEL[s]}（${counts[s]||0} 人）</option>`).join("");
+}
+async function sendBroadcast(){
+  const segment=$("segSel").value, message=$("pushMsg").value.trim();
+  if(!message){ toast("請輸入訊息內容"); return; }
+  const box=$("pushResult");
+  try{
+    const r=await api(`/membership/segments/${segment}/broadcast`,{method:"POST",body:JSON.stringify({message})});
+    box.innerHTML=`<div style="border:1px solid var(--good);border-radius:12px;padding:12px">
+      ✅ 已送達 <b>${r.delivered}</b> / ${r.audience_size} 人（${SEG_LABEL[r.segment]||r.segment}）</div>`;
+    $("pushMsg").value="";
+  }catch(e){ box.innerHTML=`<div class="empty">發送失敗：${esc(e.message)}</div>`; }
 }
 async function loadGrants(){
   const box=$("grantTable"); if(!box) return;
