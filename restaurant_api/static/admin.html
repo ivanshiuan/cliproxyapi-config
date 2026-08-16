@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>店長後台 · 開幕輪盤抽獎</title>
+<title>行銷中心 · 全域餐飲管理系統</title>
 <style>
   :root {
     --bg:#16101f; --panel:#1f1730; --panel2:#272036; --line:#382c52;
@@ -67,12 +67,24 @@
   input.cell { width:74px; padding:5px 7px; margin:0; }
   .big { font-size:22px; font-weight:800; }
   .hint { font-size:11px; color:var(--muted); margin-top:4px; }
+  header nav button.active-nav { border-color:var(--accent); color:var(--accent); }
+  .lib-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+  .scard { border:1px solid var(--line); border-radius:14px; padding:16px; background:var(--panel); display:flex; flex-direction:column; }
+  .scard .shd { display:flex; align-items:center; gap:9px; margin-bottom:10px; }
+  .scard .shd .ic { font-size:22px; } .scard .shd b { font-size:15px; }
+  .scard .body { font-size:13px; line-height:1.75; color:#d7ccef; flex:1; }
+  .scard .body b { color:var(--text); }
+  .scard .act { margin-top:12px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>🎯 店長後台</h1>
-  <span class="tag">開幕輪盤抽獎 · 活動 / 獎項 / 核銷</span>
+  <h1>🎯 行銷中心</h1>
+  <span class="tag">全域餐飲管理系統 · 行銷模組</span>
+  <nav id="nav" style="margin-left:18px;display:none;gap:6px">
+    <button id="navLib" class="ghost sm" onclick="showView('lib')">🏠 行銷策略庫</button>
+    <button id="navWheel" class="ghost sm" onclick="showView('wheel')">🎡 開幕輪盤</button>
+  </nav>
   <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
 </header>
 
@@ -90,7 +102,13 @@
   </div>
 </div>
 
-<div id="app" class="grid" style="display:none">
+<div id="app" style="display:none">
+
+  <!-- ══ 🎯 行銷策略庫（首頁：店長一進來看到的整櫃工具）══ -->
+  <div id="viewLib" style="max-width:1200px;margin:0 auto;padding:16px"></div>
+
+  <!-- ══ 🎡 開幕輪盤活動管理（策略庫中的第一個「已上線」工具）══ -->
+  <div id="viewWheel" class="grid" style="display:none">
   <!-- ── 左欄：活動列表 + 建立 ── -->
   <div>
     <div class="card">
@@ -132,7 +150,8 @@
   <div>
     <div id="detail" class="card"><div class="empty">← 從左側選一個活動，或先建立一個</div></div>
   </div>
-</div>
+  </div><!-- /viewWheel -->
+</div><!-- /app -->
 
 <div id="toast" class="toast"></div>
 
@@ -163,10 +182,19 @@ async function api(path, opts={}){
 }
 
 // ── 登入閘門 ──
-function showLogin(){ $("loginOverlay").style.display="grid"; $("app").style.display="none"; $("logoutBtn").style.display="none"; $("passcode").focus(); }
-function showApp(){ $("loginOverlay").style.display="none"; $("app").style.display="grid"; $("logoutBtn").style.display="inline-block"; }
+function showLogin(){ $("loginOverlay").style.display="grid"; $("app").style.display="none"; $("nav").style.display="none"; $("logoutBtn").style.display="none"; $("passcode").focus(); }
+function showApp(){ $("loginOverlay").style.display="none"; $("app").style.display="block"; $("nav").style.display="flex"; $("logoutBtn").style.display="inline-block"; }
+// 切換行銷中心的分頁：'lib' = 策略庫首頁，'wheel' = 開幕輪盤工具
+function showView(v){
+  $("viewLib").style.display   = v==='lib'   ? 'block' : 'none';
+  $("viewWheel").style.display = v==='wheel' ? 'grid'  : 'none';
+  $("navLib").classList.toggle('active-nav', v==='lib');
+  $("navWheel").classList.toggle('active-nav', v==='wheel');
+  if(v==='lib') renderStrategyLibrary();
+}
+async function enter(){ showApp(); await loadCampaigns(); showView('lib'); }
 async function boot(){
-  try{ await api("/admin/session"); showApp(); loadCampaigns(); }
+  try{ await api("/admin/session"); await enter(); }
   catch{ showLogin(); }
 }
 async function doLogin(){
@@ -175,8 +203,72 @@ async function doLogin(){
   try{
     const res=await fetch(API+"/admin/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({passcode:pc})});
     if(!res.ok){ $("loginErr").textContent="通行碼錯誤"; return; }
-    $("passcode").value=""; showApp(); loadCampaigns();
+    $("passcode").value=""; await enter();
   }catch(e){ $("loginErr").textContent="登入失敗："+e.message; }
+}
+
+// ── 🎯 行銷策略庫：店長挑策略 → 填參數 → 啟用，不用再找工程師（設計見 docs/19）──
+const STRATEGIES = [
+  { icon:"🎡", name:"開幕輪盤抽獎", live:true,
+    goal:"門口 QR 引流、天天回訪、每個玩家變 LINE 會員",
+    how:"掃碼→加好友→免打字進輪盤→每日一抽→中獎領券→到店核銷",
+    win:"曝光變會員、每日活躍、到店轉換",
+    cta:"進入管理 →", act:"showView('wheel')" },
+  { icon:"🔗", name:"分享解鎖（裂變送券）",
+    goal:"舊客帶新客，零廣告費長會員",
+    how:"送一張券（例：肉盤），要領到必須分享給「非會員」朋友→朋友加好友+註冊→兩人都能用券來店消費",
+    win:"每發一張券≈長一個新會員，病毒式擴散" },
+  { icon:"🎂", name:"生日禮",
+    goal:"生日把客人拉回店、加深情感黏著",
+    how:"會員生日當週自動推播一張生日券（免費甜點／肉盤折扣）",
+    win:"高回應率的自然回訪由頭" },
+  { icon:"🎯", name:"每日任務（回訪連續度）",
+    goal:"讓客人天天上來、養成習慣",
+    how:"連續回訪／抽獎 N 天→解鎖加碼獎；斷了重來",
+    win:"每日活躍、拉長生命週期" },
+  { icon:"📣", name:"精準分眾推播（Retarget）",
+    goal:"對的人對的時間推，不每天洗版",
+    how:"依 RFM 六分眾各推不同訊息：流失客召回、主力客升級",
+    win:"高精準、低反感、召回沉睡客" },
+  { icon:"💰", name:"儲值加贈",
+    goal:"一次鎖住未來多次消費",
+    how:"儲 500 送 10%、1000 送 20%（級距加贈）",
+    win:"提前回收現金、綁定回流" },
+  { icon:"📸", name:"打卡／評論換獎（UGC）",
+    goal:"用點數買口碑（Google 五星／IG 曝光）",
+    how:"客人評論／打卡→店員審核→發點",
+    win:"自然流量＋社群曝光" },
+  { icon:"🧾", name:"券 QR ＋ POS 掃碼核銷",
+    goal:"櫃檯掃一下就消帳、量化行銷 ROI",
+    how:"中獎券顯示成 QR→店員／POS 掃→核銷→計入客流",
+    win:"核銷零錯誤、到店人數可統計" },
+];
+function renderStrategyLibrary(){
+  const live = STRATEGIES.filter(s=>s.live).length;
+  const cards = STRATEGIES.map(s=>`
+    <div class="scard">
+      <div class="shd">
+        <span class="ic">${s.icon}</span><b>${esc(s.name)}</b>
+        <span class="pill ${s.live?'active':'draft'}" style="margin-left:auto">${s.live?'已上線':'即將開放'}</span>
+      </div>
+      <div class="body">
+        <div>🎯 <b>目標</b>：${esc(s.goal)}</div>
+        <div>🛠️ <b>做法</b>：${esc(s.how)}</div>
+        <div>📈 <b>效果</b>：${esc(s.win)}</div>
+      </div>
+      <div class="act">
+        ${s.live
+          ? `<button class="sm" onclick="${s.act}">${esc(s.cta||'進入管理 →')}</button>`
+          : `<button class="ghost sm" disabled>即將開放 · 跟開發者說「先做這個」</button>`}
+      </div>
+    </div>`).join("");
+  $("viewLib").innerHTML = `
+    <div style="margin-bottom:14px">
+      <h2 style="font-size:20px;margin:0 0 4px">🎯 行銷策略庫</h2>
+      <div class="muted">挑一個策略、填參數即可啟用，店長不用再找工程師開發。
+        目前 <b style="color:var(--good)">${live} 個已上線</b> · 其餘引擎多已就緒，逐步接進後台。</div>
+    </div>
+    <div class="lib-grid">${cards}</div>`;
 }
 async function logout(){
   try{ await fetch(API+"/admin/logout",{method:"POST"}); }catch{}
