@@ -382,10 +382,16 @@ async function doClaim(){
     return;
   }
   try{
-    await api(`/vouchers/gifts/${encodeURIComponent(pendingClaim)}/claim`,
+    const g = await api(`/vouchers/gifts/${encodeURIComponent(pendingClaim)}/claim`,
       { method:"POST", body: JSON.stringify({ recipient_id: customerId }) });
-    toast("領取成功！來店向店員出示即可 🎉");
-    pendingClaim = null; $("claimBanner").style.display = "none"; loadWallet();
+    toast("領取成功 🎉");
+    pendingClaim = null;
+    $("claimBanner").innerHTML =
+      `<div style="font-weight:800">🎁 見面禮已領取</div>
+       <div class="v-meta" style="margin:6px 0">來店向店員出示這個核銷碼即可：</div>
+       <div class="code" style="font-size:13px;letter-spacing:0;word-break:break-all;display:block">${escapeHtml(g.id)}</div>
+       <div class="v-meta" style="margin-top:8px">核銷後，送你的朋友也會拿到回饋 🎁</div>`;
+    loadWallet();
   }catch(e){
     if (e.status === 409) toast(e.message || "這張見面禮已被領取或不可自己領");
     else showErr("領取失敗：" + e.message);

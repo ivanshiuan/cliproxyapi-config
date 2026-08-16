@@ -311,8 +311,27 @@ function renderShare(){
     <h2><span class="dot"></span>配額券包儀表
       <span style="float:right"><button class="ghost sm" onclick="loadGrants()">↻ 重新整理</button></span></h2>
     <div id="grantTable"><div class="empty">載入中…</div></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot"></span>櫃台核銷送券（朋友來店出示見面禮碼 → 送券人得回饋）</h2>
+    <div class="row">
+      <div style="flex:2"><label>見面禮核銷碼</label><input id="giftCode" placeholder="貼上朋友出示的碼" onkeydown="if(event.key==='Enter')redeemGift()" /></div>
+      <div style="align-self:flex-end"><button onclick="redeemGift()">核銷</button></div>
+    </div>
+    <div id="giftRedeemBox" style="margin-top:10px"></div>
+    <div class="hint">核銷後才發回饋給送券人（防農場）；每人每月回饋有上限。</div>
   </div>`;
   loadGrants();
+}
+async function redeemGift(){
+  const id=$("giftCode").value.trim();
+  if(!id){ toast("請貼上見面禮核銷碼"); return; }
+  try{
+    const g=await api(`/vouchers/gifts/${encodeURIComponent(id)}/redeem`,{method:"POST",body:"{}"});
+    $("giftRedeemBox").innerHTML=`<div style="border:1px solid var(--good);border-radius:12px;padding:12px">✅ 核銷成功 · 送券人回饋 <b>${esc(String(g.reward_amount))} 點</b>已入帳</div>`;
+    $("giftCode").value="";
+  }catch(e){ $("giftRedeemBox").innerHTML=`<div class="empty">核銷失敗：${esc(e.message)}</div>`; }
 }
 async function loadGrants(){
   const box=$("grantTable"); if(!box) return;
