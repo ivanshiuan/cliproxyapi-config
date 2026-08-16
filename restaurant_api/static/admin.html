@@ -247,9 +247,9 @@ const STRATEGIES = [
     how:"送一張券（例：肉盤），要領到必須分享給「非會員」朋友→朋友加好友+註冊→兩人都能用券來店消費",
     win:"每發一張券≈長一個新會員，病毒式擴散",
     cta:"進入管理 →", act:"showView('share')" },
-  { icon:"🎂", name:"生日禮",
+  { icon:"🎂", name:"生日禮", auto:true,
     goal:"生日把客人拉回店、加深情感黏著",
-    how:"會員生日當週自動推播一張生日券（免費甜點／肉盤折扣）",
+    how:"每日 04:15 排程自動掃當日壽星 → 送生日券 + LINE 推播（無需人工）",
     win:"高回應率的自然回訪由頭" },
   { icon:"🎯", name:"每日任務（回訪連續度）",
     goal:"讓客人天天上來、養成習慣",
@@ -281,7 +281,7 @@ function renderStrategyLibrary(){
     <div class="scard">
       <div class="shd">
         <span class="ic">${s.icon}</span><b>${esc(s.name)}</b>
-        <span class="pill ${s.live?'active':'draft'}" style="margin-left:auto">${s.live?'已上線':'即將開放'}</span>
+        <span class="pill ${s.live||s.auto?'active':'draft'}" style="margin-left:auto">${s.live?'已上線':s.auto?'自動執行中':'即將開放'}</span>
       </div>
       <div class="body">
         <div>🎯 <b>目標</b>：${esc(s.goal)}</div>
@@ -291,6 +291,8 @@ function renderStrategyLibrary(){
       <div class="act">
         ${s.live
           ? `<button class="sm" onclick="${s.act}">${esc(s.cta||'進入管理 →')}</button>`
+          : s.auto
+          ? `<button class="ghost sm" disabled>🕓 每日自動執行 · 無需操作</button>`
           : `<button class="ghost sm" disabled>即將開放 · 跟開發者說「先做這個」</button>`}
       </div>
     </div>`).join("");
