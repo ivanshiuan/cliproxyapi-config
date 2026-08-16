@@ -84,6 +84,7 @@
   <nav id="nav" style="margin-left:18px;display:none;gap:6px">
     <button id="navLib" class="ghost sm" onclick="showView('lib')">🏠 行銷策略庫</button>
     <button id="navWheel" class="ghost sm" onclick="showView('wheel')">🎡 開幕輪盤</button>
+    <button id="navShare" class="ghost sm" onclick="showView('share')">🔗 分享解鎖</button>
   </nav>
   <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
 </header>
@@ -151,6 +152,9 @@
     <div id="detail" class="card"><div class="empty">← 從左側選一個活動，或先建立一個</div></div>
   </div>
   </div><!-- /viewWheel -->
+
+  <!-- ══ 🔗 分享解鎖（送券裂變）：配額券包管理 ══ -->
+  <div id="viewShare" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
 </div><!-- /app -->
 
 <div id="toast" class="toast"></div>
@@ -188,9 +192,12 @@ function showApp(){ $("loginOverlay").style.display="none"; $("app").style.displ
 function showView(v){
   $("viewLib").style.display   = v==='lib'   ? 'block' : 'none';
   $("viewWheel").style.display = v==='wheel' ? 'grid'  : 'none';
+  $("viewShare").style.display = v==='share' ? 'block' : 'none';
   $("navLib").classList.toggle('active-nav', v==='lib');
   $("navWheel").classList.toggle('active-nav', v==='wheel');
+  $("navShare").classList.toggle('active-nav', v==='share');
   if(v==='lib') renderStrategyLibrary();
+  if(v==='share') renderShare();
 }
 async function enter(){ showApp(); await loadCampaigns(); showView('lib'); }
 async function boot(){
@@ -214,10 +221,11 @@ const STRATEGIES = [
     how:"掃碼→加好友→免打字進輪盤→每日一抽→中獎領券→到店核銷",
     win:"曝光變會員、每日活躍、到店轉換",
     cta:"進入管理 →", act:"showView('wheel')" },
-  { icon:"🔗", name:"分享解鎖（裂變送券）",
+  { icon:"🔗", name:"分享解鎖（裂變送券）", live:true,
     goal:"舊客帶新客，零廣告費長會員",
     how:"送一張券（例：肉盤），要領到必須分享給「非會員」朋友→朋友加好友+註冊→兩人都能用券來店消費",
-    win:"每發一張券≈長一個新會員，病毒式擴散" },
+    win:"每發一張券≈長一個新會員，病毒式擴散",
+    cta:"進入管理 →", act:"showView('share')" },
   { icon:"🎂", name:"生日禮",
     goal:"生日把客人拉回店、加深情感黏著",
     how:"會員生日當週自動推播一張生日券（免費甜點／肉盤折扣）",
@@ -269,6 +277,81 @@ function renderStrategyLibrary(){
         目前 <b style="color:var(--good)">${live} 個已上線</b> · 其餘引擎多已就緒，逐步接進後台。</div>
     </div>
     <div class="lib-grid">${cards}</div>`;
+}
+
+// ── 🔗 分享解鎖 · 送券裂變（配額券包，走既有 /vouchers/grants）──
+function renderShare(){
+  $("viewShare").innerHTML = `
+  <div class="card">
+    <h2><span class="dot"></span>🔗 分享解鎖 · 送券裂變</h2>
+    <div class="muted" style="line-height:1.75">
+      <b style="color:var(--text)">怎麼運作</b>：發一批「配額券包」給貴人／老客（例：送 100 張肉盤券），
+      他們把券分享出去；朋友加好友＋註冊後雙方都能到店用券——每一張＝一次新客觸及。<br>
+      <b style="color:var(--text)">這裡可操作</b>：建立配額券包、逐張發出、看每個人發了幾張還剩多少（硬上限，發完就停）。
+      顧客端「一鍵分享解鎖」按鈕（LINE 分享給非會員朋友）為下一步，接進顧客頁。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot"></span>建立配額券包</h2>
+    <div class="row">
+      <div style="flex:2"><label>來源／貴人名稱</label><input id="gName" placeholder="王老闆 / 開幕檔" /></div>
+      <div><label>券種標籤</label><input id="gKind" placeholder="肉盤券" /></div>
+    </div>
+    <div class="row">
+      <div><label>份數（配額上限）</label><input id="gQuota" type="number" min="1" value="100" /></div>
+      <div><label>面額(元)</label><input id="gFace" type="number" min="0" value="0" /></div>
+      <div><label>有效到（含當日）</label><input id="gUntil" type="date" /></div>
+    </div>
+    <div style="margin-top:12px"><button class="pink" onclick="createGrant()">＋ 建立券包</button></div>
+    <div class="hint">份數是硬上限（發完就沒了）；面額用整數元。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot"></span>配額券包儀表
+      <span style="float:right"><button class="ghost sm" onclick="loadGrants()">↻ 重新整理</button></span></h2>
+    <div id="grantTable"><div class="empty">載入中…</div></div>
+  </div>`;
+  loadGrants();
+}
+async function loadGrants(){
+  const box=$("grantTable"); if(!box) return;
+  let list; try{ list=await api("/vouchers/grants"); }
+  catch(e){ box.innerHTML=`<div class="empty">讀取失敗：${esc(e.message)}</div>`; return; }
+  if(!list.length){ box.innerHTML=`<div class="empty">尚無配額券包，於上方建立第一個</div>`; return; }
+  box.innerHTML=`<table>
+    <tr><th>來源／貴人</th><th>券種</th><th>面額</th><th>已發 / 配額</th><th>有效到</th><th></th></tr>
+    ${list.map(g=>{
+      const done=g.used_count>=g.total_quota;
+      return `<tr>
+        <td>${esc(g.grantee_name)}</td>
+        <td>${esc(g.voucher_kind)}</td>
+        <td>${money(g.face_value)}</td>
+        <td>${g.used_count} / ${g.total_quota}${done?' <span class="pill ended">發完</span>':''}</td>
+        <td>${esc(g.valid_until)}</td>
+        <td><button class="ghost sm" ${done?'disabled':''} onclick="distributeGrant('${g.id}')">發一張</button></td>
+      </tr>`;
+    }).join("")}
+  </table>`;
+}
+async function createGrant(){
+  const grantee_name=$("gName").value.trim(), voucher_kind=$("gKind").value.trim();
+  if(!grantee_name||!voucher_kind){ toast("請填來源名稱與券種"); return; }
+  if(!$("gUntil").value){ toast("請選有效到日期"); return; }
+  const body={
+    grantee_name, voucher_kind,
+    total_quota:Number($("gQuota").value)||1,
+    face_value:String($("gFace").value||"0"),
+    valid_until:$("gUntil").value,
+  };
+  try{ await api("/vouchers/grants",{method:"POST",body:JSON.stringify(body)});
+    toast("配額券包已建立"); $("gName").value=$("gKind").value=""; loadGrants();
+  }catch(e){ toast("建立失敗："+e.message); }
+}
+async function distributeGrant(id){
+  try{ await api(`/vouchers/grants/${id}/distribute`,{method:"POST",body:"{}"});
+    toast("已發出一張 🎟"); loadGrants();
+  }catch(e){ toast("發券失敗："+e.message); }
 }
 async function logout(){
   try{ await fetch(API+"/admin/logout",{method:"POST"}); }catch{}
