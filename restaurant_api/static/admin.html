@@ -87,6 +87,7 @@
     <button id="navShare" class="ghost sm" onclick="showView('share')">🔗 分享解鎖</button>
     <button id="navPush" class="ghost sm" onclick="showView('push')">📣 精準推播</button>
     <button id="navUgc" class="ghost sm" onclick="showView('ugc')">📸 打卡評論</button>
+    <button id="navTopup" class="ghost sm" onclick="showView('topup')">💰 儲值加贈</button>
   </nav>
   <button id="logoutBtn" class="ghost sm" style="margin-left:auto;display:none" onclick="logout()">登出</button>
 </header>
@@ -163,6 +164,9 @@
 
   <!-- ══ 📸 打卡／評論換獎：UGC 審核佇列 ══ -->
   <div id="viewUgc" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
+
+  <!-- ══ 💰 儲值加贈：搜尋會員 → 儲值（加贈自動） ══ -->
+  <div id="viewTopup" style="max-width:1200px;margin:0 auto;padding:16px;display:none"></div>
 </div><!-- /app -->
 
 <div id="toast" class="toast"></div>
@@ -203,15 +207,18 @@ function showView(v){
   $("viewShare").style.display = v==='share' ? 'block' : 'none';
   $("viewPush").style.display  = v==='push'  ? 'block' : 'none';
   $("viewUgc").style.display   = v==='ugc'   ? 'block' : 'none';
+  $("viewTopup").style.display = v==='topup' ? 'block' : 'none';
   $("navLib").classList.toggle('active-nav', v==='lib');
   $("navWheel").classList.toggle('active-nav', v==='wheel');
   $("navShare").classList.toggle('active-nav', v==='share');
   $("navPush").classList.toggle('active-nav', v==='push');
   $("navUgc").classList.toggle('active-nav', v==='ugc');
+  $("navTopup").classList.toggle('active-nav', v==='topup');
   if(v==='lib') renderStrategyLibrary();
   if(v==='share') renderShare();
   if(v==='push') renderPush();
   if(v==='ugc') renderUgc();
+  if(v==='topup') renderTopup();
 }
 async function enter(){ showApp(); await loadCampaigns(); showView('lib'); }
 async function boot(){
@@ -253,10 +260,11 @@ const STRATEGIES = [
     how:"依 RFM 六分眾各推不同訊息：流失客召回、主力客升級",
     win:"高精準、低反感、召回沉睡客",
     cta:"進入管理 →", act:"showView('push')" },
-  { icon:"💰", name:"儲值加贈",
+  { icon:"💰", name:"儲值加贈", live:true,
     goal:"一次鎖住未來多次消費",
     how:"儲 500 送 10%、1000 送 20%（級距加贈）",
-    win:"提前回收現金、綁定回流" },
+    win:"提前回收現金、綁定回流",
+    cta:"進入管理 →", act:"showView('topup')" },
   { icon:"📸", name:"打卡／評論換獎（UGC）", live:true,
     goal:"用點數買口碑（Google 五星／IG 曝光）",
     how:"客人評論／打卡→店員審核→發點",
@@ -460,6 +468,73 @@ async function reviewUgc(id,action){
     toast(action==='approve'?"已通過 · 發點+道謝 ✅":"已拒絕");
     loadUgc();
   }catch(e){ toast((action==='approve'?"審核":"拒絕")+"失敗："+e.message); }
+}
+
+// ── 💰 儲值加贈（走既有 /customers 搜尋 + /stored-value/top-up）──
+let SV_LIST = []; let svCustomer = null;
+function renderTopup(){
+  $("viewTopup").innerHTML = `
+  <div class="card">
+    <h2><span class="dot"></span>💰 儲值加贈</h2>
+    <div class="muted" style="line-height:1.75">
+      會員儲值一次鎖住未來多次消費；系統依級距自動加贈（例：儲 1000 送 200），
+      加贈與本金分開記帳、可稽核。搜尋會員 → 輸入儲值金額 → 完成。
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">
+    <div class="card" style="margin:0">
+      <h2><span class="dot"></span>搜尋會員</h2>
+      <div class="row"><input id="svSearch" placeholder="姓名／手機／LINE ID" onkeydown="if(event.key==='Enter')loadMembers()" />
+        <button class="ghost" onclick="loadMembers()">搜尋</button></div>
+      <div id="svResults" class="clist" style="margin-top:10px"><div class="empty">輸入關鍵字搜尋</div></div>
+    </div>
+    <div class="card" style="margin:0">
+      <h2><span class="dot"></span>儲值</h2>
+      <div id="svForm"><div class="empty">← 先搜尋並選一位會員</div></div>
+    </div>
+  </div>`;
+}
+async function loadMembers(){
+  const q=$("svSearch").value.trim(); const box=$("svResults");
+  if(!q){ box.innerHTML=`<div class="empty">輸入姓名／手機／LINE ID 搜尋</div>`; return; }
+  try{ SV_LIST=await api("/customers?search="+encodeURIComponent(q)); }
+  catch(e){ box.innerHTML=`<div class="empty">搜尋失敗：${esc(e.message)}</div>`; return; }
+  if(!SV_LIST.length){ box.innerHTML=`<div class="empty">查無會員</div>`; return; }
+  box.innerHTML=SV_LIST.map(c=>`<div class="citem" onclick="selectMember('${c.id}')">
+    <div class="nm">${esc(c.display_name||"(未命名)")}</div>
+    <div class="meta">${esc(c.phone||c.line_user_id||c.id)} · ${esc(String(c.tier||""))}</div>
+  </div>`).join("");
+}
+async function selectMember(id){
+  svCustomer=SV_LIST.find(c=>c.id===id)||null;
+  if(svCustomer){ try{ const b=await api(`/customers/${id}/stored-value`); svCustomer._bal=b.stored_value_balance; }catch(_){ svCustomer._bal=null; } }
+  renderTopupForm();
+}
+function renderTopupForm(){
+  const box=$("svForm");
+  if(!svCustomer){ box.innerHTML=`<div class="empty">← 先搜尋並選一位會員</div>`; return; }
+  const c=svCustomer;
+  box.innerHTML=`
+    <div class="big">${esc(c.display_name||"(未命名)")}</div>
+    <div class="muted" style="margin:4px 0 12px">目前儲值餘額 <b>${c._bal!=null?money(c._bal):"—"}</b> · 點數 ${esc(String(c.points_balance||0))}</div>
+    <label>儲值金額（元，加贈由系統自動計算）</label>
+    <input id="svAmount" type="number" min="1" placeholder="1000" />
+    <label>備註（選填）</label>
+    <input id="svNote" placeholder="開幕儲值檔" />
+    <div style="margin-top:12px"><button class="pink" onclick="doTopup()">💰 確認儲值</button></div>
+    <div id="svResult" style="margin-top:10px"></div>`;
+}
+async function doTopup(){
+  if(!svCustomer) return;
+  const amount=$("svAmount").value.trim();
+  if(!amount||Number(amount)<=0){ toast("請輸入儲值金額"); return; }
+  const body={ amount:String(amount) }; const note=$("svNote").value.trim(); if(note) body.note=note;
+  try{
+    const r=await api(`/customers/${svCustomer.id}/stored-value/top-up`,{method:"POST",body:JSON.stringify(body)});
+    svCustomer._bal=r.stored_value_balance;
+    $("svResult").innerHTML=`<div style="border:1px solid var(--good);border-radius:12px;padding:12px">✅ 儲值完成 · 新餘額 <b>${money(r.stored_value_balance)}</b>（已含加贈）</div>`;
+    $("svAmount").value=""; toast("儲值成功 💰");
+  }catch(e){ $("svResult").innerHTML=`<div class="empty">儲值失敗：${esc(e.message)}</div>`; }
 }
 async function loadGrants(){
   const box=$("grantTable"); if(!box) return;
