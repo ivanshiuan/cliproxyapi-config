@@ -351,6 +351,32 @@ async def get_voucher_by_code(
     )
 
 
+@router.get(
+    "/{campaign_id}/vouchers/by-code/{code}/qr.svg",
+    response_class=Response,
+    summary="券兌換碼 QR (顧客錢包出示 → 櫃台掃碼核銷)",
+)
+async def voucher_code_qr(
+    campaign_id: uuid.UUID,
+    code: str,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> Response:
+    """Render a voucher's redemption code as a scannable SVG QR.
+
+    Public (the customer's wallet embeds it as an ``<img>``): we encode only the
+    code string, never a mutating URL, so displaying it is safe. Looking the code
+    up first 404s an unknown code, so we never mint a QR for one that isn't real;
+    codes are high-entropy, so the existence signal is not a practical enumeration
+    oracle. Scanning yields the code, which staff feed into the admin-gated
+    redeem lookup (``get_voucher_by_code``) — same path a manual entry takes.
+    """
+    voucher = await campaigns_service.get_voucher_by_code(
+        session, campaign_id, code, tenant_id=tenant_id
+    )
+    return Response(content=make_qr_svg(voucher.code), media_type="image/svg+xml")
+
+
 @router.post(
     "/{campaign_id}/vouchers/{voucher_id}/redeem",
     response_model=VoucherResponse,

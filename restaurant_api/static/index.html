@@ -139,7 +139,7 @@
   <div class="card wallet" id="walletCard" style="display:none">
     <h2>🎁 我的獎品錢包</h2>
     <div id="walletList"></div>
-    <div class="demo-note">來店時向店員出示券碼，由櫃台核銷（每次來店限一張，通常挑最大獎）。逾期券自動失效。</div>
+    <div class="demo-note">來店時出示券碼 QR，店員掃一下即核銷（每次來店限一張，通常挑最大獎）。逾期券自動失效。</div>
   </div>
 
   <!-- 🔗 分享解鎖：會員把見面禮送給非會員朋友 -->
@@ -357,7 +357,9 @@ async function loadWallet() {
           <div class="v-name">${escapeHtml(v.prize_name)} <span class="pill ${v.status}">${statusLabel(v.status)}</span></div>
           <div class="v-meta">${v.code} · ${v.valid_from}～${v.valid_until}</div>
         </div>
-        ${v.status === "active" ? `<span class="redeem-btn" style="cursor:default">至櫃台出示</span>` : ""}
+        ${v.status === "active"
+          ? `<img class="v-qr" src="/campaigns/${encodeURIComponent(campaignId)}/vouchers/by-code/${encodeURIComponent(v.code)}/qr.svg" alt="券碼 QR" width="76" height="76" style="background:#fff;border-radius:8px;padding:3px;flex:none" />`
+          : ""}
       </div>`).join("");
   } catch (e) { /* wallet is best-effort */ }
 }

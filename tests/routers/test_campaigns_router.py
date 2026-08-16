@@ -735,6 +735,49 @@ async def test_qr_unknown_campaign_404(client: httpx.AsyncClient) -> None:
     assert resp.status_code == 404
 
 
+async def test_voucher_code_qr_renders_and_matches(
+    client: httpx.AsyncClient, seed_menu_item: MenuItem
+) -> None:
+    """A minted voucher's code renders as an SVG QR encoding exactly that code."""
+    from restaurant_api.qr import make_qr_svg
+
+    cid = (
+        await client.post(
+            "/campaigns", json={"name": "券QR", "slug": _slug(), "status": "active"}
+        )
+    ).json()["id"]
+    await client.post(
+        f"/campaigns/{cid}/prizes",
+        json={
+            "name": "和牛一盤",
+            "weight": 1,
+            "value_estimate": "500",
+            "menu_item_id": str(seed_menu_item.id),
+        },
+    )
+    spin = await client.post(
+        f"/campaigns/{cid}/spin",
+        json={"line_user_id": f"U{uuid.uuid4().hex[:16]}", "display_name": "客"},
+    )
+    code = spin.json()["voucher"]["code"]
+
+    resp = await client.get(f"/campaigns/{cid}/vouchers/by-code/{code}/qr.svg")
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("image/svg+xml")
+    # The QR encodes exactly the code (not a mutating URL).
+    assert resp.content == make_qr_svg(code)
+
+
+async def test_voucher_code_qr_unknown_code_404(client: httpx.AsyncClient) -> None:
+    cid = (
+        await client.post(
+            "/campaigns", json={"name": "券QR", "slug": _slug(), "status": "active"}
+        )
+    ).json()["id"]
+    resp = await client.get(f"/campaigns/{cid}/vouchers/by-code/NOPECODE/qr.svg")
+    assert resp.status_code == 404
+
+
 async def test_poster_endpoint_renders_brand(client: httpx.AsyncClient) -> None:
     create = await client.post(
         "/campaigns", json={"name": "開幕輪盤", "slug": _slug(), "status": "active"}

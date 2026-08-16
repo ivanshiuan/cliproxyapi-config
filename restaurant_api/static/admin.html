@@ -270,10 +270,11 @@ const STRATEGIES = [
     how:"客人評論／打卡→店員審核→發點",
     win:"自然流量＋社群曝光",
     cta:"進入審核 →", act:"showView('ugc')" },
-  { icon:"🧾", name:"券 QR ＋ POS 掃碼核銷",
+  { icon:"🧾", name:"券 QR ＋ POS 掃碼核銷", live:true,
     goal:"櫃檯掃一下就消帳、量化行銷 ROI",
-    how:"中獎券顯示成 QR→店員／POS 掃→核銷→計入客流",
-    win:"核銷零錯誤、到店人數可統計" },
+    how:"顧客錢包中獎券顯示成 QR → 店員／POS 掃碼帶出券碼 → 核銷（在開幕輪盤分頁）",
+    win:"核銷零錯誤、到店人數可統計",
+    cta:"到核銷 →", act:"showView('wheel')" },
 ];
 function renderStrategyLibrary(){
   const live = STRATEGIES.filter(s=>s.live).length;
@@ -782,14 +783,17 @@ async function lookupVoucher(){
   try{
     const v=await api(`/campaigns/${CUR.id}/vouchers/by-code/${encodeURIComponent(code)}`);
     box.innerHTML=`
-      <div style="border:1px solid var(--line);border-radius:12px;padding:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span class="big">${esc(v.prize_name)}</span>
-          <span class="pill ${v.status}">${voucherStatus(v.status)}</span>
+      <div style="border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;gap:14px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="big">${esc(v.prize_name)}</span>
+            <span class="pill ${v.status}">${voucherStatus(v.status)}</span>
+          </div>
+          <div class="muted" style="margin:6px 0">券碼 ${esc(code)} · 價值 ${money(v.value_estimate)} · 有效 ${v.valid_from} ～ ${v.valid_until}</div>
+          ${v.redeemed_at?`<div class="muted">已於 ${esc(v.redeemed_on||v.redeemed_at)} 核銷</div>`
+            :`<button class="pink" onclick="redeem('${v.id}')" ${v.status!=='active'?'disabled':''}>✓ 確認核銷</button>`}
         </div>
-        <div class="muted" style="margin:6px 0">價值 ${money(v.value_estimate)} · 有效 ${v.valid_from} ～ ${v.valid_until}</div>
-        ${v.redeemed_at?`<div class="muted">已於 ${esc(v.redeemed_on||v.redeemed_at)} 核銷</div>`
-          :`<button class="pink" onclick="redeem('${v.id}')" ${v.status!=='active'?'disabled':''}>✓ 確認核銷</button>`}
+        <img src="${API}/campaigns/${CUR.id}/vouchers/by-code/${encodeURIComponent(code)}/qr.svg" alt="券碼 QR" width="88" height="88" style="background:#fff;border-radius:8px;padding:3px;flex:none" />
       </div>`;
   }catch(e){ box.innerHTML=`<div class="empty">查無此券或不可用：${esc(e.message)}</div>`; }
 }
