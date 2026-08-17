@@ -27,7 +27,8 @@ Ivan 現在的工作模式**就是 Orca 想服務的那種人**：指揮官不�
 3. **手機指揮工作流不用自建**：Orca 的 mobile companion（監看、通知、追加指令）與 Ivan 現行「手機審 PR」互補；若某天 Claude Code 遠端 session 不夠用，Orca 是現成的備選指揮台，不必自研。
 
 ## 行動項（Next action）
-- [ ] 下次 DevSwarm 迭代時，評估用 git worktree 取代 `workspace/` + `promote.py` 的搬移流程（一任務一 worktree，審完 merge 或丟棄）。
+- [x] 展開完整整合規劃 → 見 [[../20_orca_integration_plan|docs/20 — 霸虎OS × Orca 整合規劃]]（Phase O-0 試駕 ～ O-4 制度化）
+- [ ] 指揮官拍板 docs/20 §七的三個決策（啟動時機 / 比稿名單 / 遠端機），拍板後啟動 Phase O-0
 
 ## 原文摘錄 / 逐字稿重點
 > 它不是又一套把聊天框塞進編輯器的 AI IDE，而是一個用來管理「多個 Coding Agents」的工作台。

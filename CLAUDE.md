@@ -237,6 +237,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 8. **長 session 超過 50K token 用 `/compact`**，保留重要決策與 spec contract
 9. **規劃新功能用 Plan Mode**（Shift+Tab×2），讓我先審計畫再動工
 10. **遇到不確定時用 AskUserQuestion**，給我 2-4 個具體選項，不要長段問題
+11. **交付自動化、不交付 runbook**：任何需要指揮官執行的流程，一律做成 idempotent 的一鍵指令（make 目標或 script）——重跑不炸、失敗自己講人話、成功印出下一步。指揮官只做最終 approval（審 PR、按 Merge）。文件裡的步驟是寫給維護者看的，不是叫指揮官照抄的。
 
 ---
 
