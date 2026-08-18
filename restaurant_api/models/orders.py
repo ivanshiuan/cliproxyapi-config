@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy import (
     Enum as SQLEnum,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -37,6 +38,26 @@ class OrderStatus(enum.StrEnum):
     CLOSED = "closed"
     VOIDED = "voided"
     REFUNDED = "refunded"
+
+
+class ServiceType(enum.StrEnum):
+    """How the customer receives the food (取餐方式)."""
+
+    DINE_IN = "dine_in"
+    TAKEOUT = "takeout"
+    DELIVERY = "delivery"
+
+
+class OrderSource(enum.StrEnum):
+    """Which channel the order came in through (訂單來源)."""
+
+    POS = "pos"  # staff-operated till
+    QR = "qr"  # customer self-service QR ordering
+    LINE = "line"  # LINE 官方帳號 ordering entry
+    UBEREATS = "ubereats"
+    FOODPANDA = "foodpanda"
+    PHONE = "phone"
+    OTHER = "other"
 
 
 class InvoiceStatus(enum.StrEnum):
@@ -170,6 +191,25 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         default=OrderStatus.OPEN,
         server_default=OrderStatus.OPEN.value,
     )
+    service_type: Mapped[ServiceType] = mapped_column(
+        SQLEnum(ServiceType, name="service_type", native_enum=False, length=16),
+        nullable=False,
+        default=ServiceType.DINE_IN,
+        server_default=ServiceType.DINE_IN.value,
+    )
+    order_source: Mapped[OrderSource] = mapped_column(
+        SQLEnum(OrderSource, name="order_source", native_enum=False, length=16),
+        nullable=False,
+        default=OrderSource.POS,
+        server_default=OrderSource.POS.value,
+    )
+    # SET NULL: re-layouts soft-delete tables, but even a hard removal must
+    # not take historical orders down with it.
+    table_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("dining_tables.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # 統一發票 fields — Taiwan-specific.
     invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -193,6 +233,13 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
     # POS integration round-trip.
     external_pos_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     pos_source: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Refund trail — set when status transitions CLOSED → REFUNDED.
+    refunded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    refund_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -280,6 +327,15 @@ class OrderLine(TenantScopedMixin, Base):
     served_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
+    )
+    # Snapshot of chosen customisations at sale time:
+    # [{"group": "甜度", "option": "微糖", "price_delta": "0.0000"}, ...].
+    # A snapshot (not FKs) so menu edits never rewrite sold history.
+    modifiers: Mapped[list[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default="[]",
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -396,6 +452,8 @@ __all__ = [
     "OrderDiscount",
     "OrderLine",
     "OrderPayment",
+    "OrderSource",
     "OrderStatus",
     "PaymentMethod",
+    "ServiceType",
 ]

@@ -14,16 +14,22 @@ the app and the router is therefore active without further wiring.
 
 from __future__ import annotations
 
+import datetime as dt
 import uuid
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from ..api.deps import DbSession, Messenger, TenantId
 from ..api.errors import DomainError, ErrorBody, domain_error_handler
+from ..models.orders import OrderSource, OrderStatus, ServiceType
 from ..schemas.orders import (
     OrderCloseRequest,
     OrderCreateRequest,
+    OrderLinesAddRequest,
+    OrderListResponse,
+    OrderRefundRequest,
     OrderResponse,
     OrderVoidRequest,
 )
@@ -61,6 +67,45 @@ async def create_order_endpoint(
 
 
 @router.get(
+    "",
+    response_model=OrderListResponse,
+    summary="List order summaries with status/date/store/type/source filters.",
+)
+async def list_orders_endpoint(
+    session: DbSession,
+    tenant_id: TenantId,
+    status_filter: Annotated[
+        Literal["open", "closed", "voided", "refunded"] | None,
+        Query(alias="status", description="未結單即 status=open"),
+    ] = None,
+    business_date: Annotated[dt.date | None, Query()] = None,
+    store_id: Annotated[uuid.UUID | None, Query()] = None,
+    service_type: Annotated[
+        Literal["dine_in", "takeout", "delivery"] | None, Query()
+    ] = None,
+    order_source: Annotated[
+        Literal["pos", "qr", "line", "ubereats", "foodpanda", "phone", "other"] | None,
+        Query(),
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> OrderListResponse:
+    """``GET /orders`` — paged summaries (id, order_no, status, 取餐方式,
+    來源, 桌號, opened_at, 總額), newest first."""
+    return await orders_service.list_orders(
+        session=session,
+        tenant_id=tenant_id,
+        status=OrderStatus(status_filter) if status_filter else None,
+        business_date=business_date,
+        store_id=store_id,
+        service_type=ServiceType(service_type) if service_type else None,
+        order_source=OrderSource(order_source) if order_source else None,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
     "/{order_id}",
     response_model=OrderResponse,
     summary="Fetch one order with its lines, discounts, and payments.",
@@ -93,6 +138,44 @@ async def close_order_endpoint(
         tenant_id=tenant_id,
         closed_at=payload.closed_at,
         messenger=messenger,
+    )
+
+
+@router.post(
+    "/{order_id}/lines",
+    response_model=OrderResponse,
+    summary="加點 — append lines to an OPEN order (409 otherwise).",
+)
+async def add_lines_endpoint(
+    order_id: uuid.UUID,
+    payload: OrderLinesAddRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await orders_service.add_lines(
+        session=session,
+        order_id=order_id,
+        tenant_id=tenant_id,
+        lines=list(payload.lines),
+    )
+
+
+@router.post(
+    "/{order_id}/refund",
+    response_model=OrderResponse,
+    summary="Refund a CLOSED order — stamps refunded_at and writes an audit row.",
+)
+async def refund_order_endpoint(
+    order_id: uuid.UUID,
+    payload: OrderRefundRequest,
+    session: DbSession,
+    tenant_id: TenantId,
+) -> OrderResponse:
+    return await orders_service.refund_order(
+        session=session,
+        order_id=order_id,
+        tenant_id=tenant_id,
+        reason=payload.reason,
     )
 
 

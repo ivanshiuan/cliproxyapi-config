@@ -38,7 +38,14 @@ from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
-from .menu import MenuCategory, MenuItem
+from .menu import (
+    MenuCategory,
+    MenuItem,
+    MenuItemModifierGroup,
+    ModifierGroup,
+    ModifierOption,
+    ModifierSelectionType,
+)
 from .orders import (
     DiscountKind,
     InvoiceMedia,
@@ -49,8 +56,10 @@ from .orders import (
     OrderDiscount,
     OrderLine,
     OrderPayment,
+    OrderSource,
     OrderStatus,
     PaymentMethod,
+    ServiceType,
 )
 from .public_holidays import PublicHoliday
 from .reservations import (
@@ -60,6 +69,7 @@ from .reservations import (
     WalkInQueueEntry,
 )
 from .stores import Store
+from .tables import DiningTable
 from .tenants import Tenant
 from .ugc import UgcKind, UgcStatus, UgcSubmission
 
@@ -81,6 +91,10 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     # menu
     "MenuCategory",
     "MenuItem",
+    "MenuItemModifierGroup",
+    "ModifierGroup",
+    "ModifierOption",
+    "ModifierSelectionType",
     # inventory
     "Ingredient",
     "MovementType",
@@ -88,6 +102,8 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "StockMovement",
     # orders
     "DiscountKind",
+    "OrderSource",
+    "ServiceType",
     "InvoiceMedia",
     "InvoiceStatus",
     "KitchenStation",
@@ -117,6 +133,8 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "CashDrawerSession",
     # public holiday calendar (Taiwan)
     "PublicHoliday",
+    # dining tables (桌位)
+    "DiningTable",
     # audit trail
     "AuditLog",
     # customers / loyalty

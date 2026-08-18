@@ -32,6 +32,7 @@
 ## 定價
 
 ## 門市營運
+- [[2026-07-23-aibou-crew-competitor]] — 排班/打卡/結薪的競品做法：QR 到店打卡、30 秒結薪、一小時上線
 
 ## 供應鏈
 
@@ -40,5 +41,8 @@
 ## 財務
 
 ## 競品情報
+- [[2026-07-23-aibou-crew-competitor]] — Aibou Crew（艾柏雲端）人力軸 HR SaaS 蒸餾：NT$168/人/月、勞基法防呆、我們以全域損益超車
+- [[2026-07-23-haodian-pos-competitor]] — 好點 POS 一站式點餐收銀蒸餾：操作外殼完整但無成本/損益；已據此補齊菜單後台/桌位/客製/訂單生命週期/報表（docs/13）
 
 ## 系統與AI
+- [[2026-07-23-aibou-crew-competitor]] — 勞基法即時 guardrail 應納入 clock_router / labor_hours_classifier 強化

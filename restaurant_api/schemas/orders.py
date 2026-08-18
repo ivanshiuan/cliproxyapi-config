@@ -47,6 +47,22 @@ StrictDecimal = Annotated[Decimal, BeforeValidator(_reject_float)]
 # ──────────────────────────────────────────────────────────────────────────
 
 
+class OrderLineModifier(BaseModel):
+    """One customisation snapshot on a line (甜度 / 冰塊 / 加料).
+
+    ``price_delta`` participates in the line total:
+    ``line_total = (unit_price + Σ price_delta) x qty``. Stored on the ORM
+    row as a JSONB snapshot (strings for money) so menu edits never rewrite
+    sold history.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    group: str = Field(min_length=1, max_length=50)
+    option: str = Field(min_length=1, max_length=50)
+    price_delta: StrictDecimal = Decimal("0")
+
+
 class OrderLineCreate(BaseModel):
     """One line on a new order. ``unit_price`` is a sale-time snapshot.
 
@@ -64,6 +80,7 @@ class OrderLineCreate(BaseModel):
     unit_price: StrictDecimal = Field(ge=Decimal("0"))
     notes: str | None = Field(default=None, max_length=200)
     kitchen_station: Literal["kitchen", "bar", "dessert", "counter"] | None = None
+    modifiers: list[OrderLineModifier] = Field(default_factory=list)
 
 
 class OrderDiscountCreate(BaseModel):
@@ -129,6 +146,13 @@ class OrderCreateRequest(BaseModel):
     # present, the close-order step writes a points-accrual ledger row
     # (and pushes a LINE confirmation when the customer has line_user_id).
     customer_id: UUID | None = None
+    service_type: Literal["dine_in", "takeout", "delivery"] = "dine_in"
+    order_source: Literal[
+        "pos", "qr", "line", "ubereats", "foodpanda", "phone", "other",
+    ] = "pos"
+    # Optional FK to a dining table (dine-in). Must exist and belong to the
+    # same store — the service raises 404 / 422 otherwise.
+    table_id: UUID | None = None
     order_no: str = Field(min_length=1, max_length=64)
     business_date: date
     opened_at: datetime | None = None
@@ -184,6 +208,22 @@ class OrderVoidRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
 
 
+class OrderLinesAddRequest(BaseModel):
+    """``POST /orders/{id}/lines`` request body — 加點 on an open order."""
+
+    model_config = ConfigDict(frozen=True)
+
+    lines: list[OrderLineCreate] = Field(min_length=1)
+
+
+class OrderRefundRequest(BaseModel):
+    """``POST /orders/{id}/refund`` request body. ``reason`` is mandatory."""
+
+    model_config = ConfigDict(frozen=True)
+
+    reason: str = Field(min_length=1, max_length=200)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Response schemas
 # ──────────────────────────────────────────────────────────────────────────
@@ -204,6 +244,8 @@ class OrderLineResponse(BaseModel):
     kitchen_station: str | None = None
     kitchen_status: str | None = None
     sent_to_kitchen_at: datetime | None = None
+    # Customisation snapshot as stored (price_delta serialised as string).
+    modifiers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class OrderDiscountResponse(BaseModel):
@@ -241,6 +283,13 @@ class OrderResponse(BaseModel):
     opened_at: datetime
     closed_at: datetime | None = None
     status: Literal["open", "closed", "voided", "refunded"]
+    service_type: Literal["dine_in", "takeout", "delivery"] = "dine_in"
+    order_source: Literal[
+        "pos", "qr", "line", "ubereats", "foodpanda", "phone", "other",
+    ] = "pos"
+    table_id: UUID | None = None
+    refunded_at: datetime | None = None
+    refund_reason: str | None = None
     invoice_number: str | None = None
     carrier_type: str | None = None
     carrier_id: str | None = None
@@ -253,15 +302,47 @@ class OrderResponse(BaseModel):
     payments: list[OrderPaymentResponse] = Field(default_factory=list)
 
 
+class OrderSummary(BaseModel):
+    """One row in the ``GET /orders`` list. Timestamps in Asia/Taipei."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: UUID
+    order_no: str
+    status: Literal["open", "closed", "voided", "refunded"]
+    service_type: Literal["dine_in", "takeout", "delivery"]
+    order_source: Literal[
+        "pos", "qr", "line", "ubereats", "foodpanda", "phone", "other",
+    ]
+    table_id: UUID | None = None
+    opened_at: datetime
+    total: Decimal
+
+
+class OrderListResponse(BaseModel):
+    """``GET /orders`` envelope with the paging window echoed back."""
+
+    model_config = ConfigDict(frozen=True)
+
+    items: list[OrderSummary]
+    limit: int
+    offset: int
+
+
 __all__ = [
     "OrderCloseRequest",
     "OrderCreateRequest",
     "OrderDiscountCreate",
     "OrderDiscountResponse",
     "OrderLineCreate",
+    "OrderLineModifier",
     "OrderLineResponse",
+    "OrderLinesAddRequest",
+    "OrderListResponse",
     "OrderPaymentCreate",
     "OrderPaymentResponse",
+    "OrderRefundRequest",
     "OrderResponse",
+    "OrderSummary",
     "OrderVoidRequest",
 ]

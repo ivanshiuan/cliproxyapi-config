@@ -25,12 +25,12 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
@@ -51,12 +51,23 @@ from ..models import (
     StockMovement,
     Store,
 )
-from ..models.orders import DiscountKind, KitchenStation, KitchenStatus, PaymentMethod
+from ..models.orders import (
+    DiscountKind,
+    KitchenStation,
+    KitchenStatus,
+    OrderSource,
+    PaymentMethod,
+    ServiceType,
+)
+from ..models.tables import DiningTable
 from ..schemas.orders import (
     OrderCreateRequest,
     OrderLineCreate,
+    OrderListResponse,
     OrderResponse,
+    OrderSummary,
 )
+from .audit_service import audit
 from .calc.bom_consumer import (
     BOMConsumeInput,
     RecipeRow,
@@ -135,6 +146,27 @@ async def _resolve_tenant_from_store(
     # In Phase 1 multi-tenancy is off → request_tenant is the default; trust
     # the store. When auth lands this becomes a hard mismatch check.
     return store_tenant
+
+
+async def _validate_table(
+    session: AsyncSession,
+    table_id: uuid.UUID,
+    store_id: uuid.UUID,
+) -> None:
+    """Ensure the dining table exists (live) and belongs to the order's store.
+
+    - Missing / soft-deleted table → 404 ``NotFoundError``
+    - Table from another store → 422 ``ValidationError`` (the id is real,
+      the request is just wrong — a 404 would send staff hunting a ghost).
+    """
+    table = await session.get(DiningTable, table_id)
+    if table is None or table.deleted_at is not None:
+        raise NotFoundError(f"dining table not found: {table_id}")
+    if table.store_id != store_id:
+        raise ValidationError(
+            "table_id belongs to a different store",
+            details={"table_id": str(table_id), "table_store_id": str(table.store_id)},
+        )
 
 
 async def _load_active_recipes(
@@ -248,6 +280,11 @@ def order_to_response(order: Order) -> OrderResponse:
         opened_at=opened_at,
         closed_at=_to_tpe(order.closed_at),
         status=order.status.value,  # type: ignore[arg-type]
+        service_type=order.service_type.value,  # type: ignore[arg-type]
+        order_source=order.order_source.value,  # type: ignore[arg-type]
+        table_id=order.table_id,
+        refunded_at=_to_tpe(order.refunded_at),
+        refund_reason=order.refund_reason,
         invoice_number=order.invoice_number,
         carrier_type=order.carrier_type,
         carrier_id=order.carrier_id,
@@ -272,6 +309,7 @@ def order_to_response(order: Order) -> OrderResponse:
                     ln.kitchen_status.value if ln.kitchen_status is not None else None
                 ),
                 "sent_to_kitchen_at": _to_tpe(ln.sent_to_kitchen_at),
+                "modifiers": ln.modifiers or [],
             }
             for ln in lines
         ],  # type: ignore[arg-type]
@@ -316,6 +354,9 @@ async def create_order(
     order matched the request's ``external_pos_id`` and was returned as-is.
     """
     store_tenant = await _resolve_tenant_from_store(session, payload.store_id, tenant_id)
+
+    if payload.table_id is not None:
+        await _validate_table(session, payload.table_id, payload.store_id)
 
     # Idempotency check first — if external_pos_id collides we replay.
     if payload.external_pos_id is not None:
@@ -365,6 +406,9 @@ async def create_order(
         business_date=payload.business_date,
         opened_at=opened_at,
         status=OrderStatus.OPEN,
+        service_type=ServiceType(payload.service_type),
+        order_source=OrderSource(payload.order_source),
+        table_id=payload.table_id,
         invoice_number=payload.invoice_number,
         carrier_type=payload.carrier_type,
         carrier_id=payload.carrier_id,
@@ -466,7 +510,18 @@ async def _add_line_with_movement(
         the ledger stays self-consistent and downstream variance jobs can
         flag the missing recipe.
     """
-    line_total = line_payload.qty * line_payload.unit_price
+    # Modifiers adjust the effective unit price BEFORE multiplying by qty:
+    # line_total = (unit_price + Σ price_delta) x qty. All Decimal, no float.
+    modifier_delta = sum(
+        (m.price_delta for m in line_payload.modifiers), Decimal("0")
+    )
+    line_total = (line_payload.unit_price + modifier_delta) * line_payload.qty
+    # JSONB snapshot — price_delta serialised as string so the sold history
+    # stays exact (and re-parses to Decimal without float round-trips).
+    modifiers_snapshot = [
+        {"group": m.group, "option": m.option, "price_delta": str(m.price_delta)}
+        for m in line_payload.modifiers
+    ]
     recipes = await _load_active_recipes(session, line_payload.menu_item_id)
 
     theoretical_cogs: Decimal | None = None
@@ -503,6 +558,7 @@ async def _add_line_with_movement(
         kitchen_station=kitchen_station,
         kitchen_status=kitchen_status,
         sent_to_kitchen_at=sent_to_kitchen_at,
+        modifiers=modifiers_snapshot,
     )
     session.add(line)
     await session.flush()  # need line.id for source_id
@@ -545,6 +601,125 @@ async def get_order(
 ) -> OrderResponse:
     """Fetch a single order with all child collections."""
     order = await _load_order_with_relations(session, order_id, tenant_id)
+    return order_to_response(order)
+
+
+async def list_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    status: OrderStatus | None = None,
+    business_date: date | None = None,
+    store_id: uuid.UUID | None = None,
+    service_type: ServiceType | None = None,
+    order_source: OrderSource | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> OrderListResponse:
+    """List order summaries, newest first, with the running total per order.
+
+    未結單 = ``status=open``. The total is Σ line_total (gross, before
+    discounts) — the same figure staff see on the open-tab screen.
+
+    Phase-1 multi-tenancy is off (see ``_load_order_with_relations``); we
+    scope by the explicit ``store_id`` filter rather than the header tenant.
+    """
+    _ = tenant_id  # reserved for Phase 2 RLS / explicit filter
+
+    totals_sq = (
+        select(
+            OrderLine.order_id.label("order_id"),
+            func.coalesce(func.sum(OrderLine.line_total), 0).label("total"),
+        )
+        .group_by(OrderLine.order_id)
+        .subquery()
+    )
+    stmt = (
+        select(Order, func.coalesce(totals_sq.c.total, 0))
+        .outerjoin(totals_sq, totals_sq.c.order_id == Order.id)
+        .where(Order.deleted_at.is_(None))
+        .order_by(Order.opened_at.desc(), Order.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if status is not None:
+        stmt = stmt.where(Order.status == status)
+    if business_date is not None:
+        stmt = stmt.where(Order.business_date == business_date)
+    if store_id is not None:
+        stmt = stmt.where(Order.store_id == store_id)
+    if service_type is not None:
+        stmt = stmt.where(Order.service_type == service_type)
+    if order_source is not None:
+        stmt = stmt.where(Order.order_source == order_source)
+
+    rows = (await session.execute(stmt)).all()
+    items = [
+        OrderSummary(
+            id=order.id,
+            order_no=order.order_no,
+            status=order.status.value,  # type: ignore[arg-type]
+            service_type=order.service_type.value,  # type: ignore[arg-type]
+            order_source=order.order_source.value,  # type: ignore[arg-type]
+            table_id=order.table_id,
+            opened_at=_to_tpe(order.opened_at) or order.opened_at,
+            total=Decimal(total),
+        )
+        for order, total in rows
+    ]
+    return OrderListResponse(items=items, limit=limit, offset=offset)
+
+
+async def add_lines(
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    lines: list[OrderLineCreate],
+) -> OrderResponse:
+    """加點 — append lines to an OPEN order. Any other status → 409.
+
+    Reuses the create-time line pipeline so modifiers pricing, KDS routing,
+    and BOM/placeholder stock movements behave identically to first-order
+    lines.
+    """
+    order = await _load_order_with_relations(session, order_id, tenant_id)
+    if order.status != OrderStatus.OPEN:
+        raise ConflictError(
+            f"lines can only be added to an open order (status={order.status.value})",
+            details={"current_status": order.status.value},
+        )
+
+    occurred_at = datetime.now(UTC)
+
+    placeholder_state: dict[str, Ingredient] = {}
+
+    async def _get_placeholder() -> Ingredient:
+        if "ing" not in placeholder_state:
+            placeholder_state["ing"] = await _placeholder_ingredient(
+                session, order.tenant_id, order.store_id
+            )
+        return placeholder_state["ing"]
+
+    for line_payload in lines:
+        await _add_line_with_movement(
+            session=session,
+            order=order,
+            tenant_id=order.tenant_id,
+            store_id=order.store_id,
+            line_payload=line_payload,
+            get_placeholder=_get_placeholder,
+            occurred_at=occurred_at,
+        )
+
+    await session.flush()
+    # The identity map would hand back the pre-add ``lines`` collection on a
+    # plain re-select; expire it so the reload sees the appended rows.
+    session.expire(order, ["lines"])
+    order = await _load_order_with_relations(session, order_id, tenant_id)
+    logger.info(
+        "order.lines_added order_id=%s added=%d total_lines=%d",
+        order.id, len(lines), len(order.lines),
+    )
     return order_to_response(order)
 
 
@@ -797,6 +972,53 @@ async def void_order(
     return order_to_response(order)
 
 
+async def refund_order(
+    session: AsyncSession,
+    order_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    reason: str,
+) -> OrderResponse:
+    """Refund a CLOSED order → status=refunded. Any other status → 409.
+
+    Stamps ``refunded_at`` / ``refund_reason`` and writes an ``order.refunded``
+    audit row (append-only trail — 退款 is a cash-out event and must be
+    reviewable). Stock is NOT restored: the food was made and served; only
+    void reverses consumption.
+    """
+    order = await _load_order_with_relations(session, order_id, tenant_id)
+    if order.status != OrderStatus.CLOSED:
+        raise ConflictError(
+            f"only a closed order can be refunded (status={order.status.value})",
+            details={"current_status": order.status.value},
+        )
+
+    refunded_dt = datetime.now(UTC)
+    order.status = OrderStatus.REFUNDED  # type: ignore[assignment]
+    order.refunded_at = refunded_dt  # type: ignore[assignment]
+    order.refund_reason = reason  # type: ignore[assignment]
+    await session.flush()
+
+    await audit(
+        session,
+        action="order.refunded",
+        tenant_id=order.tenant_id,
+        target=("orders", order.id),
+        store_id=order.store_id,
+        before={"status": OrderStatus.CLOSED.value},
+        after={
+            "status": OrderStatus.REFUNDED.value,
+            "refunded_at": refunded_dt.isoformat(),
+        },
+        reason=reason,
+    )
+
+    logger.info(
+        "order.refunded order_id=%s refunded_at=%s reason=%s",
+        order.id, refunded_dt.isoformat(), reason,
+    )
+    return order_to_response(order)
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Net-revenue computation (delegates to the discount_resolver calc engine)
 # ──────────────────────────────────────────────────────────────────────────
@@ -822,9 +1044,12 @@ def _compute_net_revenue(order: Order) -> Decimal:
 
 
 __all__ = [
+    "add_lines",
     "close_order",
     "create_order",
     "get_order",
+    "list_orders",
     "order_to_response",
+    "refund_order",
     "void_order",
 ]
