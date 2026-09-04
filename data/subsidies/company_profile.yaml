@@ -1,0 +1,29 @@
+# 公司側寫 — 補助雷達配對引擎的輸入
+# ⚠️ assumptions 裡的欄位是推測值，送件前務必由負責人逐項確認
+
+company_name: "帝國餐飲科技有限公司"
+industry_code: "5610"          # 主計總處：餐館業
+industry_desc: "AI 驅動餐飲營運系統（餐館業）"
+employee_count: 15
+insured_employees: 12          # 勞保投保人數
+capital_twd: "5000000"         # 實收資本額 500 萬
+founded: "2023-06-01"
+region: "台北市"
+owner_age: 35
+owner_has_20h_startup_course: null   # 尚未確認
+is_company_registered: true
+has_tax_debt: null                   # 尚未確認
+has_labor_law_violations: null       # 尚未確認
+previous_grants: []
+digital_tools:
+  - "LINE Official Account"
+  - "自建 POS (restaurant_api)"
+  - "Claude Code / DevSwarm"
+
+assumptions:
+  - "員工數 15 人為估計，請以勞保投保清冊為準"
+  - "資本額 500 萬為估計，請以公司登記證明為準"
+  - "負責人年齡 35 歲為估計"
+  - "是否已取得 20 小時創業輔導課程證明未確認"
+  - "欠稅狀態未查詢"
+  - "勞動法規違規狀態未查詢"
