@@ -9,6 +9,11 @@ Boundary rules (same as every service in the project):
 - ``flush()`` only, never ``commit()``.
 - ``tenant_id`` is plumbed in by the router DI seam — services trust it.
 - All errors raise ``DomainError`` subclasses.
+
+P3 additions: the queue rows carry ``item_name`` / ``table_name`` (joined
+server-side so the KDS screen renders without extra fetches), and every status
+transition also lands on the real-time floor stream (``kitchen.status_changed``)
+so KDS screens and POS floors sync live over the same P1.5 channel.
 """
 
 from __future__ import annotations
@@ -20,13 +25,33 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError, ValidationError
-from ..models import KitchenStation, KitchenStatus, Order, OrderLine
+from ..models import (
+    DiningTable,
+    KitchenStation,
+    KitchenStatus,
+    MenuItem,
+    Order,
+    OrderLine,
+    TableSession,
+)
 from ..schemas.kitchen import (
     KITCHEN_TRANSITIONS,
     KitchenLineResponse,
     KitchenStatusPatch,
 )
 from .audit_service import audit
+from .event_hub import record_event
+
+
+def _base_stmt():
+    """order_lines + orders + (optional) item / table names in one round trip."""
+    return (
+        select(OrderLine, Order, MenuItem.name, DiningTable.name)
+        .join(Order, Order.id == OrderLine.order_id)
+        .outerjoin(MenuItem, MenuItem.id == OrderLine.menu_item_id)
+        .outerjoin(TableSession, TableSession.id == Order.table_session_id)
+        .outerjoin(DiningTable, DiningTable.id == TableSession.table_id)
+    )
 
 
 async def list_queue(
@@ -44,8 +69,7 @@ async def list_queue(
     lines). Pass ``status=QUEUED`` to get only what's waiting to cook.
     """
     stmt = (
-        select(OrderLine, Order)
-        .join(Order, Order.id == OrderLine.order_id)
+        _base_stmt()
         .where(OrderLine.tenant_id == tenant_id)
         .where(OrderLine.kitchen_station.is_not(None))
     )
@@ -58,7 +82,10 @@ async def list_queue(
     stmt = stmt.order_by(OrderLine.sent_to_kitchen_at).limit(limit)
 
     rows = (await session.execute(stmt)).all()
-    return [_project(line, order) for line, order in rows]
+    return [
+        _project(line, order, item_name=item_name, table_name=table_name)
+        for line, order, item_name, table_name in rows
+    ]
 
 
 async def patch_line_status(
@@ -72,18 +99,17 @@ async def patch_line_status(
     column on the way in (``cooking_started_at`` / ``ready_at`` /
     ``served_at``)."""
     stmt = (
-        select(OrderLine, Order)
-        .join(Order, Order.id == OrderLine.order_id)
+        _base_stmt()
         .where(OrderLine.id == line_id)
         .where(OrderLine.tenant_id == tenant_id)
     )
-    pair = (await session.execute(stmt)).one_or_none()
-    if pair is None:
+    row = (await session.execute(stmt)).one_or_none()
+    if row is None:
         raise NotFoundError(
             message=f"kitchen line {line_id} not found",
             details={"line_id": str(line_id)},
         )
-    line, order = pair
+    line, order, item_name, table_name = row
 
     if line.kitchen_station is None or line.kitchen_status is None:
         raise ValidationError(
@@ -118,7 +144,21 @@ async def patch_line_status(
         after={"kitchen_status": payload.status.value},
         reason=payload.reason,
     )
-    return _project(line, order)
+    # Live push (P1.5 channel): KDS screens re-pull their board, POS floors can
+    # surface 可出餐 state — one stream for the whole floor.
+    await record_event(
+        session,
+        tenant_id=tenant_id,
+        store_id=order.store_id,
+        event_type="kitchen.status_changed",
+        session_id=order.table_session_id,
+        payload={
+            "line_id": str(line.id),
+            "order_id": str(order.id),
+            "status": payload.status.value,
+        },
+    )
+    return _project(line, order, item_name=item_name, table_name=table_name)
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -126,7 +166,13 @@ async def patch_line_status(
 # ──────────────────────────────────────────────────────────────────────────
 
 
-def _project(line: OrderLine, order: Order) -> KitchenLineResponse:
+def _project(
+    line: OrderLine,
+    order: Order,
+    *,
+    item_name: str | None = None,
+    table_name: str | None = None,
+) -> KitchenLineResponse:
     return KitchenLineResponse.model_validate(
         {
             "line_id": line.id,
@@ -135,6 +181,8 @@ def _project(line: OrderLine, order: Order) -> KitchenLineResponse:
             "store_id": order.store_id,
             "business_date": order.business_date.isoformat(),
             "menu_item_id": line.menu_item_id,
+            "item_name": item_name,
+            "table_name": table_name,
             "qty": float(line.qty),
             "notes": line.notes,
             "kitchen_station": line.kitchen_station,

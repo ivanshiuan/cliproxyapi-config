@@ -20,28 +20,42 @@ import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..api.errors import ConflictError, NotFoundError
 from ..integrations.line import LineMessage, LineMessenger
 from ..models import (
     Customer,
+    Ingredient,
+    MenuItem,
+    Order,
+    OrderChannel,
+    OrderStatus,
+    OrderType,
     QueueStatus,
     Reservation,
     ReservationStatus,
     WalkInQueueEntry,
 )
+from ..schemas.orders import OrderLineCreate, OrderResponse
 from ..schemas.reservations import (
     QUEUE_TRANSITIONS,
     RESERVATION_TRANSITIONS,
+    QueueBoardEntry,
+    QueueBoardResponse,
     QueueEntryResponse,
     QueueJoinRequest,
+    QueuePreorderLineRequest,
+    QueueSeatRequest,
+    QueueSeatResult,
     QueueStatusPatch,
     ReservationCreate,
     ReservationResponse,
     ReservationStatusPatch,
 )
+from ..schemas.tables import TableSessionOpen
+from . import orders_service, pos_order_service, table_service
 from .audit_service import audit
 
 logger = logging.getLogger("restaurant_api.integrations.line")
@@ -226,12 +240,38 @@ async def patch_reservation_status(
 # ──────────────────────────────────────────────────────────────────────────
 
 
+async def _next_queue_no(
+    session: AsyncSession, *, tenant_id: uuid.UUID, store_id: uuid.UUID
+) -> str:
+    """今日流水取號 (Taipei day) — W001, W002, … per store.
+
+    Count-based, so it stays monotonic for customers even when earlier
+    parties are seated/abandoned. Collisions under heavy concurrent
+    self-check-in are tolerable (the number is a display label, ``id`` is
+    the identity), matching how 取餐叫號 treats order_no.
+    """
+    day_start_tpe = datetime.now(_TPE).replace(hour=0, minute=0, second=0, microsecond=0)
+    count = (
+        await session.execute(
+            select(func.count(WalkInQueueEntry.id)).where(
+                WalkInQueueEntry.tenant_id == tenant_id,
+                WalkInQueueEntry.store_id == store_id,
+                WalkInQueueEntry.joined_at >= day_start_tpe.astimezone(UTC),
+            )
+        )
+    ).scalar_one()
+    return f"W{count + 1:03d}"
+
+
 async def join_queue(
     session: AsyncSession,
     payload: QueueJoinRequest,
     *,
     tenant_id: uuid.UUID,
 ) -> QueueEntryResponse:
+    queue_no = payload.queue_no or await _next_queue_no(
+        session, tenant_id=tenant_id, store_id=payload.store_id
+    )
     row = WalkInQueueEntry(
         tenant_id=tenant_id,
         store_id=payload.store_id,
@@ -239,7 +279,7 @@ async def join_queue(
         contact_name=payload.contact_name,
         contact_phone=payload.contact_phone,
         party_size=payload.party_size,
-        queue_no=payload.queue_no,
+        queue_no=queue_no,
         notes=payload.notes,
     )
     session.add(row)
@@ -253,7 +293,7 @@ async def join_queue(
         target=("walk_in_queue", row.id),
         after={
             "party_size": payload.party_size,
-            "queue_no": payload.queue_no,
+            "queue_no": queue_no,
         },
     )
     return QueueEntryResponse.model_validate(row)
@@ -275,6 +315,39 @@ async def list_queue(
     stmt = stmt.order_by(WalkInQueueEntry.joined_at).limit(limit)
     rows = (await session.execute(stmt)).scalars().all()
     return [QueueEntryResponse.model_validate(r) for r in rows]
+
+
+async def queue_board(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    store_id: uuid.UUID,
+) -> QueueBoardResponse:
+    """遠端候位進度 (P9.2, docs/23 G6) — the PUBLIC read: live waiting/called
+    numbers only, no names or phones (anyone holding the store link sees it).
+    The customer page derives its own position from ``queue_no`` client-side."""
+    stmt = (
+        select(WalkInQueueEntry)
+        .where(
+            WalkInQueueEntry.tenant_id == tenant_id,
+            WalkInQueueEntry.store_id == store_id,
+            WalkInQueueEntry.status.in_((QueueStatus.WAITING, QueueStatus.CALLED)),
+        )
+        .order_by(WalkInQueueEntry.joined_at)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return QueueBoardResponse(
+        waiting_count=sum(1 for r in rows if r.status == QueueStatus.WAITING),
+        entries=[
+            QueueBoardEntry(
+                queue_no=r.queue_no,
+                party_size=r.party_size,
+                status=r.status,
+                joined_at=r.joined_at,
+            )
+            for r in rows
+        ],
+    )
 
 
 async def patch_queue_status(
@@ -330,6 +403,168 @@ async def patch_queue_status(
         )
 
     return QueueEntryResponse.model_validate(row)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# 候位先點餐 — pre-order while waiting, seat carries it onto the table
+# ──────────────────────────────────────────────────────────────────────────
+
+
+async def add_queue_preorder_line(
+    session: AsyncSession,
+    queue_id: uuid.UUID,
+    payload: QueuePreorderLineRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> OrderResponse:
+    """Add one item to a waiting party's pre-order.
+
+    Creates the party's ``Order`` on first call — ``table_session_id`` stays
+    NULL while they wait. On seating (``seat_queue_entry``), this order gets
+    reparented onto the newly opened session with a single FK flip (no line
+    movement needed, unlike 併桌 which merges two already-seated bills).
+    """
+    row = await _load_queue_entry(session, queue_id, tenant_id)
+    if row.status not in (QueueStatus.WAITING, QueueStatus.CALLED):
+        raise ConflictError(
+            message=f"queue entry is {row.status.value}, cannot pre-order",
+            details={"current": row.status.value},
+        )
+
+    if row.order_id is None:
+        order = Order(
+            tenant_id=tenant_id,
+            store_id=row.store_id,
+            order_no=f"Q-{row.id.hex[:12]}",
+            business_date=datetime.now(_TPE).date(),
+            status=OrderStatus.OPEN,
+            order_type=OrderType.DINE_IN,
+            channel=OrderChannel.POS,
+            customer_id=row.customer_id,
+            notes=f"候位先點餐 — {row.contact_name}" + (f" ({row.queue_no})" if row.queue_no else ""),
+        )
+        session.add(order)
+        await session.flush()
+        row.order_id = order.id
+        await session.flush()
+    else:
+        order = await session.get(Order, row.order_id)
+        if order is None or order.status != OrderStatus.OPEN:  # pragma: no cover - FK guarantees presence
+            raise ConflictError(message="pre-order is no longer open", details={"order_id": str(row.order_id)})
+
+    item = (
+        await session.execute(
+            select(MenuItem).where(
+                MenuItem.id == payload.menu_item_id,
+                MenuItem.tenant_id == tenant_id,
+                MenuItem.deleted_at.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        raise NotFoundError(
+            message=f"menu item {payload.menu_item_id} not found",
+            details={"menu_item_id": str(payload.menu_item_id)},
+        )
+    pos_order_service._guard_available_now(item)
+
+    now = datetime.now(UTC)
+    placeholder: dict[str, Ingredient] = {}
+
+    async def _get_placeholder() -> Ingredient:
+        if "ing" not in placeholder:
+            placeholder["ing"] = await orders_service._placeholder_ingredient(session, tenant_id, row.store_id)
+        return placeholder["ing"]
+
+    await orders_service._add_line_with_movement(
+        session=session,
+        order=order,
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        line_payload=OrderLineCreate(
+            menu_item_id=payload.menu_item_id,
+            qty=payload.qty,
+            unit_price=item.price,
+            notes=payload.notes,
+            kitchen_station=None,  # not sent to KDS until the party is seated
+        ),
+        get_placeholder=_get_placeholder,
+        occurred_at=now,
+    )
+    await audit(
+        session,
+        action="queue.preorder_line_added",
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        actor_id=payload.actor_id,
+        target=("orders", order.id),
+        after={"menu_item_id": str(payload.menu_item_id), "qty": str(payload.qty)},
+    )
+    order = await orders_service._load_order_with_relations(session, order.id, tenant_id)
+    return orders_service.order_to_response(order)
+
+
+async def seat_queue_entry(
+    session: AsyncSession,
+    queue_id: uuid.UUID,
+    payload: QueueSeatRequest,
+    *,
+    tenant_id: uuid.UUID,
+) -> QueueSeatResult:
+    """帶位入座 — open the table, reparent any pre-order onto it, mark seated.
+
+    One transaction: the pre-order (if any) becomes visible on the table's
+    bill the instant the session opens — the kitchen doesn't wait for the
+    party to re-order at the table.
+    """
+    row = await _load_queue_entry(session, queue_id, tenant_id)
+    if row.status not in (QueueStatus.WAITING, QueueStatus.CALLED):
+        raise ConflictError(
+            message=f"queue entry is {row.status.value}, cannot seat",
+            details={"current": row.status.value},
+        )
+
+    ts_response = await table_service.open_session(
+        session,
+        payload.table_id,
+        TableSessionOpen(
+            party_size=row.party_size,
+            opened_by=payload.actor_id,
+            notes=f"候位帶位 — {row.contact_name}" + (f" ({row.queue_no})" if row.queue_no else ""),
+        ),
+        tenant_id=tenant_id,
+    )
+
+    if row.order_id is not None:
+        preorder = await session.get(Order, row.order_id)
+        if preorder is not None and preorder.status == OrderStatus.OPEN:
+            preorder.table_session_id = ts_response.id
+            await session.flush()
+
+    before_status = row.status
+    row.status = QueueStatus.SEATED
+    now = datetime.now(UTC)
+    if row.called_at is None:
+        row.called_at = now
+    row.seated_at = now
+    await session.flush()
+    await session.refresh(row)
+
+    await audit(
+        session,
+        action="queue.seated",
+        tenant_id=tenant_id,
+        store_id=row.store_id,
+        actor_id=payload.actor_id,
+        target=("walk_in_queue", row.id),
+        before={"status": before_status.value},
+        after={"status": "seated", "table_id": str(payload.table_id), "order_id": str(row.order_id) if row.order_id else None},
+    )
+
+    return QueueSeatResult(
+        queue_entry=QueueEntryResponse.model_validate(row),
+        table_session=ts_response,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -420,6 +655,7 @@ def _check_queue_transition(current: QueueStatus, target: QueueStatus) -> None:
 
 
 __all__ = [
+    "add_queue_preorder_line",
     "create_reservation",
     "get_reservation",
     "join_queue",
@@ -427,4 +663,5 @@ __all__ = [
     "list_reservations",
     "patch_queue_status",
     "patch_reservation_status",
+    "seat_queue_entry",
 ]

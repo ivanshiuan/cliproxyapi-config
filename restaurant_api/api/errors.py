@@ -68,6 +68,20 @@ class ValidationError(DomainError):
     status_code = 422
 
 
+class AuthenticationError(DomainError):
+    """Caller is not authenticated (bad/absent/expired credential)."""
+
+    code = "UNAUTHENTICATED"
+    status_code = status.HTTP_401_UNAUTHORIZED
+
+
+class AuthorizationError(DomainError):
+    """Caller is authenticated but lacks permission for this action."""
+
+    code = "FORBIDDEN"
+    status_code = status.HTTP_403_FORBIDDEN
+
+
 # ──────────────────────────────────────────────────────────────────────────
 # Exception handlers — attach to the FastAPI app
 # ──────────────────────────────────────────────────────────────────────────
@@ -82,6 +96,8 @@ async def domain_error_handler(request: Request, exc: DomainError) -> JSONRespon
 
 
 __all__ = [
+    "AuthenticationError",
+    "AuthorizationError",
     "ConflictError",
     "DomainError",
     "ErrorBody",
