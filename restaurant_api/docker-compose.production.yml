@@ -72,7 +72,10 @@ services:
         condition: service_completed_successfully
     env_file: ../.env.production
     ports:
-      - "8000:8000"
+      # Loopback-only: docs/11 §1 forbids exposing 8000 to the internet
+      # directly (TLS must terminate at Cloudflare). A reverse proxy /
+      # Cloudflare Tunnel running on the VM reaches this via localhost.
+      - "127.0.0.1:8000:8000"
     networks: [resto]
     # Healthcheck inherited from the Dockerfile (/health/live).
     deploy:
@@ -97,6 +100,10 @@ services:
     env_file: ../.env.production
     networks: [resto]
     command: ["python", "-m", "restaurant_api.jobs"]
+    # No HTTP server here — disable the Dockerfile's inherited /health/live
+    # healthcheck so this container doesn't report permanently unhealthy.
+    healthcheck:
+      disable: true
     deploy:
       resources:
         limits:
