@@ -7,6 +7,7 @@ Three jobs run via APScheduler (in-process):
   campaign_expiry     03:45 daily  — expire wheel-spin vouchers past their window
   cogs_variance_check 04:00 daily  — compare actual vs theoretical COGS by store
   membership_lifecycle 04:15 daily — tier recompute + birthday + dormant win-back
+  odoo_sync           04:45 daily  — push received purchase orders to Odoo AP (draft)
 
 The scheduler is intentionally *in-process* (not Celery / arq) for Phase 1.
 Single-instance restaurant scale doesn't need distributed workers. Phase 2
@@ -33,6 +34,7 @@ from .campaign_expiry import run_campaign_voucher_expiry
 from .cogs_variance import run_cogs_variance_check
 from .expiry_warning import run_expiry_warning
 from .membership_lifecycle import run_membership_lifecycle
+from .odoo_sync import run_odoo_sync
 from .points_expire import run_points_expire
 
 logger = logging.getLogger("restaurant_api.jobs")
@@ -86,6 +88,14 @@ def _register(scheduler: AsyncIOScheduler) -> None:
         coalesce=True,
         misfire_grace_time=600,
     )
+    scheduler.add_job(
+        _wrap("odoo_sync", run_odoo_sync),
+        trigger=CronTrigger(hour=4, minute=45, timezone=tz),
+        id="odoo_sync",
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
 
 
 def _wrap(name: str, fn: JobFn) -> JobFn:
@@ -130,6 +140,7 @@ __all__ = [
     "run_cogs_variance_check",
     "run_expiry_warning",
     "run_membership_lifecycle",
+    "run_odoo_sync",
     "run_points_expire",
     "run_scheduler",
 ]
