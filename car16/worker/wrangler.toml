@@ -1,0 +1,29 @@
+name = "car16-api"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+# D1：先 `wrangler d1 create car16` 拿到 database_id 後填入
+[[d1_databases]]
+binding = "DB"
+database_name = "car16"
+database_id = "REPLACE_AFTER_wrangler_d1_create"
+migrations_dir = "../migrations"
+
+# 台灣營業時段（06:00–19:00 TST = 22:00–11:00 UTC）每 30 分鐘攝取一次
+[triggers]
+crons = ["*/30 22-23 * * *", "*/30 0-10 * * *"]
+
+[vars]
+ECPAY_ENV = "stage"           # stage | production
+SITE_ORIGIN = "https://car16.pages.dev"
+# 綠界 stage 測試商店（公開測試憑證，正式環境改用 wrangler secret put）：
+ECPAY_MERCHANT_ID = "2000132"
+ECPAY_HASH_KEY = "5294y06JbISpM5x9"
+ECPAY_HASH_IV = "v77hoKGq4kWxNNIS"
+
+# 正式上線前用 secrets 覆蓋（secret 優先於 vars 同名值）：
+#   wrangler secret put ECPAY_MERCHANT_ID
+#   wrangler secret put ECPAY_HASH_KEY
+#   wrangler secret put ECPAY_HASH_IV
+#   wrangler secret put INGEST_TOKEN      # 備援推送 /api/ingest 的 Bearer token
+#   wrangler secret put ANTHROPIC_API_KEY # （可選）啟用 AI 客服
