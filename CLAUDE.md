@@ -218,6 +218,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | Office 檔 `.docx` `.pptx` `.xlsx` `.epub` | **先 `to_md.py` 轉** | Read 不直接吃這些；轉完表格/標題結構乾淨 |
 | 複雜 HTML（多層表格） | **先 `to_md.py` 轉** | 去殼留結構，省 token |
 | 掃描檔 / 照片型發票（需 OCR） | 先用 `Read` 看圖；要抽文字再 `to_md.py --llm`（需 `OPENAI_API_KEY`） | 一般「看」用原生即可 |
+| 影片檔（mp4/mov…）/ YouTube 連結 | **用 `/watch-video`**（`scripts/watch_video.py` 抽幀 + 逐字稿再 Read） | Read 吃不了影片；先抽時間戳幀圖再逐張看（見 `docs/20`） |
 
 **鐵律**：`to_md.py` 只做「檔案→文字」。**任何要入帳的金額/品項，仍須走
 `restaurant_api` 結構化驗證 + 人工覆核，不可直接信轉出來的純文字**（呼應
@@ -256,6 +257,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「審查目前 diff」 | 用 `/code-review` skill |
 | 「找 bug」 | 用 `/bugfix` skill |
 | 「文件交接」 | 看 `COMMANDER_HANDOFF.md` |
+| 「拆解這支影片 / 幫我看這部片 / 分析對手宣傳片 / 這支 YouTube 的敘事結構·鏡頭節奏·賣點」+ 影片路徑或 YouTube 連結 | 用 `/watch-video` command（抽時間戳幀圖 + 逐字稿再 Read 分析，見 `docs/20`） |
 | 「建檔 / digest / 整理這篇 / 幫我消化 / 存進知識庫 / 把 XX 學起來」+ 一條連結或內容 | 用 `digest` skill → 提煉成知識卡存 `docs/knowledge/` + 登進 `00_MOC.md` |
 | 「幫我開網站 / 登入抓資料 / 監看競品菜單價格 / 填沒 API 的後台表單 / 過驗證碼」 | 用 `browser-act` skill（需先開網路白名單，見 `docs/18`） |
 | 「帝國大腦怎麼運作 / 知識庫架構 / 格局圖」 | 看 `docs/19_empire_brain.md`；vault 入口 `docs/knowledge/00_MOC.md` |
