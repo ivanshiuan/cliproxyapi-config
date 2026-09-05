@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全台標牌競標公告・成交行情｜選牌通 PlateGo</title>
+  <meta name="description" content="全台監理所站吉祥號碼標售公告一站看，競標中號牌、截止倒數、歷史成交行情，並提供專業代標服務。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A2%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-bar">
+    <a class="brand" href="index.html">
+      <span class="brand-plate">選牌通</span> PlateGo
+    </a>
+    <button class="nav-toggle" aria-label="開啟選單" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links">
+      <li><a href="index.html#search">選號查詢</a></li>
+      <li><a href="auction.html" class="active">標牌競標</a></li>
+      <li><a href="#records">成交行情</a></li>
+      <li><a href="index.html#services">服務項目</a></li>
+      <li><a href="index.html#faq">常見問題</a></li>
+      <li class="nav-cta"><a href="index.html#agent">委託代標</a></li>
+    </ul>
+  </div>
+</header>
+
+<section class="hero" style="padding:38px 0 44px;">
+  <div class="container">
+    <h1>全台<em>標牌競標</em>公告</h1>
+    <p class="lead">吉祥號碼由監理站公開標售，價高者得。這裡一次看遍全台開標中的號牌、即時出價與截止倒數。</p>
+    <div class="hero-stats">
+      <div class="stat"><div class="num" id="stat-biding">—</div><div class="cap">競標中號牌</div></div>
+      <div class="stat"><div class="num" id="stat-closing">—</div><div class="cap">３日內截止</div></div>
+      <div class="stat"><div class="num" id="stat-volume">—</div><div class="cap">近月成交總額</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="auctions">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">Live Auctions</span>
+      <h2>競標中號牌</h2>
+      <p>資料整理自各監理所站標售公告。出價與截止時間以監理服務網為準。</p>
+    </div>
+
+    <div class="search-panel">
+      <div class="filter-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));">
+        <div class="field">
+          <label for="a-region">區域</label>
+          <select id="a-region">
+            <option value="">全部區域</option>
+            <option>北部</option><option>中部</option><option>南部</option>
+            <option>東部</option><option>離島</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="a-type">車種</label>
+          <select id="a-type">
+            <option value="">全部車種</option>
+            <option value="car">自用小客車</option>
+            <option value="taxi">營業小客車</option>
+            <option value="ev">電動小客車</option>
+            <option value="moto">普通重型機車</option>
+            <option value="moto_yellow">大型重機（黃牌）</option>
+            <option value="moto_red">大型重機（紅牌）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="a-sort">排序</label>
+          <select id="a-sort">
+            <option value="end">截止日（近→遠）</option>
+            <option value="bid">目前出價（高→低）</option>
+            <option value="lucky">吉祥度（高→低）</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="result-meta"><span id="a-count">載入中…</span></div>
+    <div class="auction-list" id="auction-list"></div>
+    <div class="empty-state hidden" id="a-empty">目前沒有符合條件的競標號牌。</div>
+  </div>
+</section>
+
+<section class="section alt" id="records">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">Market Data</span>
+      <h2>近期成交行情</h2>
+      <p>掌握行情才不會出到冤枉價 — 委託代標前，先看看同級號碼最近成交多少。</p>
+    </div>
+    <div class="table-scroll">
+      <table class="records">
+        <thead>
+          <tr><th>號牌</th><th>標售單位</th><th>決標日</th><th>出價次數</th><th>成交價</th></tr>
+        </thead>
+        <tbody id="records-body"></tbody>
+      </table>
+    </div>
+    <p class="text-center mt-lg" style="color:var(--ink-soft);font-size:0.82rem;">
+      ※ 示範站台之行情為模擬資料。正式版將同步監理服務網標售紀錄，逐月累積為全台唯一的吉祥號估價資料庫。
+    </p>
+  </div>
+</section>
+
+<section class="cta-band">
+  <div class="container">
+    <h2>想標又怕出錯價？交給盯場的人</h2>
+    <p>成功報酬制：沒標到不收費。先免費估價，再決定要不要出手。</p>
+    <a class="btn btn-gold" href="https://line.me/R/ti/p/@plategoTW" target="_blank" rel="noopener">加 LINE 免費估價</a>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <h4>選牌通 PlateGo</h4>
+        <p>全台車牌選號整合查詢與代標服務。<br>好號碼不必碰運氣，交給懂行情的人。</p>
+      </div>
+      <div>
+        <h4>快速連結</h4>
+        <a href="index.html#search">選號查詢</a>
+        <a href="auction.html">標牌競標</a>
+        <a href="auction.html#records">成交行情</a>
+        <a href="index.html#pricing">服務方案</a>
+      </div>
+      <div>
+        <h4>官方資源</h4>
+        <a href="https://www.mvdis.gov.tw/m3-emv-plate/webpickno/queryPickNo" target="_blank" rel="noopener">監理服務網・選號</a>
+        <a href="https://www.mvdis.gov.tw/m3-emv-plate/bid/announce" target="_blank" rel="noopener">監理服務網・標牌公告</a>
+        <a href="https://www.mvdis.gov.tw/m3-emv-plate/bid/queryBid" target="_blank" rel="noopener">監理服務網・標售紀錄</a>
+      </div>
+    </div>
+    <div class="disclaimer">
+      本站為民間資訊整合服務，非交通部公路局或任何監理機關之官方網站。號牌資料整理自監理服務網公開資訊，
+      實際可選狀態、底價與規費以監理機關公告為準。車牌號碼依法不得單獨買賣轉讓；本站代標服務僅以委託人名義
+      進行競標之代辦與顧問，不涉及號牌權利之移轉。示範站台資料為模擬展示用途。
+      © 2026 選牌通 PlateGo
+    </div>
+  </div>
+</footer>
+
+<script src="js/common.js"></script>
+<script src="js/auction.js"></script>
+</body>
+</html>
