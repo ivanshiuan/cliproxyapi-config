@@ -128,8 +128,19 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/seed_wheel_campaign.py" = ["RUF001"]
 "scripts/seed_growth_demo.py" = ["RUF001"]
 "scripts/line_check.py" = ["RUF001"]
+# knowledge-* tests use 中文標點 in fixture bodies to mimic real投資人 dumps.
+"tests/services/test_knowledge_ingestion.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/models/test_knowledge_models.py" = ["RUF001", "RUF002", "RUF003"]
+# BUFF OS daily brief templates are Traditional Chinese by design so
+# Ivan can literally read what the LLM will say.
+"restaurant_api/jobs/_brief_prompts.py" = ["RUF001", "RUF002", "RUF003"]
+"restaurant_api/jobs/daily_brief.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/jobs/test_daily_brief.py" = ["RUF001", "RUF002", "RUF003"]
 # Compliance disclaimer is canonical Chinese — fullwidth comma is correct.
 "tigerline/compliance_guard.py" = ["RUF001"]
+# BUFF OS CLI helpers print Traditional-Chinese guidance for Ivan.
+"scripts/ingest_knowledge.py" = ["RUF001", "RUF002", "RUF003"]
+"scripts/run_brief.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"
