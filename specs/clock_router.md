@@ -1,3 +1,15 @@
+---
+id: clock_router
+title: Spec: Clock / 打卡 Router (`/clock`)
+module: clock_router
+kind: router
+status: implemented
+preferred_model: opus
+budget_usd: 5.0
+tags: [staffing, router, labor-law]
+ac_count: 16
+---
+
 # Spec: Clock / 打卡 Router (`/clock`)
 
 > **Module name:** `restaurant_api.routers.clock`
