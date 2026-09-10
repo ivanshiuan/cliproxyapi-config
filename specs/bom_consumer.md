@@ -1,3 +1,15 @@
+---
+id: bom_consumer
+title: BOM Consumer (MVP Module)
+module: bom_consumer
+kind: pure-function
+status: implemented
+preferred_model: sonnet
+budget_usd: 5.0
+tags: [inventory, mvp, pure-function]
+ac_count: 15
+---
+
 # Task Brief: BOM Consumer (MVP Module)
 
 > **Module name:** `bom_consumer`

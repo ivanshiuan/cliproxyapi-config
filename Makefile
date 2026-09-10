@@ -75,13 +75,29 @@ demo-dry: install ## PM + Architect only on the demo task (no Coder/QA, much che
 	$(PY) -m devswarm --task-file specs/profit_calc.md --dry-run --verbose
 
 .PHONY: swarm
-swarm: install ## Run a one-off task. Usage: make swarm REQ="Build me X"
-	@test -n "$(REQ)" || (echo 'usage: make swarm REQ="<your task brief>"' && exit 1)
-	$(PY) -m devswarm "$(REQ)" --verbose
+swarm: install ## Run a one-off task. Usage: make swarm REQ="Build me X" OR SPEC=specs/foo.md
+	@if [ -n "$(SPEC)" ]; then \
+		$(PY) scripts/validate_spec.py "$(SPEC)" || (echo "❌ spec validation failed — fix the spec before burning Coder budget"; exit 1); \
+		$(PY) -m devswarm --task-file "$(SPEC)" --verbose; \
+	elif [ -n "$(REQ)" ]; then \
+		$(PY) -m devswarm "$(REQ)" --verbose; \
+	else \
+		echo 'usage: make swarm SPEC=specs/<id>.md   OR   make swarm REQ="<inline brief>"'; \
+		exit 1; \
+	fi
 
 .PHONY: backlog
 backlog: ## List all DevSwarm specs and run history
 	$(PY) scripts/backlog.py
+
+.PHONY: spec-check
+spec-check: ## Validate every specs/*.md against the structured-spec contract
+	$(PY) scripts/validate_spec.py --all
+
+.PHONY: bakeoff
+bakeoff: install ## Run a spec against opus/sonnet/haiku in parallel. Usage: make bakeoff SPEC=specs/foo.md [MODELS=opus,sonnet]
+	@test -n "$(SPEC)" || (echo 'usage: make bakeoff SPEC=specs/<id>.md [MODELS=opus,sonnet,haiku]' && exit 1)
+	$(PY) scripts/bakeoff.py $(SPEC) $(if $(MODELS),--models $(MODELS),) $(if $(BUDGET),--budget $(BUDGET),)
 
 .PHONY: promote
 promote: install ## Promote workspace/<id>/ artifacts into restaurant_api. Usage: make promote TASK=abc12345
@@ -161,12 +177,13 @@ demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳�
 	$(PY) scripts/demo_flow.py
 
 .PHONY: full-check
-full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smoke + migration drift
+full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smoke + migration drift + spec contract
 	$(VENV)/bin/ruff check devswarm restaurant_api tests scripts
 	$(VENV)/bin/pyright
 	$(PYTEST) tests/
 	cd restaurant_api && ../$(VENV)/bin/alembic check
 	$(PY) scripts/smoke_db.py
+	$(PY) scripts/validate_spec.py --all
 	@echo
 	@echo "✅ Full quality gate green."
 

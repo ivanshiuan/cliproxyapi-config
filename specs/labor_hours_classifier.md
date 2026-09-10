@@ -1,3 +1,15 @@
+---
+id: labor_hours_classifier
+title: Labor Hours Classifier (MVP Module)
+module: labor_hours_classifier
+kind: pure-function
+status: implemented
+preferred_model: sonnet
+budget_usd: 5.0
+tags: [staffing, labor-law, pure-function]
+ac_count: 19
+---
+
 # Task Brief: Labor Hours Classifier (MVP Module)
 
 > **Module name:** `labor_hours_classifier`

@@ -1,3 +1,15 @@
+---
+id: cogs_variance_detector
+title: COGS Variance Detector (MVP Module)
+module: cogs_variance_detector
+kind: pure-function
+status: implemented
+preferred_model: sonnet
+budget_usd: 5.0
+tags: [finance, mvp, pure-function]
+ac_count: 15
+---
+
 # Task Brief: COGS Variance Detector (MVP Module)
 
 > **Module name:** `cogs_variance_detector`

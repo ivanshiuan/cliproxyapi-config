@@ -1,3 +1,15 @@
+---
+id: stock_intake_router
+title: Spec: Stock Intake & Movements Router (`/stock`)
+module: stock_intake_router
+kind: router
+status: implemented
+preferred_model: opus
+budget_usd: 5.0
+tags: [inventory, router, audit]
+ac_count: 16
+---
+
 # Spec: Stock Intake & Movements Router (`/stock`)
 
 > **Module name:** `restaurant_api.routers.stock`

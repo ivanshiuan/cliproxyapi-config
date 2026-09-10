@@ -1,3 +1,15 @@
+---
+id: cost_events_router
+title: Spec: Cost Events Router (`/events`)
+module: cost_events_router
+kind: router
+status: implemented
+preferred_model: opus
+budget_usd: 5.0
+tags: [accounting, router, audit]
+ac_count: 18
+---
+
 # Spec: Cost Events Router (`/events`)
 
 > **Module name:** `restaurant_api.routers.cost_events`
