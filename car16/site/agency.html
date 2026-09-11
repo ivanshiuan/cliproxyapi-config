@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>委託代辦 — car16</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main style="max-width:640px">
+  <h2>委託代辦</h2>
+  <p class="muted">留下需求，合作代辦業者會在 1 個工作天內聯繫你報價。選號、繳費、領牌全程專人處理。</p>
+
+  <div class="card" id="form">
+    <label>委託類型</label>
+    <select id="kind">
+      <option value="pickno">選號代辦（網路選號 + 領牌）</option>
+      <option value="bid">競標代辦（標牌出價協助）</option>
+    </select>
+    <div class="field-row">
+      <div>
+        <label>想要的號碼 / 樣式</label>
+        <input id="plate_pattern" placeholder="例：8888、*-168、BXP-1688" maxlength="10">
+      </div>
+      <div>
+        <label>車種</label>
+        <select id="vehicle_type">
+          <option>自用小客車</option><option>自用重型機車</option>
+          <option>大型重型機車(550cc以上)</option><option>大型重型機車(250-550cc)</option>
+          <option>營業小客車</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div>
+        <label>領牌監理所 / 地區</label>
+        <input id="region" placeholder="例：臺北市區監理所">
+      </div>
+      <div>
+        <label>預算（選填，含代辦費）</label>
+        <input id="budget_twd" type="number" placeholder="例：20000">
+      </div>
+    </div>
+    <label>備註（選填）</label>
+    <textarea id="note" rows="3" placeholder="例：8 月初交車，希望 8 開頭吉祥號"></textarea>
+    <hr style="border:none;border-top:1px solid var(--line);margin:16px 0">
+    <div class="field-row">
+      <div><label>姓名 / 稱呼 *</label><input id="contact_name"></div>
+      <div><label>手機 *</label><input id="contact_phone" placeholder="0912345678"></div>
+      <div><label>LINE ID（選填）</label><input id="contact_line"></div>
+    </div>
+    <div class="error-box" id="err"></div>
+    <button class="btn" id="submit" style="width:100%;margin-top:14px">送出委託需求</button>
+    <p class="muted" style="font-size:13px;margin-top:12px">
+      送出即表示同意<a href="legal/privacy.html">隱私權政策</a>。平台僅媒合並轉介需求給合作代辦業者：證件資料由你直接提供給代辦業者核對、競標保證金由你直接繳給監理機關，<b>平台與代辦業者均不代收保證金</b>。
+    </p>
+  </div>
+
+  <div class="card" id="done" style="display:none;text-align:center">
+    <h3>✅ 需求已送出</h3>
+    <p class="muted">合作代辦業者將在 1 個工作天內與你聯繫。想加快腳步？</p>
+    <a class="btn" id="line-btn" target="_blank" rel="noopener">加 LINE 客服</a>
+  </div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/ui.js"></script>
+<script>
+document.getElementById("line-btn").href = CAR16.LINE_URL;
+document.getElementById("submit").onclick = async () => {
+  const $ = (id) => document.getElementById(id).value;
+  const err = document.getElementById("err");
+  err.textContent = "";
+  try {
+    await api.post("/api/agency-requests", {
+      kind: $("kind"),
+      plate_pattern: $("plate_pattern") || undefined,
+      vehicle_type: $("vehicle_type"),
+      region: $("region") || undefined,
+      budget_twd: $("budget_twd") ? Number($("budget_twd")) : undefined,
+      note: $("note") || undefined,
+      contact_name: $("contact_name"),
+      contact_phone: $("contact_phone"),
+      contact_line: $("contact_line") || undefined,
+    });
+    document.getElementById("form").style.display = "none";
+    document.getElementById("done").style.display = "block";
+  } catch (e) {
+    err.textContent = e.message;
+  }
+};
+</script>
+</body>
+</html>

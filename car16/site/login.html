@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登入 / 註冊 — car16</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main style="max-width:420px">
+  <div class="card">
+    <h2 id="title">登入</h2>
+    <label>Email</label>
+    <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+    <label>密碼</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="至少 8 個字元">
+    <div id="reg-extra" style="display:none">
+      <label>稱呼（選填）</label>
+      <input id="display_name" placeholder="王小明 / 小明車業">
+      <label>手機（選填，代辦聯繫用）</label>
+      <input id="phone" placeholder="0912345678">
+    </div>
+    <div class="error-box" id="err"></div>
+    <button class="btn" id="submit" style="width:100%;margin-top:12px">登入</button>
+    <p class="muted" style="text-align:center;font-size:14px;margin-top:14px">
+      <a id="toggle" href="#">還沒有帳號？免費註冊</a>
+    </p>
+  </div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/ui.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+let mode = params.get("mode") === "register" ? "register" : "login";
+const next = params.get("next") || "dashboard.html";
+
+function render() {
+  document.getElementById("title").textContent = mode === "login" ? "登入" : "免費註冊";
+  document.getElementById("submit").textContent = mode === "login" ? "登入" : "註冊";
+  document.getElementById("reg-extra").style.display = mode === "login" ? "none" : "block";
+  document.getElementById("toggle").textContent = mode === "login" ? "還沒有帳號？免費註冊" : "已有帳號？直接登入";
+}
+document.getElementById("toggle").onclick = (e) => { e.preventDefault(); mode = mode === "login" ? "register" : "login"; render(); };
+
+document.getElementById("submit").onclick = async () => {
+  const err = document.getElementById("err");
+  err.textContent = "";
+  const body = {
+    email: document.getElementById("email").value,
+    password: document.getElementById("password").value,
+  };
+  if (mode === "register") {
+    body.display_name = document.getElementById("display_name").value || undefined;
+    body.phone = document.getElementById("phone").value || undefined;
+  }
+  try {
+    const d = await api.post(`/api/auth/${mode}`, body);
+    api.setToken(d.token);
+    location.href = next;
+  } catch (e) {
+    err.textContent = e.message;
+  }
+};
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>car16 — 車牌選號、標牌競標、委託代辦一站搞定</title>
+<meta name="description" content="彙整全台監理站車牌選號與標牌競標資料。車主、業務、車商都適用：不限次查詢、心願號碼追蹤、競標提醒、委託代辦。">
+<meta property="og:title" content="car16 車牌選號平台">
+<meta property="og:description" content="車牌選號、標牌競標、委託代辦一站搞定">
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main>
+  <section class="hero">
+    <h1>心儀的車牌號碼<br>不用再自己刷監理站</h1>
+    <p>彙整全台監理站選號與標牌競標資料，查詢、追蹤、提醒、代辦一站完成。車主、業務、車商都有適合的方案。</p>
+    <a class="btn" href="search.html" style="font-size:17px;padding:12px 28px">立即免費查詢</a>
+    <a class="btn ghost" href="agency.html" style="font-size:17px;padding:12px 28px">委託代辦</a>
+  </section>
+
+  <section>
+    <h2 style="text-align:center">方案與收費</h2>
+    <div class="pricing" id="pricing">
+      <div class="card price-card">
+        <h3>免費體驗</h3>
+        <div class="price">NT$0</div>
+        <ul>
+          <li>每日 10 次查詢（未登入 3 次）</li>
+          <li>標牌競標公告瀏覽</li>
+          <li>客服機器人</li>
+        </ul>
+        <a class="btn ghost" href="login.html?mode=register">免費註冊</a>
+      </div>
+      <div class="card price-card">
+        <h3>一般版 <span class="muted">給車主</span></h3>
+        <div class="price">NT$149 <small>/ 30天</small></div>
+        <ul>
+          <li>不限次查詢、完整結果</li>
+          <li>心願號碼追蹤 10 組</li>
+          <li>買車前選一次號剛剛好</li>
+        </ul>
+        <button class="btn buy" data-plan="consumer">購買</button>
+      </div>
+      <div class="card price-card hot">
+        <span class="tag">業務最愛</span>
+        <h3>專業版 <span class="muted">給業務</span></h3>
+        <div class="price">NT$499 <small>/ 30天</small></div>
+        <ul>
+          <li>一般版全部功能</li>
+          <li>心願號碼追蹤 50 組（幫多位客戶追號）</li>
+          <li>查詢結果匯出 CSV</li>
+          <li>批次條件查詢</li>
+        </ul>
+        <button class="btn buy" data-plan="pro">購買</button>
+      </div>
+      <div class="card price-card">
+        <h3>車商版 <span class="muted">給車行</span></h3>
+        <div class="price">NT$1,999 <small>/ 30天</small></div>
+        <ul>
+          <li>專業版全部功能</li>
+          <li>心願號碼追蹤 200 組</li>
+          <li>代辦委託優先派送</li>
+          <li>大量選號需求專人服務</li>
+        </ul>
+        <button class="btn buy" data-plan="dealer">購買</button>
+      </div>
+    </div>
+    <p class="muted" style="text-align:center;font-size:13.5px">付款由綠界科技（ECPay）安全處理，支援信用卡與 ATM 轉帳。30 天通行證到期不自動扣款。</p>
+  </section>
+
+  <section style="margin-top:48px">
+    <h2 style="text-align:center">委託代辦怎麼運作？</h2>
+    <div class="steps">
+      <div class="card"><b>1. 留下需求</b><p class="muted">想要的號碼、車種、地區、預算，加上聯絡方式。</p></div>
+      <div class="card"><b>2. 專人聯繫報價</b><p class="muted">合作代辦業者 1 個工作天內聯繫你，確認細節與費用。</p></div>
+      <div class="card"><b>3. 完成選號領牌</b><p class="muted">選號、繳費、領牌由專人處理。競標保證金一律由你直接繳給監理機關，平台與代辦不代收。</p></div>
+    </div>
+  </section>
+
+  <div class="notice" style="margin-top:32px">
+    本站彙整監理服務網公開資料，非公路監理機關官方網站。標牌競標之出價、保證金繳納均於監理服務網進行；委託代辦由合作之第三方代辦業者執行。
+  </div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/ui.js"></script>
+<script>
+document.querySelectorAll(".buy").forEach((btn) => {
+  btn.onclick = async () => {
+    if (!api.token()) { location.href = `login.html?next=index.html`; return; }
+    btn.disabled = true;
+    try {
+      const d = await api.post("/api/checkout", { plan_id: btn.dataset.plan });
+      document.open(); document.write(d.checkout_html); document.close();
+    } catch (e) {
+      alert(e.message);
+      btn.disabled = false;
+    }
+  };
+});
+</script>
+</body>
+</html>
