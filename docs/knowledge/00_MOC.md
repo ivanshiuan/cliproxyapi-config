@@ -42,3 +42,4 @@
 ## 競品情報
 
 ## 系統與AI
+- [[2026-07-12-open-connector]] — Composio 開源替代品；做 LINE/integrations 正式版時的架構參考（憑證邊界 + action schema + 稽核）
