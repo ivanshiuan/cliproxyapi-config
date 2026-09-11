@@ -99,6 +99,10 @@
           {
             "type": "command",
             "command": "sudo service postgresql start >/dev/null 2>&1 || true; pg_isready >/dev/null 2>&1 && echo '✅ PG up' || echo '⚠️ PG down — run: sudo service postgresql start'; grep -q 'ANTHROPIC_API_KEY=sk-' /home/user/cliproxyapi-config/.env 2>/dev/null && echo '✅ API key set' || echo '⚠️ ANTHROPIC_API_KEY missing — DevSwarm unavailable until you fill .env'"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start-plugins.sh"
           }
         ]
       }
