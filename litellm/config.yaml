@@ -1,0 +1,90 @@
+# ──────────────────────────────────────────────────────────────────────────
+# LiteLLM Proxy — 三層模型分流（全雲端版，零磁碟、零 GPU 需求）
+#
+#   smart      開發 / 重要任務。Claude 優先，MiniMax、DeepSeek 依序 fallback。
+#   code-lite  日常寫程式小任務。DeepInfra 代管的 Ornith-1.0 35B
+#              （約 $0.14/M 輸入、$1.0/M 輸出，是 Claude 的零頭）。
+#   chat-lite  日常組織語言 / 聊天 / 文案。DeepSeek-chat
+#              （便宜、中文強；Ornith 是純 coding 模型，不適合聊天）。
+#
+# 為什麼不用本地模型：35B 權重要 18-20GB 磁碟 + 24GB VRAM 等級的硬體，
+# 目前機器條件不符。改用按量計費 API，同樣達到「日常小任務用便宜模型」，
+# 不佔磁碟、不吃硬體。未來有合適機器再啟用檔尾的本地選項。
+#
+# 啟動：
+#   pip install 'litellm[proxy]'
+#   litellm --config litellm/config.yaml --port 4000
+#
+# 所有工具的 base URL 一律指向 http://localhost:4000/v1，
+# model 欄位填 smart / code-lite / chat-lite 三選一。
+# ──────────────────────────────────────────────────────────────────────────
+
+model_list:
+  # ---- smart：開發 / 重要任務（Claude 優先，備援見 router_settings） ----
+  - model_name: smart
+    litellm_params:
+      model: anthropic/claude-sonnet-5
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: smart-backup-minimax
+    litellm_params:
+      # MiniMax 是 OpenAI 相容端點；模型代號常變動，
+      # 上 https://www.minimax.io/platform 核對後再改這裡。
+      model: openai/MiniMax-M2
+      api_base: https://api.minimax.io/v1
+      api_key: os.environ/MINIMAX_API_KEY
+
+  - model_name: smart-backup-deepseek
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  # ---- code-lite：日常寫程式小任務（雲端代管 Ornith，按量計費） ----
+  #
+  # ⚠️ 2026-07-16 查證：DeepInfra 官方頁面寫「因用量低，本模型將於
+  #    2026-07-19 下架」（https://deepinfra.com/deepreinforce-ai/Ornith-1.0-35B）。
+  #    下架後這個呼叫會失敗 → 靠 router_settings.fallbacks 自動轉 chat-lite，
+  #    系統不會壞，但會悄悄失去 Ornith 的 coding 特化優勢。
+  #    上線前（尤其是 2026-07-19 之後）先去上面那個網址確認模型還在，
+  #    不在的話要嘛換成 DeepInfra 當時還在架的其他 Ornith 尺寸，
+  #    要嘛認命讓它 fallback 到 chat-lite（也不是不能接受，只是不再是 Ornith）。
+  - model_name: code-lite
+    litellm_params:
+      model: openai/deepreinforce-ai/Ornith-1.0-35B
+      api_base: https://api.deepinfra.com/v1/openai
+      api_key: os.environ/DEEPINFRA_API_KEY
+      # Ornith 官方評測參數
+      temperature: 1.0
+      top_p: 0.95
+
+  # ---- chat-lite：日常聊天 / 組織語言（DeepSeek-chat，中文強、極便宜） ----
+  - model_name: chat-lite
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+router_settings:
+  # smart 失敗（額度/超時/5xx）才依序轉 MiniMax → DeepSeek，
+  # 確保重要任務預設一定是 Claude；code-lite 掛了退到 DeepSeek。
+  fallbacks:
+    - smart: ["smart-backup-minimax", "smart-backup-deepseek"]
+    - code-lite: ["chat-lite"]
+  num_retries: 1
+  timeout: 90
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+# ──────────────────────────────────────────────────────────────────────────
+# 附錄：本地模型選項（未來有 24GB+ VRAM / 統一記憶體的機器再啟用）
+# 先 ollama pull ornith:35b / qwen3.5:32b，再把下面解除註解、
+# 替換掉上面同名的 code-lite / chat-lite 區塊。
+# ──────────────────────────────────────────────────────────────────────────
+# - model_name: code-lite
+#   litellm_params:
+#     model: ollama/ornith:35b
+#     api_base: http://localhost:11434
+# - model_name: chat-lite
+#   litellm_params:
+#     model: ollama/qwen3.5:32b
+#     api_base: http://localhost:11434
