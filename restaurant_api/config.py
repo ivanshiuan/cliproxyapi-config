@@ -83,6 +83,48 @@ class Settings(BaseSettings):
     # ─── Logging ────────────────────────────────────────────────────────
     log_level: str = Field(default="INFO", pattern=r"^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
+    # ─── BUFF OS — LLM + embeddings + retrieval ─────────────────────────
+    # Keys use the community-standard variable names (no RESTO_ prefix) via
+    # validation_alias so a stock ``.env`` from Anthropic / OpenAI / Voyage
+    # dashboards drops in without rename gymnastics.
+    anthropic_api_key: str = Field(
+        default="", validation_alias="ANTHROPIC_API_KEY"
+    )
+    openai_api_key: str = Field(default="", validation_alias="OPENAI_API_KEY")
+    voyage_api_key: str = Field(default="", validation_alias="VOYAGE_API_KEY")
+
+    # BUFF OS knobs use the RESTO_ prefix so they live alongside other
+    # service settings and pyproject env conventions.
+    #   RESTO_EMBED_BACKEND=openai|voyage|local|fake
+    #   RESTO_EMBED_MODEL=text-embedding-3-small
+    #   RESTO_LLM_MODEL=claude-sonnet-5
+    embed_backend: str = Field(
+        default="openai",
+        pattern=r"^(openai|voyage|local|fake)$",
+    )
+    embed_model: str = Field(default="text-embedding-3-small")
+    embed_model_version: str = Field(default="v1")
+    llm_model: str = Field(default="claude-sonnet-5")
+    # Bounded output token limit for brief generation — keeps a runaway
+    # completion from burning the monthly budget in one call.
+    llm_max_output_tokens: int = Field(default=4096, ge=256, le=64_000)
+    # Prompt cache is a 90% cost saver for repeated brief structure. On by
+    # default; only turn off if the provider bill needs sanity-checking.
+    llm_prompt_cache: bool = True
+
+    @property
+    def has_llm_credentials(self) -> bool:
+        return bool(self.anthropic_api_key)
+
+    @property
+    def has_embed_credentials(self) -> bool:
+        if self.embed_backend == "openai":
+            return bool(self.openai_api_key)
+        if self.embed_backend == "voyage":
+            return bool(self.voyage_api_key)
+        # local / fake need no credentials
+        return True
+
     @property
     def database_url(self) -> str:
         """asyncpg DSN."""
