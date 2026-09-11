@@ -1,0 +1,10 @@
+schema_version: 5
+name: resto_demo
+version: "1.0"
+
+# Wren 引擎命名空間(不是你資料庫的 catalog/schema)
+catalog: wren
+schema: public
+
+# 資料源:本 demo 用本地 duckdb 檔(data.duckdb,由 seed/ 重建、不進版控)
+data_source: duckdb

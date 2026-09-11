@@ -1,0 +1,10 @@
+name: stores
+table_reference:
+  catalog: data
+  schema: main
+  table: stores
+columns:
+  - {name: store_id, type: INTEGER, is_primary_key: true, not_null: true}
+  - {name: name, type: VARCHAR}
+  - {name: city, type: VARCHAR}
+primary_key: store_id

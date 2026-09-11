@@ -1,0 +1,5 @@
+relationships:
+  - name: orders_stores
+    models: [orders, stores]
+    join_type: MANY_TO_ONE
+    condition: orders.store_id = stores.store_id

@@ -174,6 +174,13 @@
 - Ivan 在 GitHub（手機或電腦）審核後按 Merge 進 main；要改就在同個 PR 上修。
 - 例外：Ivan 明講「先不要開 PR / 留分支就好」時就不開。
 
+### 交付方式（Ivan 的鐵則）
+- **不要丟 runbook / 手動步驟清單給 Ivan 執行。** 任何操作都做成
+  **idempotent 的 one-command automation**（`make <target>` 或 `scripts/<x>.sh`，可重複跑、
+  真的失敗才非零離開），Ivan **只負責最終 approval**（審 PR、按 Merge）。
+- 需要 Ivan 提供的祕密（帳密、金鑰）一律走 `.env` / 環境變數，不要叫他一步步敲指令。
+- 範例：WrenAI 用 `make wren`（一鍵裝＋建＋驗證），不是「先跑 A、再跑 B、再手動 C」。
+
 ---
 
 ## 經常踩到的坑（解法已就位）
