@@ -1,0 +1,3 @@
+references/*.json
+!references/manifest.json
+references/.last-updated

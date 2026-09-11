@@ -266,6 +266,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「分析這場球 / 賽前 memo / 盤口」 | 用 `match-intel` skill（僅分析，不推薦下注） |
 | 「賽後覆盤 / 準備比賽輸入」 | 用 `tiger-pm` agent |
 | 「食安 / 勞基法 / 發票 / 對帳的領域問題」 | 用 `restaurant-domain-expert` agent |
+| 「找生圖 prompt / 海報·頭像·商品圖·社群圖靈感 / 幫文章配圖」 | 用 `ai-image-prompts` skill（10,000+ 社群 prompt 庫附樣圖，任何生圖模型通用；references 由 `scripts/setup.js` 自動下載，不進 git） |
 
 ---
 
