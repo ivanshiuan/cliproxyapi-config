@@ -245,6 +245,12 @@ to-md: ## Convert a file to Markdown for token-cheap reading (usage: make to-md 
 	@test -n "$(FILE)" || (echo "usage: make to-md FILE=<path> [OUT=<path>]" && exit 1)
 	uv run scripts/to_md.py "$(FILE)" $(if $(OUT),-o "$(OUT)",)
 
+.PHONY: watch-video
+watch-video: ## Split a video/YouTube into timestamped frames + transcript (usage: make watch-video FILE=x.mp4 [TRANSCRIBE=1])
+	@test -n "$(FILE)" || (echo "usage: make watch-video FILE=<path|youtube-url> [TRANSCRIBE=1] [FRAMES=N]" && exit 1)
+	$(if $(TRANSCRIBE),uv run --with faster-whisper,uv run) scripts/watch_video.py "$(FILE)" \
+		$(if $(TRANSCRIBE),--transcribe,) $(if $(FRAMES),--frames "$(FRAMES)",)
+
 # ----- info --------------------------------------------------------------
 
 .PHONY: status
