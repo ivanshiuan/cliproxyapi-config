@@ -92,6 +92,28 @@ promote: install ## Promote workspace/<id>/ artifacts into restaurant_api. Usage
 backlog-json: ## Same as backlog, machine-readable JSON
 	$(PY) scripts/backlog.py --json
 
+# ----- orca / worktree ops (docs/20) -------------------------------------
+
+.PHONY: orca-bootstrap
+orca-bootstrap: ## One-command Orca 指揮端就緒檢查+安裝 (idempotent, Mac/Linux)
+	bash scripts/orca/bootstrap.sh
+
+.PHONY: swarm-wt
+swarm-wt: install ## DevSwarm in isolated worktree→promote→gate→commit. Usage: make swarm-wt SPEC=specs/x.md [BUDGET=5] [FRESH=1] [PUSH=1] [DRY_RUN=1] [SETUP_ONLY=1]
+	@test -n "$(SPEC)" || (echo 'usage: make swarm-wt SPEC=specs/<name>.md' && exit 1)
+	BUDGET="$(BUDGET)" FRESH="$(FRESH)" PUSH="$(PUSH)" DRY_RUN="$(DRY_RUN)" SETUP_ONLY="$(SETUP_ONLY)" \
+		bash scripts/orca/swarm_worktree.sh "$(SPEC)"
+
+.PHONY: bakeoff
+bakeoff: install ## Same spec→multi-agent worktrees→比稿報告. Usage: make bakeoff SPEC=specs/x.md [LANES="devswarm claude"] [FRESH=1]
+	@test -n "$(SPEC)" || (echo 'usage: make bakeoff SPEC=specs/<name>.md' && exit 1)
+	LANES="$(LANES)" BUDGET="$(BUDGET)" FRESH="$(FRESH)" \
+		bash scripts/orca/bakeoff.sh "$(SPEC)"
+
+.PHONY: wt-clean
+wt-clean: ## Remove all swarm/bakeoff worktrees (branches kept)
+	bash scripts/orca/wt_clean.sh
+
 # ----- restaurant backend (Phase 1) --------------------------------------
 
 .PHONY: db-up

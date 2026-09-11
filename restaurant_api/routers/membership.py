@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 
-from ..api.deps import DbSession, TenantId
+from ..api.deps import DbSession, Messenger, TenantId
 from ..schemas.membership_stats import MembershipStatsResponse
 from ..schemas.rfm import (
     BroadcastResult,
@@ -60,9 +60,14 @@ async def broadcast_segment(
     payload: SegmentBroadcastRequest,
     session: DbSession,
     tenant_id: TenantId,
+    messenger: Messenger,
 ) -> BroadcastResult:
     return await rfm_service.broadcast_to_segment(
-        session, tenant_id=tenant_id, segment=segment, message=payload.message
+        session,
+        tenant_id=tenant_id,
+        segment=segment,
+        message=payload.message,
+        messenger=messenger,
     )
 
 
