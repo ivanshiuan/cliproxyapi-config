@@ -1,0 +1,19 @@
+{
+  "mode": "SIMULATED_ODOO_JSONRPC_CONTRACT",
+  "live_odoo": "EXTERNAL_DEPENDENCY_BLOCKED (no instance in environment)",
+  "tenant_id": "019faccd-5d06-7f9a-b0e7-fcb82dd89ea8",
+  "store_id": "019faccd-5d08-7ace-8617-368623971bc7",
+  "supplier_id": "019faccd-5d0d-7c44-8a34-f8903862ac95",
+  "supplier_ref": "SUP-E2E",
+  "purchase_order_id": "019faccd-5d10-7770-a02c-5cf8a474640f",
+  "po_number": "PO-E2E-fb41a4",
+  "po_lines": 2,
+  "odoo_partner_id": 501,
+  "odoo_move_id": 502,
+  "move_state": "draft",
+  "move_ref": "\u9032\u8ca8 AB-87654321 [src:019faccd-5d10-7770-a02c-5cf8a474640f]",
+  "balanced_total": 2520.0,
+  "journal_id": 3,
+  "rerun_duplicates": 0,
+  "posted_moves": 0
+}

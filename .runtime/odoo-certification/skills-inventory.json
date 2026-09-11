@@ -1,0 +1,13 @@
+{
+  "required_capability_routing": {
+    "repository_audit":        {"skill": null, "status": "MISSING_CAPABILITY", "covered_by": "manual git/diff inventory (Phase 1) + reviewer agent (Phase 8)"},
+    "odoo_integration":        {"skill": null, "status": "MISSING_CAPABILITY", "covered_by": "integrations/odoo built in-repo; mirrors integrations/line pattern"},
+    "security_review":         {"skill": "security-review", "status": "FOUND", "planned_phase": "7"},
+    "database_migration":      {"skill": null, "status": "MISSING_CAPABILITY", "covered_by": "alembic via Makefile: from-zero + downgrade round-trip + check (Phase 2/7)"},
+    "python_quality":          {"skill": "check", "status": "FOUND", "planned_phase": "2,7"},
+    "testing":                 {"skill": "check", "status": "FOUND", "planned_phase": "2,7"},
+    "release_gate":            {"skill": "check", "status": "FOUND", "planned_phase": "7"},
+    "independent_verification":{"skill": null, "status": "COVERED_BY_AGENT", "covered_by": "read-only reviewer subagent via Agent tool (Phase 8)"}
+  },
+  "all_available_skills": ["check","security-review","review","simplify","handoff","spec","swarm","morning","digest","deploy-sid","match-intel","browser-act","docx","pdf","pptx","xlsx","dataviz","update-config","loop","claude-api","run","init","bugfix? (not listed)","code-review? (not listed this session)"]
+}

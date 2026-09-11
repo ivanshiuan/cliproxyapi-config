@@ -63,12 +63,24 @@ class Settings(BaseSettings):
     # so dropping LINE_CHANNEL_ACCESS_TOKEN into .env "just works".
     # The secret is only needed for inbound webhook signature validation;
     # outbound push/reply/multicast need the token alone.
-    line_channel_access_token: str = Field(
-        default="", validation_alias="LINE_CHANNEL_ACCESS_TOKEN"
-    )
-    line_channel_secret: str = Field(
-        default="", validation_alias="LINE_CHANNEL_SECRET"
-    )
+    line_channel_access_token: str = Field(default="", validation_alias="LINE_CHANNEL_ACCESS_TOKEN")
+    line_channel_secret: str = Field(default="", validation_alias="LINE_CHANNEL_SECRET")
+
+    # ─── Odoo back-office (accounting + AP) ─────────────────────────────
+    # When URL/DB/USERNAME/API_KEY are all set, the app switches from the
+    # in-memory stub to the real Odoo JSON-RPC backend (see
+    # integrations/odoo/client.py::get_odoo). Community-standard env names
+    # (no RESTO_ prefix) via validation_alias, so dropping them into .env
+    # "just works". Authenticate as a dedicated service user with an API key
+    # scoped to Accounting + Purchase only -- never admin, never a password.
+    # ODOO_ALLOW_AUTO_POST stays False by default: the nightly sync creates
+    # everything as *drafts* for human review; flip it once to opt into
+    # fully-automated posting to the ledger.
+    odoo_url: str = Field(default="", validation_alias="ODOO_URL")
+    odoo_db: str = Field(default="", validation_alias="ODOO_DB")
+    odoo_username: str = Field(default="", validation_alias="ODOO_USERNAME")
+    odoo_api_key: str = Field(default="", validation_alias="ODOO_API_KEY")
+    odoo_allow_auto_post: bool = Field(default=False, validation_alias="ODOO_ALLOW_AUTO_POST")
 
     # ─── Locale ─────────────────────────────────────────────────────────
     default_timezone: str = "Asia/Taipei"

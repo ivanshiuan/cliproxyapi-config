@@ -204,6 +204,20 @@ jobs-once: install ## Run all nightly jobs once and exit (for cron-style externa
 openapi: install ## Export OpenAPI 3 schema to openapi.json (regenerate any time)
 	$(PY) scripts/export_openapi.py
 
+# ----- Odoo staging deployment (idempotent one-command automation) -------
+
+.PHONY: deploy-staging
+deploy-staging: install ## Staging 部署 PLAN (唯讀, 印出會做什麼; 這是唯一你要記的指令)
+	$(PY) scripts/deploy_staging.py plan
+
+.PHONY: deploy-staging-apply
+deploy-staging-apply: install ## Converge staging to desired state (idempotent, run on staging host)
+	$(PY) scripts/deploy_staging.py apply
+
+.PHONY: deploy-staging-verify
+deploy-staging-verify: install ## Run the 46-item acceptance checklist -> evidence JSON + SHA256
+	$(PY) scripts/deploy_staging.py verify
+
 .PHONY: migration-safety
 migration-safety: ## Scan Alembic migrations for unsafe ops (DROP COLUMN, NOT NULL, ...)
 	$(PY) scripts/check_migration_safety.py

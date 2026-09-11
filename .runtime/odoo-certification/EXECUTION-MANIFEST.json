@@ -1,0 +1,29 @@
+{
+  "run_id": "odoo-cert-20260729T072525Z",
+  "status": "CONDITIONALLY_CERTIFIED",
+  "branch": "claude/odoo-inventory-integration-s4olur",
+  "reviewer": "independent read-only subagent",
+  "tests": {
+    "passed": 681,
+    "skipped": 1,
+    "failed_external_dependency_blocked": 1,
+    "odoo_suite": 45
+  },
+  "gates": {
+    "ruff": "PASS",
+    "pyright": "PASS(0)",
+    "alembic_from_zero": "PASS",
+    "alembic_downgrade_roundtrip": "PASS",
+    "alembic_no_drift": "PASS",
+    "db_smoke": "PASS",
+    "secret_scan": "PASS",
+    "pip_audit": "RAN (1 dev-dep advisory: pytest PYSEC-2026-1845, RISK R2)",
+    "security_review_skill": "NO_FINDINGS",
+    "independent_review": "CONDITIONALLY_CERTIFIED"
+  },
+  "evidence_dir": ".runtime/odoo-certification/",
+  "sha256_manifest": "EVIDENCE-SHA256-MANIFEST.txt",
+  "remaining_blockers": [
+    "live Odoo sandbox validation (EXTERNAL_DEPENDENCY_BLOCKED: no instance; credentials must come from the owner)"
+  ]
+}
