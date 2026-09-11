@@ -105,7 +105,7 @@ async def _load_order_with_relations(
         select(Order)
         .where(Order.id == order_id)
         .options(
-            selectinload(Order.lines),
+            selectinload(Order.lines).selectinload(OrderLine.modifiers),
             selectinload(Order.discounts),
             selectinload(Order.payments),
         )
@@ -248,6 +248,11 @@ def order_to_response(order: Order) -> OrderResponse:
         opened_at=opened_at,
         closed_at=_to_tpe(order.closed_at),
         status=order.status.value,  # type: ignore[arg-type]
+        order_type=order.order_type.value,  # type: ignore[arg-type]
+        channel=order.channel.value,  # type: ignore[arg-type]
+        table_session_id=order.table_session_id,
+        pickup_at=_to_tpe(order.pickup_at),
+        pickup_called_at=_to_tpe(order.pickup_called_at),
         invoice_number=order.invoice_number,
         carrier_type=order.carrier_type,
         carrier_id=order.carrier_id,
@@ -259,6 +264,7 @@ def order_to_response(order: Order) -> OrderResponse:
             {
                 "id": ln.id,
                 "menu_item_id": ln.menu_item_id,
+                "combo_parent_id": ln.combo_parent_id,
                 "qty": ln.qty,
                 "unit_price": ln.unit_price,
                 "line_total": ln.line_total,
@@ -272,6 +278,10 @@ def order_to_response(order: Order) -> OrderResponse:
                     ln.kitchen_status.value if ln.kitchen_status is not None else None
                 ),
                 "sent_to_kitchen_at": _to_tpe(ln.sent_to_kitchen_at),
+                "modifiers": [
+                    {"option_name": m.option_name, "price_delta": m.price_delta}
+                    for m in sorted(ln.modifiers, key=lambda x: x.id)
+                ],
             }
             for ln in lines
         ],  # type: ignore[arg-type]
@@ -327,7 +337,7 @@ async def create_order(
                 Order.external_pos_id == payload.external_pos_id,
             )
             .options(
-                selectinload(Order.lines),
+                selectinload(Order.lines).selectinload(OrderLine.modifiers),
                 selectinload(Order.discounts),
                 selectinload(Order.payments),
             )
@@ -453,8 +463,9 @@ async def _add_line_with_movement(
     line_payload: OrderLineCreate,
     get_placeholder: Callable[[], Awaitable[Ingredient]],
     occurred_at: datetime,
-) -> None:
-    """Create one OrderLine + its consumption ledger rows.
+    combo_parent_id: uuid.UUID | None = None,
+) -> OrderLine:
+    """Create one OrderLine + its consumption ledger rows. Returns the line.
 
     Recipe path (``consume_bom``):
         Active recipes exist for this menu item → expand into one
@@ -495,6 +506,7 @@ async def _add_line_with_movement(
         tenant_id=tenant_id,
         order_id=order.id,
         menu_item_id=line_payload.menu_item_id,
+        combo_parent_id=combo_parent_id,
         qty=line_payload.qty,
         unit_price=line_payload.unit_price,
         line_total=line_total,
@@ -536,6 +548,8 @@ async def _add_line_with_movement(
                 note=f"no recipe for menu_item {line_payload.menu_item_id}",
             ),
         )
+
+    return line
 
 
 async def get_order(

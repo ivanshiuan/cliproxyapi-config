@@ -15,6 +15,7 @@ from sqlalchemy import (
     Numeric,
     Text,
     func,
+    text,
 )
 from sqlalchemy import (
     Enum as SQLEnum,
@@ -37,6 +38,29 @@ class OrderStatus(enum.StrEnum):
     CLOSED = "closed"
     VOIDED = "voided"
     REFUNDED = "refunded"
+
+
+class OrderType(enum.StrEnum):
+    """How the meal is consumed. Drives table binding + packaging flow."""
+
+    DINE_IN = "dine_in"
+    TAKEOUT = "takeout"
+    DELIVERY = "delivery"
+
+
+class OrderChannel(enum.StrEnum):
+    """Where the order was captured.
+
+    ``external`` covers legacy ingest from third-party POS (the original
+    Phase-1 flow via ``external_pos_id``); the in-house POS surfaces use the
+    other values.
+    """
+
+    POS = "pos"  # staff POS terminal
+    TABLE_QR = "table_qr"  # customer phone via 桌位/訂單 QR
+    TABLET = "tablet"  # table-side kiosk tablet
+    ONLINE = "online"  # web takeout / delivery storefront
+    EXTERNAL = "external"  # ingested from an external POS
 
 
 class InvoiceStatus(enum.StrEnum):
@@ -171,6 +195,55 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         server_default=OrderStatus.OPEN.value,
     )
 
+    # ─── POS front-of-house (P1) ───
+    # Pre-existing ingested rows default to dine_in/external; the in-house
+    # POS sets these explicitly on creation.
+    # NB: SQLEnum(native_enum=False) stores the member NAME ("DINE_IN"), not
+    # the value — the server_default backfills legacy rows, so it must be the
+    # NAME or those rows become unreadable through the ORM.
+    order_type: Mapped[OrderType] = mapped_column(
+        SQLEnum(OrderType, name="order_type", native_enum=False, length=16),
+        nullable=False,
+        default=OrderType.DINE_IN,
+        server_default=OrderType.DINE_IN.name,
+    )
+    channel: Mapped[OrderChannel] = mapped_column(
+        SQLEnum(OrderChannel, name="order_channel", native_enum=False, length=16),
+        nullable=False,
+        default=OrderChannel.EXTERNAL,
+        server_default=OrderChannel.EXTERNAL.name,
+    )
+    # 服務費 rate as a fraction (0.10 = 10%), applied on the line subtotal
+    # (gross) and added AFTER the discount stack: due = discounted + gross*rate.
+    # Persisted per order so quote / checkout / reports all read one number.
+    service_charge_rate: Mapped[Decimal] = mapped_column(
+        Numeric(5, 4),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+    )
+    # SET NULL: an order must survive its seating record (financial ledger
+    # outlives floor-plan history).
+    table_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("table_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    # 線上外帶: when the customer wants to pick up (NULL = 盡快/ASAP). Only
+    # meaningful for order_type=TAKEOUT + channel=ONLINE.
+    pickup_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    # 取餐叫號: set when staff presses 叫號 for a ready 線上外帶 order. The
+    # public pickup-call board is a plain query for "OPEN orders with this
+    # set", ordered by it — the WS event is only a wake-up-and-refetch signal
+    # (see order_events.py), never the source of truth for what's displayed.
+    pickup_called_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # 統一發票 fields — Taiwan-specific.
     invoice_number: Mapped[str | None] = mapped_column(Text, nullable=True)
     invoice_status: Mapped[InvoiceStatus | None] = mapped_column(
@@ -214,6 +287,17 @@ class Order(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
 
     __table_args__ = (
         Index("ix_orders_store_business_date", "store_id", "business_date"),
+        # DB-level race guard: a table session has at most ONE open order.
+        # Concurrent first-touch get-or-create (POS order+quote in parallel,
+        # clerk tablet racing table-QR phone) both insert → loser hits this
+        # and adopts the winner's row in _get_or_create_session_order.
+        # NB native_enum=False stores the enum NAME → predicate must say 'OPEN'.
+        Index(
+            "uq_orders_one_open_per_session",
+            "table_session_id",
+            unique=True,
+            postgresql_where=text("status = 'OPEN' AND deleted_at IS NULL"),
+        ),
     )
 
 
@@ -245,6 +329,15 @@ class OrderLine(TenantScopedMixin, Base):
     menu_item_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("menu_items.id", ondelete="RESTRICT"),
         nullable=False,
+        index=True,
+    )
+    # 套餐組合: set when this line is an auto-expanded component of a combo
+    # item's line (see pos_order_service._expand_combo). NULL for a normal
+    # line or a combo's own "header" line. CASCADE so voiding the parent
+    # combo line takes its zero-price component tickets with it.
+    combo_parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("order_lines.id", ondelete="CASCADE"),
+        nullable=True,
         index=True,
     )
     qty: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
@@ -295,6 +388,11 @@ class OrderLine(TenantScopedMixin, Base):
     )
 
     order: Mapped[Order] = relationship(back_populates="lines")
+    modifiers: Mapped[list[OrderLineModifier]] = relationship(
+        back_populates="order_line",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     __table_args__ = (
         # KDS queue scans: "what's queued at the kitchen station, oldest first?"
@@ -305,6 +403,37 @@ class OrderLine(TenantScopedMixin, Base):
             "sent_to_kitchen_at",
         ),
     )
+
+
+class OrderLineModifier(TenantScopedMixin, TimestampedMixin, Base):
+    """A selected 口味選項/加價購 choice on one order line.
+
+    ``option_name`` / ``price_delta`` are snapshotted at selection time (same
+    receipt-immutability reasoning as ``OrderLine.unit_price`` — the modifier
+    catalog can change price later without rewriting past sales).
+    """
+
+    __tablename__ = "order_line_modifiers"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid7,
+    )
+    order_line_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("order_lines.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    modifier_option_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("modifier_options.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    option_name: Mapped[str] = mapped_column(Text, nullable=False)
+    price_delta: Mapped[Decimal] = mapped_column(Money, nullable=False)
+
+    order_line: Mapped[OrderLine] = relationship(back_populates="modifiers")
 
 
 class OrderDiscount(TenantScopedMixin, Base):
@@ -329,6 +458,13 @@ class OrderDiscount(TenantScopedMixin, Base):
     # Either a percentage (0..1) or a TWD amount, depending on ``kind``.
     value: Mapped[Decimal] = mapped_column(Money, nullable=False)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set when this row was auto-applied by a 自動折扣規則 (docs/22 #10) —
+    # doubles as the apply-once marker and the reporting link. SET NULL so
+    # deleting a rule doesn't erase the discount history it produced.
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("discount_rules.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # SET NULL: don't lose the discount record if the approving employee is
     # later removed from the system.
     applied_by: Mapped[uuid.UUID | None] = mapped_column(
@@ -393,9 +529,11 @@ class OrderPayment(TenantScopedMixin, Base):
 __all__ = [
     "DiscountKind",
     "Order",
+    "OrderChannel",
     "OrderDiscount",
     "OrderLine",
     "OrderPayment",
     "OrderStatus",
+    "OrderType",
     "PaymentMethod",
 ]

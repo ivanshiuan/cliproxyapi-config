@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>POS · 桌況點餐</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #1a1e27; --panel2: #232936; --line: #2c3444;
+    --txt: #e8ecf3; --muted: #8a93a6; --accent: #4f8cff; --ok: #33c481;
+    --busy: #ffb020; --danger: #ff5c5c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--txt); font: 15px/1.4 -apple-system,
+    "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  header .stat { color: var(--muted); font-size: 13px; }
+  input, select, button {
+    font: inherit; color: var(--txt); background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.ghost { background: transparent; }
+  button:active { transform: translateY(1px); }
+  main { flex: 1; overflow: auto; padding: 16px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .table-card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 14px; min-height: 110px; display: flex; flex-direction: column;
+    gap: 6px; position: relative; cursor: pointer; transition: border-color .15s;
+  }
+  .table-card:hover { border-color: var(--accent); }
+  .table-card .name { font-size: 20px; font-weight: 700; }
+  .table-card .zone { color: var(--muted); font-size: 12px; }
+  .table-card .badge {
+    position: absolute; top: 12px; right: 12px; width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+  .free .badge { background: var(--ok); }
+  .busy .badge { background: var(--busy); box-shadow: 0 0 0 4px rgba(255,176,32,.18); }
+  .table-card .meta { margin-top: auto; font-size: 13px; color: var(--muted); }
+  .busy .meta { color: var(--busy); }
+  .add-card {
+    background: transparent; border: 1px dashed var(--line); color: var(--muted);
+    display: flex; align-items: center; justify-content: center; font-size: 15px;
+    border-radius: 14px; cursor: pointer; min-height: 110px;
+  }
+  .add-card:hover { color: var(--accent); border-color: var(--accent); }
+  /* modal */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none;
+    align-items: center; justify-content: center; padding: 16px; z-index: 20;
+  }
+  .overlay.show { display: flex; }
+  .sheet {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+    width: 100%; max-width: 460px; max-height: 88vh; overflow: auto; padding: 20px;
+  }
+  .sheet h2 { margin: 0 0 4px; font-size: 18px; }
+  .sheet .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .row > * { flex: 1; }
+  .row label { align-self: center; color: var(--muted); font-size: 13px; flex: 0 0 72px; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .actions button { flex: 1; min-width: 110px; }
+  .menu-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .menu-item {
+    display: flex; justify-content: space-between; padding: 10px 12px;
+    background: var(--panel2); border-radius: 10px;
+  }
+  .menu-item .price { color: var(--ok); font-variant-numeric: tabular-nums; }
+  .menu-item.selected { outline: 2px solid var(--accent, #4c8dff); background: var(--panel3, #2a3550); }
+  .toast {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+    background: var(--panel2); border: 1px solid var(--line); padding: 10px 16px;
+    border-radius: 10px; opacity: 0; transition: opacity .2s; z-index: 40;
+    max-width: 90vw;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--danger); color: #ffd0d0; }
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍜 POS 桌況</h1>
+  <span class="stat" id="summary">—</span>
+  <span class="stat" id="liveDot" title="即時連線狀態" style="font-size:13px">●</span>
+  <span class="spacer"></span>
+  <span class="stat" id="whoami" style="cursor:pointer" title="點擊登出/切換員工"></span>
+  <button class="ghost" id="clockBtn" style="display:none">打卡</button>
+  <select id="storeSel" title="門市"></select>
+  <button class="ghost" id="takeoutBtn">外帶</button>
+  <button class="ghost" id="onlineTakeoutBtn">外帶待取</button>
+  <button class="ghost" id="queueBtn">候位</button>
+  <button class="ghost" id="resvBtn">訂位</button>
+  <button class="ghost" id="shiftBtn">交班</button>
+  <button class="ghost" id="rulesBtn">促銷</button>
+  <button class="ghost" id="menuBtn">菜單</button>
+  <button class="ghost" id="refreshBtn">↻</button>
+</header>
+
+<main>
+  <div class="grid" id="floor"></div>
+  <div class="empty" id="emptyHint" style="display:none">
+    這間店還沒有桌位 — 點右下的「＋ 新增桌位」開始。
+  </div>
+</main>
+
+<!-- Open / manage a table -->
+<div class="overlay" id="tableModal">
+  <div class="sheet">
+    <h2 id="tmTitle">桌位</h2>
+    <div class="sub" id="tmSub"></div>
+    <div id="tmBody"></div>
+    <div class="actions" id="tmActions"></div>
+    <div class="actions"><button class="ghost" onclick="closeModal()">關閉</button></div>
+  </div>
+</div>
+
+<!-- Add table -->
+<div class="overlay" id="addModal">
+  <div class="sheet">
+    <h2>新增桌位</h2>
+    <div class="sub">建立一張實體桌，會自動產生桌位 QR token。</div>
+    <div class="row"><label>桌名</label><input id="ntName" placeholder="A1" /></div>
+    <div class="row"><label>區域</label><input id="ntZone" placeholder="一樓 (可空)" /></div>
+    <div class="row"><label>座位</label><input id="ntSeats" type="number" value="4" min="1" /></div>
+    <div class="actions">
+      <button class="primary" onclick="createTable()">建立</button>
+      <button class="ghost" onclick="hide('addModal')">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- Menu browser -->
+<div class="overlay" id="menuModal">
+  <div class="sheet">
+    <h2>菜單</h2>
+    <div class="sub" id="menuSub">目前這間店的可售品項。</div>
+    <div class="menu-list" id="menuList"></div>
+    <div class="actions"><button class="ghost" onclick="hide('menuModal')">關閉</button></div>
+  </div>
+</div>
+
+<!-- Employee login / manager override (shared sheet, filled dynamically) -->
+<div class="overlay" id="authModal">
+  <div class="sheet">
+    <h2 id="authTitle">員工登入</h2>
+    <div class="sub" id="authSub">選擇你的名字並輸入 4-6 碼 PIN。</div>
+    <div id="authBody"></div>
+    <div class="actions" id="authActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Same-origin API. This page is served from /pos/ so the API is at the root.
+const API = "";
+let stores = [];
+let storeId = null;
+let floor = [];
+// ── real-time (P1.5) ──
+let ws = null;            // live floor WebSocket
+let lastSeq = 0;         // highest applied event seq (reconnect cursor)
+let wsBackoff = 1000;    // reconnect backoff, grows to a cap
+let reconnectTimer = null;
+let refreshTimer = null; // coalesces bursts of events into one board refresh
+let openSessionId = null; // session whose bill is currently on screen, if any
+// ── auth (P1 認證/權限) ──
+let posToken = localStorage.getItem("pos_token") || null; // POS session token
+let posMe = null;        // {employee_id, full_name, role, permissions[]}
+let empCache = [];       // store employees, for login + manager-override pickers
+
+const $ = (id) => document.getElementById(id);
+
+function toast(msg, isErr) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast show" + (isErr ? " err" : "");
+  setTimeout(() => (t.className = "toast"), 2200);
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (posToken) headers["Authorization"] = "Bearer " + posToken;
+  const res = await fetch(API + path, { ...opts, headers });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const j = await res.json(); detail = j.error?.message || detail; } catch {}
+    const err = new Error(detail); err.status = res.status; throw err;
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+// ─── auth: login / identity / permission (P1 認證/權限) ───
+function hasPerm(p) { return !!(posMe && posMe.permissions.includes(p)); }
+
+function renderWhoami() {
+  const el = $("whoami");
+  if (posMe) { el.textContent = `👤 ${posMe.full_name} (${posMe.role})`; el.onclick = logout; }
+  else { el.textContent = "未登入"; el.onclick = () => showLogin(); }
+  refreshClockBtn();
+}
+
+// ─── 打卡 (HR clock in/out, uses the logged-in PIN identity) ───
+async function amIOnShift() {
+  if (!posMe || !storeId) return null;
+  try {
+    const open = await api(`/clock/today?store_id=${encodeURIComponent(storeId)}`);
+    return open.find((c) => c.employee_id === posMe.employee_id) || null;
+  } catch (e) { return null; }
+}
+
+async function refreshClockBtn() {
+  const btn = $("clockBtn"); if (!btn) return;
+  if (!posMe) { btn.style.display = "none"; return; }
+  btn.style.display = "";
+  const on = await amIOnShift();
+  btn.textContent = on ? `下班打卡 (${Number(on.elapsed_hours).toFixed(1)}h)` : "上班打卡";
+  btn.onclick = async () => {
+    try {
+      if (on) {
+        const out = await api("/clock/out", {
+          method: "POST", body: JSON.stringify({ employee_id: posMe.employee_id }),
+        });
+        toast(`已下班 · 正常 ${out.regular_hours}h` +
+          (Number(out.overtime_tier1_hours) > 0 ? ` + 加班 ${out.overtime_tier1_hours}h` : ""));
+      } else {
+        await api("/clock/in", {
+          method: "POST",
+          body: JSON.stringify({ employee_id: posMe.employee_id, store_id: storeId }),
+        });
+        toast("已上班打卡，開工！");
+      }
+      refreshClockBtn();
+    } catch (e) { toast(e.message, true); }
+  };
+}
+
+async function refreshMe() {
+  if (!posToken) { posMe = null; renderWhoami(); return; }
+  try { posMe = await api("/pos-auth/me"); }
+  catch (e) { posToken = null; localStorage.removeItem("pos_token"); posMe = null; }
+  renderWhoami();
+}
+
+function logout() {
+  posToken = null; posMe = null; localStorage.removeItem("pos_token");
+  renderWhoami(); showLogin();
+}
+
+async function loadEmployees() {
+  if (!storeId) return [];
+  try { empCache = await api(`/pos-auth/employees?store_id=${encodeURIComponent(storeId)}`); }
+  catch { empCache = []; }
+  return empCache;
+}
+
+async function showLogin() {
+  if (!storeId) { toast("先指定門市 (?store=)", true); return; }
+  await loadEmployees();
+  $("authTitle").textContent = "員工登入";
+  $("authSub").textContent = "選擇你的名字並輸入 4-6 碼 PIN。";
+  const body = $("authBody");
+  const withPin = empCache.filter((e) => e.has_pin);
+  body.innerHTML = `
+    <div class="row"><label>員工</label>
+      <select id="authEmp">${withPin.length
+        ? withPin.map((e) => `<option value="${e.id}">${escapeHtml(e.full_name)} · ${e.role}</option>`).join("")
+        : `<option value="">（尚無員工設定 PIN — 請店長後台設定）</option>`}</select></div>
+    <div class="row"><label>PIN</label>
+      <input id="authPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" /></div>`;
+  const acts = $("authActions"); acts.innerHTML = "";
+  acts.append(mkBtn("登入", "primary", async () => {
+    const eid = $("authEmp").value, pin = $("authPin").value;
+    if (!eid || !pin) return toast("請選員工並輸入 PIN", true);
+    try {
+      const res = await api("/pos-auth/login", {
+        method: "POST", body: JSON.stringify({ employee_id: eid, pin }),
+      });
+      posToken = res.token; localStorage.setItem("pos_token", posToken);
+      await refreshMe(); hide("authModal"); toast(`歡迎，${res.full_name}`);
+    } catch (e) { toast("登入失敗：" + e.message, true); }
+  }));
+  acts.append(mkBtn("稍後", "ghost", () => hide("authModal")));
+  show("authModal");
+}
+
+// Manager-override PIN prompt for a gated action the current user can't do.
+// Resolves {employee_id, pin} or null (cancel).
+function promptOverride(actionLabel) {
+  return new Promise(async (resolve) => {
+    await loadEmployees();
+    $("authTitle").textContent = "主管覆核";
+    $("authSub").textContent = `${actionLabel}需要權限 — 請主管輸入 PIN 授權。`;
+    const mgrs = empCache.filter((e) => e.has_pin && (e.role === "owner" || e.role === "manager"));
+    $("authBody").innerHTML = `
+      <div class="row"><label>主管</label>
+        <select id="ovEmp">${mgrs.length
+          ? mgrs.map((e) => `<option value="${e.id}">${escapeHtml(e.full_name)} · ${e.role}</option>`).join("")
+          : `<option value="">（無可覆核的主管）</option>`}</select></div>
+      <div class="row"><label>PIN</label>
+        <input id="ovPin" type="password" inputmode="numeric" maxlength="6" placeholder="••••" /></div>`;
+    const acts = $("authActions"); acts.innerHTML = "";
+    const done = (v) => { hide("authModal"); resolve(v); };
+    acts.append(mkBtn("授權", "primary", () => {
+      const eid = $("ovEmp").value, pin = $("ovPin").value;
+      if (!eid || !pin) return toast("請選主管並輸入 PIN", true);
+      done({ employee_id: eid, pin });
+    }));
+    acts.append(mkBtn("取消", "ghost", () => done(null)));
+    show("authModal");
+  });
+}
+
+function show(id) { $(id).classList.add("show"); }
+function hide(id) { $(id).classList.remove("show"); }
+function closeModal() { hide("tableModal"); openSessionId = null; refresh(); }
+
+// Prompts (折扣/服務費/加點口味) replace #tmBody wholesale, which destroys the
+// #orderPanel wrapper loadOrder() writes into. Reopening the table modal
+// rebuilds tmBody (incl. #orderPanel) from scratch before refetching the bill.
+function reopenOrder(sessionId) {
+  const t = floor.find((x) => x.session && x.session.id === sessionId);
+  if (t) openTableModal(t);
+}
+
+// ─── stores ───
+async function loadStores() {
+  // No public stores endpoint yet; let the operator paste a store_id via the
+  // URL (?store=<uuid>) or we surface a single manual entry. If a store query
+  // param is present we use it; otherwise show a prompt in the selector.
+  const params = new URLSearchParams(location.search);
+  const qs = params.get("store");
+  const sel = $("storeSel");
+  sel.innerHTML = "";
+  if (qs) {
+    storeId = qs;
+    const o = document.createElement("option");
+    o.value = qs; o.textContent = "店 " + qs.slice(0, 8);
+    sel.appendChild(o);
+  } else {
+    const o = document.createElement("option");
+    o.value = ""; o.textContent = "以 ?store=<id> 指定門市";
+    sel.appendChild(o);
+  }
+  sel.onchange = () => {
+    storeId = sel.value || null; menuCache = []; empCache = []; lastSeq = 0;
+    refresh(); connectWS();
+  };
+}
+
+// ─── floor plan ───
+async function refresh() {
+  if (!storeId) { $("floor").innerHTML = ""; $("emptyHint").style.display = "block";
+    $("emptyHint").textContent = "請在網址加上 ?store=<門市UUID> 來載入桌況。"; return; }
+  try {
+    floor = await api(`/tables/floor?store_id=${encodeURIComponent(storeId)}`);
+    render();
+  } catch (e) { toast("載入桌況失敗: " + e.message, true); }
+}
+
+function render() {
+  const g = $("floor");
+  g.innerHTML = "";
+  const busy = floor.filter((t) => t.is_occupied).length;
+  $("summary").textContent = `${floor.length} 桌 · ${busy} 用餐中 · ${floor.length - busy} 空桌`;
+  $("emptyHint").style.display = floor.length ? "none" : "block";
+
+  for (const t of floor) {
+    const card = document.createElement("div");
+    card.className = "table-card " + (t.is_occupied ? "busy" : "free");
+    card.innerHTML = `
+      <span class="badge"></span>
+      <div class="name">${escapeHtml(t.name)}</div>
+      <div class="zone">${t.zone ? escapeHtml(t.zone) : "&nbsp;"}</div>
+      <div class="meta">${t.is_occupied
+        ? `${t.session.party_size} 位 · 用餐中`
+        : `${t.seats} 座 · 空桌`}</div>`;
+    card.onclick = () => openTableModal(t);
+    g.appendChild(card);
+  }
+  const add = document.createElement("div");
+  add.className = "add-card";
+  add.textContent = "＋ 新增桌位";
+  add.onclick = () => { $("ntName").value = ""; $("ntZone").value = ""; $("ntSeats").value = 4; show("addModal"); };
+  g.appendChild(add);
+}
+
+function openTableModal(t) {
+  $("tmTitle").textContent = "桌位 " + t.name;
+  const body = $("tmBody");
+  const acts = $("tmActions");
+  body.innerHTML = "";
+  acts.innerHTML = "";
+
+  if (t.is_occupied) {
+    const s = t.session;
+    openSessionId = s.id;  // let live events know which bill is on screen
+    $("tmSub").textContent = `${s.party_size} 位 · 開桌於 ${fmt(s.opened_at)}`;
+    // Order panel: current bill + add items + checkout.
+    body.innerHTML = `<div id="orderPanel"><div class="empty">載入訂單…</div></div>`;
+    loadOrder(s);
+    const btnCancel = mkBtn("取消開桌", "ghost", async () => {
+      await guard(() => api(`/tables/sessions/${s.id}/cancel`, { method: "POST" }), "已取消");
+    });
+    const btnTransfer = mkBtn("轉桌", "ghost", () => transferPrompt(s, t));
+    const btnMerge = mkBtn("併桌", "ghost", () => mergePrompt(s, t));
+    acts.append(btnTransfer, btnMerge, btnCancel);
+  } else {
+    $("tmSub").textContent = `${t.seats} 座 · 空桌`;
+    openSessionId = null;  // empty table — no live bill on screen
+    body.innerHTML = `<div class="row"><label>人數</label>
+      <input id="partySize" type="number" value="2" min="1" /></div>`;
+    const btnOpen = mkBtn("開桌 (入座)", "primary", async () => {
+      const n = parseInt($("partySize").value || "1", 10);
+      await guard(() => api(`/tables/${t.id}/open`, {
+        method: "POST", body: JSON.stringify({ party_size: n }),
+      }), "已開桌");
+    });
+    const btnDel = mkBtn("刪除此桌", "ghost", async () => {
+      await guard(() => api(`/tables/${t.id}`, { method: "DELETE" }), "已刪除桌位");
+    });
+    acts.append(btnOpen, btnDel);
+  }
+  show("tableModal");
+}
+
+function transferPrompt(s, from) {
+  const free = floor.filter((t) => !t.is_occupied && t.id !== from.id);
+  if (!free.length) return toast("沒有空桌可轉", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>轉到</label>
+    <select id="targetTable">${free.map((t) =>
+      `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join("")}</select></div>`;
+  const acts = $("tmActions");
+  acts.innerHTML = "";
+  acts.append(mkBtn("確認轉桌", "primary", async () => {
+    const target = $("targetTable").value;
+    await guard(() => api(`/tables/sessions/${s.id}/transfer`, {
+      method: "POST", body: JSON.stringify({ target_table_id: target }),
+    }), "已轉桌");
+  }));
+}
+
+function mergePrompt(target, targetTable) {
+  const others = floor.filter((t) => t.is_occupied && t.id !== targetTable.id);
+  if (!others.length) return toast("沒有其他佔用中的桌可併", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="sub">選擇要併入本桌帳單的來源桌 (來源桌釋出)。</div>
+    <div class="row"><label>來源桌</label>
+      <select id="mergeSource">${others.map((t) =>
+        `<option value="${t.session.id}">${escapeHtml(t.name)} (${t.session.party_size} 位)</option>`).join("")}</select></div>`;
+  const acts = $("tmActions");
+  acts.innerHTML = "";
+  acts.append(mkBtn("確認併桌", "primary", async () => {
+    const sourceId = $("mergeSource").value;
+    await guard(() => api(`/tables/sessions/${target.id}/merge`, {
+      method: "POST", body: JSON.stringify({ source_session_id: sourceId }),
+    }), "已併桌");
+  }));
+  acts.append(mkBtn("返回", "ghost", () => openTableModal(targetTable)));
+}
+
+// ─── order panel (add items + checkout) ───
+let menuCache = [];
+async function loadMenuCache() {
+  if (menuCache.length || !storeId) return menuCache;
+  try {
+    menuCache = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true&available_now=true`);
+  } catch { menuCache = []; }
+  return menuCache;
+}
+
+async function loadRecommendations(cartItemIds) {
+  // 規則版智慧加購推薦 (docs/22 #21/#25): best-effort strip, never blocks the bill.
+  if (!storeId) return [];
+  try {
+    const qs = new URLSearchParams({ store_id: storeId, limit: "4" });
+    (cartItemIds || []).forEach((id) => qs.append("cart_item_ids", id));
+    return await api(`/menu/recommendations?${qs.toString()}`);
+  } catch { return []; }
+}
+
+async function loadOrder(s) {
+  const panel = $("orderPanel");
+  try {
+    const order = await api(`/tables/sessions/${s.id}/order`);
+    const items = await loadMenuCache();
+    const recs = await loadRecommendations([...new Set(order.lines.map((l) => l.menu_item_id))]);
+    const total = order.lines.reduce((a, l) => a + Number(l.line_total), 0);
+    panel.innerHTML = `
+      <div style="font-weight:600;margin:6px 0">本桌帳單</div>
+      <div class="menu-list">
+        ${order.lines.length ? order.lines.filter((l) => !l.combo_parent_id).map((l) => {
+          const it = items.find((m) => m.id === l.menu_item_id);
+          const nm = it ? it.name : l.menu_item_id.slice(0, 8);
+          const kids = order.lines.filter((k) => k.combo_parent_id === l.id);
+          const modTags = (l.modifiers || []).map((m) => escapeHtml(m.option_name)).join("、");
+          return `<div class="menu-item" style="flex-direction:column;align-items:stretch;gap:2px">
+            <div style="display:flex;justify-content:space-between">
+              <span>${escapeHtml(nm)} × ${Number(l.qty)}</span>
+              <span><span class="price">$${Number(l.line_total).toFixed(0)}</span>
+              <button class="ghost" style="padding:2px 8px;margin-left:8px"
+                onclick="voidLine('${s.id}','${l.id}')">退</button></span>
+            </div>
+            ${modTags ? `<div class="sub" style="padding-left:8px">＋ ${modTags}</div>` : ""}
+            ${kids.length ? kids.map((k) => {
+              const kit = items.find((m) => m.id === k.menu_item_id);
+              const knm = kit ? kit.name : k.menu_item_id.slice(0, 8);
+              return `<div class="sub" style="padding-left:8px">└ ${escapeHtml(knm)} × ${Number(k.qty)} (套餐內含)</div>`;
+            }).join("") : ""}
+          </div>`;
+        }).join("") : `<div class="empty" style="padding:14px">尚未點餐</div>`}
+      </div>
+      <div style="display:flex;justify-content:space-between;margin:10px 2px;font-size:17px;font-weight:700">
+        <span>合計</span><span class="price">$${total.toFixed(0)}</span>
+      </div>
+      ${order.discounts && order.discounts.length ? `<div class="sub" style="margin:2px">
+        已套折扣 ${order.discounts.length} 筆（結帳金額以結帳畫面為準）</div>` : ""}
+      ${recs.length ? `<div style="font-weight:600;margin:10px 0 6px">🎯 猜你想加點</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+        ${recs.map((r) => `<div class="menu-item" style="cursor:pointer;flex:0 0 auto;gap:8px"
+          onclick="openItemPrompt('${s.id}','${r.menu_item_id}')">
+          <span>${r.reason === "cart_pairing" ? "🔗" : "🔥"} ${escapeHtml(r.name)}</span>
+          <span class="price">$${Number(r.price).toFixed(0)}</span>
+        </div>`).join("")}
+      </div>` : ""}
+      <div style="font-weight:600;margin:10px 0 6px">加點</div>
+      <div class="menu-list" style="max-height:34vh;overflow:auto">
+        ${items.length ? items.map((m) => `<div class="menu-item"
+          style="cursor:pointer" onclick="openItemPrompt('${s.id}','${m.id}')">
+          <span>${escapeHtml(m.name)}</span><span class="price">$${Number(m.price).toFixed(0)}</span>
+        </div>`).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
+      </div>
+      <div class="actions" style="margin-top:12px">
+        <button class="ghost" onclick="serviceChargePrompt('${s.id}')"
+          ${order.lines.length ? "" : "disabled"}>服務費</button>
+        <button class="ghost" onclick="discountPrompt('${s.id}')"
+          ${order.lines.length ? "" : "disabled"}>折扣</button>
+        <button class="primary" onclick="checkoutPrompt('${s.id}')"
+          ${order.lines.length ? "" : "disabled"}>結帳</button>
+      </div>`;
+  } catch (e) { panel.innerHTML = `<div class="empty">載入訂單失敗: ${escapeHtml(e.message)}</div>`; }
+}
+
+async function addLine(sessionId, itemId, modifierOptionIds) {
+  try {
+    const body = { menu_item_id: itemId, qty: "1" };
+    if (modifierOptionIds && modifierOptionIds.length) body.modifier_option_ids = modifierOptionIds;
+    await api(`/tables/sessions/${sessionId}/lines`, {
+      method: "POST", body: JSON.stringify(body),
+    });
+    reopenOrder(sessionId);
+    toast("已加點");
+  } catch (e) { toast(e.message, true); }
+}
+
+// 口味選項組/加價購: check the item for configured groups before adding —
+// zero extra tap for plain items, one small sheet for items with choices.
+const modifierGroupsCache = {};
+async function openItemPrompt(sessionId, itemId) {
+  let groups = modifierGroupsCache[itemId];
+  if (groups === undefined) {
+    try { groups = await api(`/menu/items/${itemId}/modifier-groups`); }
+    catch { groups = []; }
+    modifierGroupsCache[itemId] = groups;
+  }
+  if (!groups.length) return addLine(sessionId, itemId);
+
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">選擇口味/加購</div>
+    ${groups.map((g) => `
+      <div class="sub" style="margin:8px 0 2px">${escapeHtml(g.name)}
+        ${g.min_select > 0 ? "（必選）" : "（可不選）"} — 最多 ${g.max_select} 項</div>
+      <div class="menu-list" data-group="${g.id}" data-min="${g.min_select}" data-max="${g.max_select}">
+        ${g.options.map((o) => `<div class="menu-item" style="cursor:pointer"
+            data-option="${o.id}" onclick="toggleModOption(this)">
+            <span>${escapeHtml(o.name)}</span>
+            <span class="price">${Number(o.price_delta) > 0 ? "+$" + Number(o.price_delta).toFixed(0) : ""}</span>
+          </div>`).join("")}
+      </div>`).join("")}`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("加入", "primary", async () => {
+    const selected = [];
+    for (const groupEl of body.querySelectorAll("[data-group]")) {
+      const min = Number(groupEl.dataset.min), max = Number(groupEl.dataset.max);
+      const chosen = [...groupEl.querySelectorAll(".menu-item.selected")];
+      if (chosen.length < min || chosen.length > max) {
+        return toast(`請選擇 ${min}-${max} 項`, true);
+      }
+      chosen.forEach((el) => selected.push(el.dataset.option));
+    }
+    await addLine(sessionId, itemId, selected);
+  }));
+  acts.append(mkBtn("取消", "ghost", () => reopenOrder(sessionId)));
+}
+
+function toggleModOption(el) {
+  const groupEl = el.closest("[data-group]");
+  const max = Number(groupEl.dataset.max);
+  if (!el.classList.contains("selected") && max === 1) {
+    groupEl.querySelectorAll(".menu-item.selected").forEach((s) => s.classList.remove("selected"));
+  }
+  el.classList.toggle("selected");
+}
+
+async function voidLine(sessionId, lineId) {
+  const body = { reason: "POS 退菜" };
+  if (!hasPerm("void_line")) {
+    const ov = await promptOverride("退菜");
+    if (!ov) return;               // manager cancelled
+    body.override = ov;
+  }
+  try {
+    await api(`/tables/order-lines/${lineId}/void`, {
+      method: "POST", body: JSON.stringify(body),
+    });
+    reopenOrder(sessionId);
+    toast("已退菜");
+  } catch (e) { toast(e.message, true); }
+}
+
+async function discountPrompt(sessionId) {
+  const body = $("tmBody");
+  body.innerHTML = `
+    <div style="font-weight:700;margin:6px 0">套用折扣</div>
+    <div class="row"><label>方式</label>
+      <select id="dcKind"><option value="percent">百分比 (%)</option>
+        <option value="amount">折抵金額 ($)</option>
+        <option value="comp">招待 (整單免收)</option></select></div>
+    <div class="row"><label>數值</label>
+      <input id="dcVal" type="number" step="1" min="0" placeholder="例：10 = 打9折 或 折$10" /></div>
+    <div class="sub" id="dcHint">百分比輸入 10 代表折 10%（即 9 折）。</div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("套用折扣", "primary", async () => {
+    const kind = $("dcKind").value;
+    const raw = Number($("dcVal").value || 0);
+    if (kind !== "comp" && !(raw > 0)) return toast("請輸入折扣數值", true);
+    // percent: UI takes 10(%) → API wants 0.10 fraction. comp ignores value.
+    const value = kind === "comp" ? "0"
+      : kind === "percent" ? (raw / 100).toString() : raw.toString();
+    const payload = { kind, value, reason: "POS 折扣" };
+    if (!hasPerm("apply_discount")) {
+      const ov = await promptOverride("折扣");
+      if (!ov) return;
+      payload.override = ov;
+    }
+    try {
+      await api(`/tables/sessions/${sessionId}/discount`, {
+        method: "POST", body: JSON.stringify(payload),
+      });
+      reopenOrder(sessionId);
+      toast("已套用折扣");
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("取消", "ghost", () => reopenOrder(sessionId)));
+}
+
+async function serviceChargePrompt(sessionId) {
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">服務費</div>
+    <div class="sub">加收一成服務費，或移除已設定的服務費。</div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  const setRate = async (rate, msg) => {
+    try {
+      await api(`/tables/sessions/${sessionId}/service-charge`, {
+        method: "POST", body: JSON.stringify({ rate }),
+      });
+      toast(msg);
+      reopenOrder(sessionId);
+    } catch (e) { toast(e.message, true); }
+  };
+  acts.append(mkBtn("加收 10%", "primary", () => setRate("0.1", "已加收 10% 服務費")));
+  acts.append(mkBtn("移除服務費", "ghost", () => setRate("0", "已移除服務費")));
+}
+
+async function checkoutPrompt(sessionId) {
+  const body = $("tmBody");
+  body.innerHTML = `<div class="empty">計算應收…</div>`;
+  // Ask the server for the amount due — it runs the same money math the till
+  // settles with (discount stack + 服務費 − 已收款), zero divergence.
+  let q;
+  try { q = await api(`/tables/sessions/${sessionId}/quote`); }
+  catch (e) { body.innerHTML = `<div class="empty">無法取得應收: ${escapeHtml(e.message)}</div>`; return; }
+  const remaining = Number(q.remaining);
+  const disc = Number(q.discount_total);
+  const charge = Number(q.service_charge);
+  const paid = Number(q.paid);
+  body.innerHTML = `
+    <div style="font-weight:700;font-size:18px;margin:6px 0">結帳 · 應收 $${remaining.toFixed(0)}</div>
+    <div class="sub">原價 $${Number(q.gross).toFixed(0)}${disc > 0 ? ` − 折扣 $${disc.toFixed(0)}` : ""}${charge > 0 ? ` ＋ 服務費 $${charge.toFixed(0)}` : ""}${paid > 0 ? ` − 已收 $${paid.toFixed(0)}` : ""}</div>
+    ${q.auto_discount ? `<div class="sub" style="color:var(--ok)">🏷️ ${escapeHtml(q.auto_discount)}（已自動套用）</div>` : ""}
+    <div class="row"><label>收現</label>
+      <input id="tendered" type="number" value="${remaining}" min="0" /></div>
+    <div class="row"><label>本次結清</label>
+      <input id="payPortion" type="number" value="${remaining}" min="1" max="${remaining}" /></div>
+    <div class="sub">拆單: 把「本次結清」改成這位客人要付的金額即可。</div>
+    <div id="changeHint" class="zone" style="margin:4px 2px"></div>`;
+  const inp = $("tendered");
+  const portion = $("payPortion");
+  const hint = $("changeHint");
+  const upd = () => {
+    const c = Number(inp.value || 0) - Number(portion.value || 0);
+    hint.textContent = c >= 0 ? `找零 $${c.toFixed(0)}` : "收現不足";
+  };
+  inp.oninput = upd; portion.oninput = upd; upd();
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認收款", "primary", async () => {
+    const amt = Number(portion.value || 0);
+    const tendered = Number(inp.value || 0);
+    if (!(amt > 0)) return toast("請輸入本次結清金額", true);
+    if (tendered < amt) return toast("收現不足", true);
+    try {
+      if (amt >= remaining) {
+        // Full settle → classic checkout (server recomputes remaining itself).
+        const res = await api(`/tables/sessions/${sessionId}/checkout`, {
+          method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
+        });
+        closeModal(); toast(`結帳完成 · 找零 $${Number(res.change).toFixed(0)}`); refresh();
+      } else {
+        // 拆單: partial payment; bill stays open until settled.
+        const res = await api(`/tables/sessions/${sessionId}/pay`, {
+          method: "POST",
+          body: JSON.stringify({ amount: String(amt), tendered: String(tendered) }),
+        });
+        if (res.closed) { closeModal(); toast("已收齊 · 結單結桌"); refresh(); }
+        else { toast(`已收 $${amt.toFixed(0)} · 找零 $${Number(res.change).toFixed(0)} · 尚欠 $${Number(res.remaining).toFixed(0)}`); checkoutPrompt(sessionId); }
+      }
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+
+async function createTable() {
+  const name = $("ntName").value.trim();
+  if (!name) return toast("請輸入桌名", true);
+  const body = {
+    store_id: storeId, name,
+    zone: $("ntZone").value.trim() || null,
+    seats: parseInt($("ntSeats").value || "4", 10),
+  };
+  try {
+    await api("/tables", { method: "POST", body: JSON.stringify(body) });
+    hide("addModal"); toast("已新增桌位"); refresh();
+  } catch (e) { toast("新增失敗: " + e.message, true); }
+}
+
+async function loadMenu() {
+  if (!storeId) return toast("先指定門市", true);
+  try {
+    const items = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true`);
+    const list = $("menuList");
+    list.innerHTML = items.length ? "" : `<div class="empty">尚無品項</div>`;
+    for (const it of items) {
+      const row = document.createElement("div");
+      row.className = "menu-item";
+      row.innerHTML = `<span>${escapeHtml(it.name)}</span>
+        <span class="price">$${Number(it.price).toFixed(0)}</span>`;
+      list.appendChild(row);
+    }
+    show("menuModal");
+  } catch (e) { toast("載入菜單失敗: " + e.message, true); }
+}
+
+// ─── helpers ───
+function mkBtn(label, cls, onClick) {
+  const b = document.createElement("button");
+  b.className = cls; b.textContent = label; b.onclick = onClick;
+  return b;
+}
+async function guard(fn, okMsg) {
+  try { await fn(); closeModal(); toast(okMsg); refresh(); }
+  catch (e) { toast(e.message, true); }
+}
+function fmt(iso) { try { return new Date(iso).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" }); } catch { return iso; } }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+$("refreshBtn").onclick = refresh;
+$("menuBtn").onclick = loadMenu;
+
+// ─── 訂位面板 (今日訂位 → 帶位開桌) ───
+async function showReservations() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "今日訂位";
+  $("tmSub").textContent = "點「帶位」選桌入座（自動連結訂位與開桌）。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入訂位…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  try {
+    // Today's window in local (TW) time.
+    const d = new Date(); const day = d.toISOString().slice(0, 10);
+    const from = `${day}T00:00:00+08:00`, to = `${day}T23:59:59+08:00`;
+    const qs = `store_id=${encodeURIComponent(storeId)}&from_dt=${encodeURIComponent(from)}&to_dt=${encodeURIComponent(to)}&limit=100`;
+    const rows = (await api(`/reservations?${qs}`))
+      .filter((r) => r.status === "booked" || r.status === "confirmed")
+      .sort((a, b) => new Date(a.reserved_for) - new Date(b.reserved_for));
+    if (!rows.length) { body.innerHTML = `<div class="empty">今天沒有待帶位的訂位</div>`; return; }
+    body.innerHTML = `<div class="menu-list">` + rows.map((r) => `
+      <div class="menu-item">
+        <span>${fmt(r.reserved_for)} · ${escapeHtml(r.contact_name)} · ${r.party_size} 位
+          ${r.notes ? `<br><small style="color:#888">${escapeHtml(r.notes)}</small>` : ""}</span>
+        <button class="ghost" style="padding:4px 10px" onclick="seatReservation('${r.id}', ${r.party_size})">帶位</button>
+      </div>`).join("") + `</div>`;
+  } catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; }
+}
+
+async function seatReservation(resvId, partySize) {
+  const free = floor.filter((t) => !t.is_occupied);
+  if (!free.length) return toast("目前沒有空桌", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>入座桌位</label>
+    <select id="seatTable">${free.map((t) =>
+      `<option value="${t.id}">${escapeHtml(t.name)} (${t.seats} 座)</option>`).join("")}</select></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認帶位", "primary", async () => {
+    try {
+      await api(`/tables/${$("seatTable").value}/open`, {
+        method: "POST",
+        body: JSON.stringify({ party_size: partySize, reservation_id: resvId }),
+      });
+      await api(`/reservations/${resvId}/status`, {
+        method: "PATCH", body: JSON.stringify({ status: "seated" }),
+      });
+      closeModal(); toast("已帶位入座"); refresh();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showReservations));
+}
+$("resvBtn").onclick = showReservations;
+
+// ─── 外帶快速單 (點餐 + 現金結帳一步完成，不綁桌) ───
+const toCart = new Map(); // menu_item_id -> qty
+async function showTakeout() {
+  if (!storeId) return toast("先指定門市", true);
+  toCart.clear();
+  $("tmTitle").textContent = "外帶快速單";
+  $("tmSub").textContent = "點品項加入，輸入收現一次完成結帳。";
+  await loadMenuCache();
+  renderTakeout();
+  show("tableModal");
+}
+function renderTakeout() {
+  const items = menuCache;
+  let sum = 0, count = 0;
+  for (const [id, q] of toCart) {
+    const m = items.find((x) => x.id === id);
+    if (m) { sum += q * Number(m.price); count += q; }
+  }
+  const body = $("tmBody");
+  body.innerHTML = `
+    <div class="menu-list" style="max-height:38vh;overflow:auto">
+      ${items.length ? items.map((m) => {
+        const q = toCart.get(m.id) || 0;
+        return `<div class="menu-item" style="cursor:pointer" onclick="toBump('${m.id}',1)">
+          <span>${escapeHtml(m.name)}${q ? ` <b>× ${q}</b>` : ""}</span>
+          <span><span class="price">$${Number(m.price).toFixed(0)}</span>
+          ${q ? `<button class="ghost" style="padding:2px 8px;margin-left:8px"
+            onclick="event.stopPropagation();toBump('${m.id}',-1)">−</button>` : ""}</span>
+        </div>`;
+      }).join("") : `<div class="empty" style="padding:14px">尚無菜單品項</div>`}
+    </div>
+    <div style="display:flex;justify-content:space-between;margin:10px 2px;font-weight:700">
+      <span>合計 ${count} 件</span><span class="price">$${sum.toFixed(0)}</span>
+    </div>
+    <div class="row"><label>收現</label>
+      <input id="toTendered" type="number" value="${sum}" min="${sum}" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn(`結帳 ($${sum.toFixed(0)})`, "primary", async () => {
+    if (!count) return toast("請先點餐", true);
+    const tendered = $("toTendered").value;
+    if (Number(tendered) < sum) return toast("收現不足", true);
+    try {
+      const res = await api("/tables/takeout", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: storeId,
+          items: [...toCart.entries()].map(([menu_item_id, qty]) => ({ menu_item_id, qty: String(qty) })),
+          tendered: String(tendered),
+        }),
+      });
+      closeModal();
+      toast(`外帶完成 · 單號 ${res.order.order_no.slice(-6)} · 找零 $${Number(res.change).toFixed(0)}`);
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+function toBump(id, d) {
+  const q = (toCart.get(id) || 0) + d;
+  if (q <= 0) toCart.delete(id); else toCart.set(id, q);
+  renderTakeout();
+}
+$("takeoutBtn").onclick = showTakeout;
+
+// ─── 外帶待取 (線上外帶, P7.5) — customer ordered from their phone, staff
+// collects cash + closes the order when they arrive to pick up. ───
+async function showOnlineTakeout() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "外帶待取";
+  $("tmSub").textContent = "顧客線上下單、尚未取件的外帶單，依下單時間排序。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入中…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let orders = [];
+  try { orders = await api(`/online-takeout/pending?store_id=${encodeURIComponent(storeId)}`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  body.innerHTML = orders.length ? `<div class="menu-list">` + orders.map((o) => {
+    const total = o.lines.reduce((a, l) => a + Number(l.line_total), 0);
+    const pickup = o.pickup_at ? fmt(o.pickup_at) : "盡快";
+    return `<div class="menu-item" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div style="display:flex;justify-content:space-between">
+        <span>${escapeHtml(o.order_no)} · ${escapeHtml(o.notes || "")}<br>
+          <small style="color:#888">取餐 ${pickup} · ${o.lines.length} 項${o.pickup_called_at ? " · 🔔 已叫號" : ""}</small></span>
+        <span class="price">$${total.toFixed(0)}</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="ghost" style="flex:1;padding:6px" ${o.pickup_called_at ? "disabled" : ""}
+          onclick="callForPickup('${o.id}')">${o.pickup_called_at ? "已叫號" : "🔔 叫號"}</button>
+        <button class="primary" style="flex:1;padding:6px"
+          onclick="collectOnlineTakeoutPrompt('${o.id}', ${total})">收款交付</button>
+      </div>
+    </div>`;
+  }).join("") + `</div>` : `<div class="empty">目前沒有待取的外帶單</div>`;
+  acts.append(mkBtn("關閉", "ghost", closeModal));
+}
+
+async function callForPickup(orderId) {
+  try {
+    await api(`/online-takeout/${orderId}/call`, { method: "POST" });
+    toast("已叫號 — 取餐看板已顯示");
+    showOnlineTakeout();
+  } catch (e) { toast(e.message, true); }
+}
+
+function collectOnlineTakeoutPrompt(orderId, total) {
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">收款並交付</div>
+    <div class="row"><label>應收</label><span class="price" style="align-self:center">$${total.toFixed(0)}</span></div>
+    <div class="row"><label>收現</label><input id="otTendered" type="number" value="${total}" min="${total}" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認收款", "primary", async () => {
+    const tendered = $("otTendered").value;
+    if (Number(tendered) < total) return toast("收現不足", true);
+    try {
+      const res = await api(`/online-takeout/${orderId}/collect`, {
+        method: "POST", body: JSON.stringify({ tendered: String(tendered) }),
+      });
+      toast(`已收款交付 · 找零 $${Number(res.change).toFixed(0)}`);
+      showOnlineTakeout();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showOnlineTakeout));
+}
+$("onlineTakeoutBtn").onclick = showOnlineTakeout;
+
+// ─── 自動折扣規則 (促銷: 滿額/時段自動套, docs/22 #10) ───
+async function showRules() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "促銷 · 自動折扣規則";
+  $("tmSub").textContent = "符合條件的帳單在報價/結帳時自動套用折得最多的一條，不用店員手動按。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入中…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let rules = [];
+  try { rules = await api(`/discount-rules?store_id=${encodeURIComponent(storeId)}&include_inactive=true`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  const cond = (r) => {
+    const parts = [];
+    if (r.min_subtotal) parts.push(`滿 $${Number(r.min_subtotal).toFixed(0)}`);
+    if (r.start_time) parts.push(`${r.start_time.slice(0, 5)}–${r.end_time.slice(0, 5)}`);
+    return parts.length ? parts.join(" · ") : "無條件";
+  };
+  const off = (r) => r.kind === "percent" ? `${(Number(r.value) * 100).toFixed(0)}% off` : `折 $${Number(r.value).toFixed(0)}`;
+  body.innerHTML = (rules.length ? `<div class="menu-list">` + rules.map((r) => `
+    <div class="menu-item" style="align-items:center;gap:8px${r.is_active ? "" : ";opacity:.45"}">
+      <span>${escapeHtml(r.name)}<br><small style="color:#888">${cond(r)} → ${off(r)}</small></span>
+      <button class="ghost" style="padding:4px 10px" onclick="toggleRule('${r.id}', ${r.is_active ? "false" : "true"})">
+        ${r.is_active ? "停用" : "啟用"}</button>
+    </div>`).join("") + `</div>` : `<div class="empty">尚無促銷規則</div>`)
+    + `<div style="font-weight:600;margin:14px 0 6px">新增規則</div>
+    <div class="row"><label>名稱</label><input id="drName" placeholder="例: 滿千折百" /></div>
+    <div class="row"><label>折法</label>
+      <select id="drKind"><option value="amount">折固定金額</option><option value="percent">打折 (%)</option></select>
+      <input id="drValue" type="number" placeholder="100 或 10(%)" min="0" /></div>
+    <div class="row"><label>滿額門檻</label><input id="drMin" type="number" placeholder="留空=不限" min="0" /></div>
+    <div class="row"><label>時段</label>
+      <input id="drStart" type="time" /><input id="drEnd" type="time" /></div>
+    <div class="sub">滿額與時段可只填一種; 打折輸入 10 代表 10% off。</div>`;
+  acts.append(mkBtn("新增", "primary", async () => {
+    const name = $("drName").value.trim();
+    const kind = $("drKind").value;
+    const raw = $("drValue").value;
+    if (!name || !raw) return toast("請填名稱與折扣值", true);
+    const payload = {
+      name, kind,
+      value: kind === "percent" ? String(Number(raw) / 100) : String(raw),
+      store_id: storeId,
+    };
+    if ($("drMin").value) payload.min_subtotal = String($("drMin").value);
+    if ($("drStart").value && $("drEnd").value) {
+      payload.start_time = $("drStart").value + ":00";
+      payload.end_time = $("drEnd").value + ":00";
+    }
+    try {
+      await api("/discount-rules", { method: "POST", body: JSON.stringify(payload) });
+      toast("促銷規則已建立"); showRules();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("關閉", "ghost", closeModal));
+}
+async function toggleRule(ruleId, active) {
+  try {
+    await api(`/discount-rules/${ruleId}`, { method: "PATCH", body: JSON.stringify({ is_active: active === "true" || active === true }) });
+    showRules();
+  } catch (e) { toast(e.message, true); }
+}
+$("rulesBtn").onclick = showRules;
+
+// ─── 候位面板 (現場排隊: 取號 → 叫號 → 帶位/棄號) ───
+async function showQueue() {
+  if (!storeId) return toast("先指定門市", true);
+  $("tmTitle").textContent = "現場候位";
+  $("tmSub").textContent = "取號 → 叫號 → 帶位入座；離開按棄號。";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入候位…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let rows = [];
+  try {
+    rows = (await api(`/queue?store_id=${encodeURIComponent(storeId)}&limit=100`))
+      .filter((q) => q.status === "waiting" || q.status === "called")
+      .sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
+  } catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  const waitMin = (iso) => Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  body.innerHTML = (rows.length ? `<div class="menu-list">` + rows.map((q) => `
+    <div class="menu-item">
+      <span>${q.queue_no ? `<b>${escapeHtml(q.queue_no)}</b> · ` : ""}${escapeHtml(q.contact_name)} · ${q.party_size} 位
+        <br><small style="color:#888">${q.status === "called" ? "🔔 已叫號" : "等待"} ${waitMin(q.joined_at)} 分</small></span>
+      <span>
+        ${q.status === "waiting" ? `<button class="ghost" style="padding:4px 10px"
+          onclick="queueAct('${q.id}','called','已叫號')">叫號</button>` : ""}
+        <button class="ghost" style="padding:4px 10px"
+          onclick="queuePreorderPrompt('${q.id}')">先點餐${q.order_id ? " ✓" : ""}</button>
+        <button class="ghost" style="padding:4px 10px"
+          onclick="seatQueueEntry('${q.id}', ${q.party_size})">帶位</button>
+        <button class="ghost" style="padding:4px 10px"
+          onclick="queueAct('${q.id}','abandoned','已棄號')">棄號</button>
+      </span>
+    </div>`).join("") + `</div>` : `<div class="empty">目前沒有人在候位</div>`);
+  acts.append(mkBtn("＋ 取號", "primary", queueJoinPrompt));
+}
+
+function queueJoinPrompt() {
+  const body = $("tmBody");
+  body.innerHTML = `
+    <div class="row"><label>稱呼</label><input id="qName" placeholder="王先生" maxlength="80" /></div>
+    <div class="row"><label>電話</label><input id="qPhone" placeholder="(可空)" maxlength="32" /></div>
+    <div class="row"><label>人數</label><input id="qParty" type="number" value="2" min="1" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("取號", "primary", async () => {
+    const name = $("qName").value.trim();
+    if (!name) return toast("請填稱呼", true);
+    try {
+      const q = await api("/queue", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: storeId, contact_name: name,
+          contact_phone: $("qPhone").value.trim() || null,
+          party_size: parseInt($("qParty").value || "1", 10),
+        }),
+      });
+      toast(`已取號${q.queue_no ? ` ${q.queue_no}` : ""}`);
+      showQueue();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showQueue));
+}
+
+async function queueAct(queueId, status, okMsg) {
+  try {
+    await api(`/queue/${queueId}/status`, {
+      method: "PATCH", body: JSON.stringify({ status }),
+    });
+    toast(okMsg); showQueue();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function seatQueueEntry(queueId, partySize) {
+  const free = floor.filter((t) => !t.is_occupied);
+  if (!free.length) return toast("目前沒有空桌", true);
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>入座桌位</label>
+    <select id="qSeatTable">${free.map((t) =>
+      `<option value="${t.id}">${escapeHtml(t.name)} (${t.seats} 座)</option>`).join("")}</select></div>
+    <div class="sub">若候位時已先點餐，帶位後會自動帶上這桌的帳單。</div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認帶位", "primary", async () => {
+    try {
+      // One atomic call: open the table, reparent any pre-order, mark seated.
+      await api(`/queue/${queueId}/seat`, {
+        method: "POST", body: JSON.stringify({ table_id: $("qSeatTable").value }),
+      });
+      closeModal(); toast("已帶位入座"); refresh();
+    } catch (e) { toast(e.message, true); }
+  }));
+  acts.append(mkBtn("返回", "ghost", showQueue));
+}
+
+async function queuePreorderPrompt(queueId) {
+  const items = await loadMenuCache();
+  const body = $("tmBody");
+  body.innerHTML = `<div style="font-weight:700;margin:6px 0">候位先點餐</div>
+    <div class="sub">先幫這組客人點好，帶位入座時會自動帶上桌帳單。</div>
+    <div class="menu-list" style="max-height:40vh;overflow:auto">
+      ${items.length ? items.map((m) => `<div class="menu-item"
+        style="cursor:pointer" onclick="queuePreorderAdd('${queueId}','${m.id}')">
+        <span>${escapeHtml(m.name)}</span><span class="price">$${Number(m.price).toFixed(0)}</span>
+      </div>`).join("") : `<div class="empty">尚無菜單品項</div>`}
+    </div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("完成", "primary", showQueue));
+}
+
+async function queuePreorderAdd(queueId, itemId) {
+  try {
+    await api(`/queue/${queueId}/lines`, {
+      method: "POST", body: JSON.stringify({ menu_item_id: itemId, qty: "1" }),
+    });
+    toast("已加點");
+  } catch (e) { toast(e.message, true); }
+}
+$("queueBtn").onclick = showQueue;
+
+// ─── real-time floor sync (P1.5) ───
+// A WebSocket pushes every table/order change to every tablet instantly. Each
+// frame carries a monotonic `seq`; we track the highest applied one so a
+// reconnect replays exactly what we missed (?after=lastSeq) — no gaps. When the
+// socket is down we fall back to the periodic poll below, so the board is never
+// stuck. The dot in the header shows live (green) vs polling (amber).
+function setLive(state) {
+  const d = $("liveDot"); if (!d) return;
+  d.style.color = state === "live" ? "#2ecc71" : state === "polling" ? "#e67e22" : "#888";
+  d.title = state === "live" ? "即時連線中" : state === "polling" ? "即時中斷 · 改用輪詢" : "未連線";
+}
+function wsUrl() {
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${location.host}/tables/ws`
+    + `?store_id=${encodeURIComponent(storeId)}&after=${lastSeq}`;
+}
+function connectWS() {
+  if (!storeId) return;
+  clearTimeout(reconnectTimer);
+  try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) { /* ignore */ }
+  try { ws = new WebSocket(wsUrl()); } catch (e) { setLive("polling"); scheduleReconnect(); return; }
+  ws.onopen = () => { wsBackoff = 1000; setLive("live"); };
+  ws.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch (e) { return; }
+    if (ev.type === "ping") return;
+    if (typeof ev.seq === "number" && ev.seq > lastSeq) lastSeq = ev.seq;
+    onFloorEvent(ev);
+  };
+  ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  ws.onclose = () => { setLive("polling"); scheduleReconnect(); };
+}
+function scheduleReconnect() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(connectWS, wsBackoff);
+  wsBackoff = Math.min(wsBackoff * 2, 15000);
+}
+function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 150); }
+function onFloorEvent(ev) {
+  // If the bill on screen is the one that changed, reload just that bill so the
+  // operator sees the other tablet's add/void live without a jarring board redraw.
+  if (openSessionId && ev.session_id === openSessionId && document.getElementById("orderPanel")) {
+    loadOrder({ id: openSessionId });
+  }
+  // Refresh the board underneath only when no modal is open (matches the manual
+  // poll's behaviour — closeModal() re-syncs the board on exit).
+  if (!document.querySelector(".overlay.show")) scheduleRefresh();
+}
+
+// ─── 交班/關帳 (guided cash-drawer open/close) ───
+async function showShift() {
+  if (!storeId) return toast("先指定門市", true);
+  if (!posMe) { toast("請先登入才能交班", true); return showLogin(); }
+  $("tmTitle").textContent = "交班/關帳";
+  const body = $("tmBody"); const acts = $("tmActions");
+  body.innerHTML = `<div class="empty">載入中…</div>`; acts.innerHTML = "";
+  show("tableModal");
+  let cur;
+  try { cur = await api(`/cash-drawer/current?store_id=${encodeURIComponent(storeId)}`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  if (!cur) return shiftOpenPrompt();
+  return shiftClosePrompt(cur);
+}
+
+function shiftOpenPrompt() {
+  $("tmSub").textContent = "尚未開班 — 輸入備用金開始這一班。";
+  const body = $("tmBody");
+  body.innerHTML = `<div class="row"><label>備用金</label>
+    <input id="openFloat" type="number" value="5000" min="0" /></div>`;
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("開班", "primary", async () => {
+    try {
+      await api("/cash-drawer/open", {
+        method: "POST",
+        body: JSON.stringify({
+          store_id: storeId, opened_by: posMe.employee_id,
+          opening_float: $("openFloat").value,
+        }),
+      });
+      closeModal(); toast("已開班");
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+
+async function shiftClosePrompt(drawer) {
+  $("tmSub").textContent = `開班於 ${fmt(drawer.opened_at)} · 備用金 $${Number(drawer.opening_float).toFixed(0)}`;
+  const body = $("tmBody");
+  body.innerHTML = `<div class="empty">計算應有現金…</div>`;
+  let exp;
+  try { exp = await api(`/cash-drawer/${drawer.id}/expected`); }
+  catch (e) { body.innerHTML = `<div class="empty">載入失敗: ${escapeHtml(e.message)}</div>`; return; }
+  body.innerHTML = `
+    <div class="menu-list">
+      <div class="menu-item"><span>備用金</span><span class="price">$${Number(exp.opening_float).toFixed(0)}</span></div>
+      <div class="menu-item"><span>現金銷售 (${exp.order_count} 筆)</span><span class="price">$${Number(exp.cash_sales).toFixed(0)}</span></div>
+      <div class="menu-item" style="font-weight:700"><span>應有現金</span><span class="price">$${Number(exp.expected_close).toFixed(0)}</span></div>
+    </div>
+    <div class="row" style="margin-top:10px"><label>實際清點</label>
+      <input id="closeActual" type="number" value="${exp.expected_close}" min="0" /></div>
+    <div id="varianceHint" class="sub"></div>`;
+  const inp = $("closeActual");
+  const hint = $("varianceHint");
+  const upd = () => {
+    const v = Number(inp.value || 0) - Number(exp.expected_close);
+    hint.textContent = v === 0 ? "剛好對帳" : v > 0 ? `多 $${v.toFixed(0)}` : `少 $${Math.abs(v).toFixed(0)}`;
+  };
+  inp.oninput = upd; upd();
+  const acts = $("tmActions"); acts.innerHTML = "";
+  acts.append(mkBtn("確認關帳", "primary", async () => {
+    try {
+      const res = await api(`/cash-drawer/${drawer.id}/close`, {
+        method: "POST",
+        body: JSON.stringify({ closed_by: posMe.employee_id, closing_actual: inp.value }),
+      });
+      closeModal();
+      const v = Number(res.variance);
+      toast(`關帳完成 · 淨營收 $${Number(res.net_sales).toFixed(0)} · 差異 ${v === 0 ? "$0" : (v > 0 ? "+" : "") + v.toFixed(0)}`);
+    } catch (e) { toast(e.message, true); }
+  }));
+}
+$("shiftBtn").onclick = showShift;
+
+// Boot: render once, go live, restore/prompt login. Viewing the board doesn't
+// require login; sensitive ops (退菜/折扣) do, and prompt for a manager PIN
+// override when the current user lacks the permission.
+loadStores().then(async () => {
+  refresh(); connectWS();
+  await refreshMe();
+  if (!posMe && storeId) showLogin();
+});
+setInterval(() => {
+  const live = ws && ws.readyState === WebSocket.OPEN;
+  if (storeId && !live && !document.querySelector(".overlay.show")) refresh();
+}, 5000);
+</script>
+</body>
+</html>

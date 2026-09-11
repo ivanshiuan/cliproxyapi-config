@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>線上候位</title>
+<style>
+  :root { --bg: #f7f5f2; --card: #ffffff; --ink: #1f2328; --sub: #6b7280;
+          --accent: #0f766e; --ok: #15803d; --line: #e5e7eb; --warn: #b45309; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         background: var(--bg); color: var(--ink); min-height: 100vh; }
+  header { background: var(--card); padding: 16px; border-bottom: 1px solid var(--line);
+           display: flex; align-items: baseline; gap: 10px; }
+  header h1 { font-size: 19px; }
+  header .sub { color: var(--sub); font-size: 13px; }
+  main { padding: 16px; max-width: 480px; margin: 0 auto; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+          padding: 18px; margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; margin-bottom: 12px; align-items: center; }
+  .row label { flex: 0 0 64px; color: var(--sub); font-size: 14px; }
+  .row input, .row select { flex: 1; border: 1px solid var(--line); border-radius: 10px;
+       padding: 12px; font-size: 16px; background: #fff; color: var(--ink); }
+  button.primary { width: 100%; background: var(--accent); color: #fff; border: 0;
+       border-radius: 12px; padding: 15px; font-size: 17px; font-weight: 700; cursor: pointer; }
+  button.primary:disabled { opacity: .45; }
+  button.ghost { width: 100%; background: none; border: 1px solid var(--line);
+       border-radius: 12px; padding: 12px; font-size: 15px; color: var(--sub);
+       margin-top: 10px; cursor: pointer; }
+  .status-num { text-align: center; padding: 8px 0 2px; }
+  .status-num .no { font-size: 64px; font-weight: 900; color: var(--accent); letter-spacing: 1px; }
+  .status-num .label { color: var(--sub); font-size: 14px; }
+  .pos { text-align: center; font-size: 17px; margin: 14px 0 4px; line-height: 1.7; }
+  .pos b { font-size: 26px; color: var(--accent); }
+  .called { text-align: center; background: #ecfdf5; border: 2px solid var(--ok);
+            border-radius: 14px; padding: 18px; font-size: 21px; font-weight: 800;
+            color: var(--ok); margin: 12px 0; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+  .gone { text-align: center; color: var(--warn); font-size: 16px; padding: 12px 0; }
+  .toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+           background: #1f2328; color: #fff; padding: 10px 18px; border-radius: 999px;
+           font-size: 14px; opacity: 0; transition: opacity .25s; z-index: 20; pointer-events: none; }
+  .toast.show { opacity: .96; }
+  .toast.err { background: #b91c1c; }
+  .empty { color: var(--sub); text-align: center; padding: 24px 0; }
+  .hint { color: var(--sub); font-size: 13px; text-align: center; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📱 線上候位</h1>
+  <span class="sub">取號後不用站在門口等，進度隨時看</span>
+</header>
+
+<main>
+  <div class="card" id="joinCard">
+    <div class="row"><label>姓名</label><input id="jName" placeholder="怎麼稱呼你" /></div>
+    <div class="row"><label>電話</label><input id="jPhone" type="tel" placeholder="選填, 叫號好聯絡" /></div>
+    <div class="row"><label>人數</label>
+      <select id="jParty">
+        <option>1</option><option selected>2</option><option>3</option><option>4</option>
+        <option>5</option><option>6</option><option>7</option><option>8</option>
+        <option>9</option><option>10</option>
+      </select>
+    </div>
+    <button class="primary" id="joinBtn">取號候位</button>
+  </div>
+
+  <div class="card" id="statusCard" style="display:none">
+    <div class="status-num">
+      <div class="label">你的候位號碼</div>
+      <div class="no" id="myNo"></div>
+    </div>
+    <div id="statusBody"><div class="empty">載入中…</div></div>
+    <button class="ghost" id="cancelBtn">取消候位</button>
+  </div>
+  <div class="hint" id="hint" style="display:none">進度每 8 秒自動更新，可以先去逛逛</div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// /waitlist/?store=<uuid> — 遠端線上候位 (P9.2, docs/23 G6)。
+// 取號: POST /queue (queue_no 留空由伺服器配 W001 式流水號)。
+// 進度: 輪詢 GET /queue/board — 公開安全端點, 只有號碼/人數/狀態,
+// 自己的排位用自己的 queue_no 在前端算, 不暴露任何人的姓名電話。
+const API = "";
+const storeId = new URLSearchParams(location.search).get("store");
+const LS_KEY = storeId ? `waitlist_${storeId}` : null;
+let mine = null;   // {id, queue_no}
+let pollTimer = null;
+
+const $ = (id) => document.getElementById(id);
+function toast(msg, isErr) { const t = $("toast"); t.textContent = msg;
+  t.className = "toast show" + (isErr ? " err" : "");
+  setTimeout(() => (t.className = "toast"), 2600); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function api(path, opts) {
+  const res = await fetch(API + path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const j = await res.json(); detail = j.error?.message || detail; } catch (e) { /* ignore */ }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+async function join() {
+  const name = $("jName").value.trim();
+  if (!name) return toast("請填姓名", true);
+  $("joinBtn").disabled = true;
+  try {
+    const entry = await api("/queue", {
+      method: "POST",
+      body: JSON.stringify({
+        store_id: storeId,
+        contact_name: name,
+        contact_phone: $("jPhone").value.trim() || null,
+        party_size: Number($("jParty").value),
+      }),
+    });
+    mine = { id: entry.id, queue_no: entry.queue_no };
+    localStorage.setItem(LS_KEY, JSON.stringify(mine));
+    showStatus();
+  } catch (e) { toast(e.message, true); }
+  $("joinBtn").disabled = false;
+}
+
+function showJoin() {
+  clearInterval(pollTimer);
+  mine = null;
+  if (LS_KEY) localStorage.removeItem(LS_KEY);
+  $("joinCard").style.display = "";
+  $("statusCard").style.display = "none";
+  $("hint").style.display = "none";
+}
+
+function showStatus() {
+  $("joinCard").style.display = "none";
+  $("statusCard").style.display = "";
+  $("hint").style.display = "";
+  $("myNo").textContent = mine.queue_no || "—";
+  refresh();
+  clearInterval(pollTimer);
+  pollTimer = setInterval(refresh, 8000);
+}
+
+async function refresh() {
+  if (!mine) return;
+  let board;
+  try { board = await api(`/queue/board?store_id=${encodeURIComponent(storeId)}`); }
+  catch (e) { return; /* keep last good state on transient failure */ }
+  const el = $("statusBody");
+  const idx = board.entries.findIndex((x) => x.queue_no === mine.queue_no);
+  if (idx === -1) {
+    // 不在等待/已叫清單裡 = 已入座或已棄號 — 進度頁功成身退。
+    el.innerHTML = `<div class="gone">這個號碼已完成或已取消。<br>需要再候位請重新取號。</div>`;
+    clearInterval(pollTimer);
+    return;
+  }
+  const entry = board.entries[idx];
+  if (entry.status === "called") {
+    el.innerHTML = `<div class="called">🔔 輪到你了！請至門口找帶位人員</div>`;
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    return;
+  }
+  const ahead = board.entries.slice(0, idx).filter((x) => x.status === "waiting").length;
+  el.innerHTML = `<div class="pos">前面還有 <b>${ahead}</b> 組<br>
+    <span style="color:var(--sub);font-size:14px">目前等待中共 ${board.waiting_count} 組</span></div>`;
+}
+
+async function cancel() {
+  if (!mine) return;
+  if (!confirm("確定要取消候位嗎?")) return;
+  try {
+    await api(`/queue/${mine.id}/status`, {
+      method: "PATCH", body: JSON.stringify({ status: "abandoned", reason: "顧客線上自行取消" }),
+    });
+    toast("已取消候位");
+    showJoin();
+  } catch (e) { toast(e.message, true); }
+}
+
+$("joinBtn").onclick = join;
+$("cancelBtn").onclick = cancel;
+
+if (!storeId) {
+  $("joinCard").innerHTML = `<div class="empty">連結不完整 — 請重新掃描店門口的 QR Code。</div>`;
+} else {
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved) { try { mine = JSON.parse(saved); } catch (e) { mine = null; } }
+  if (mine && mine.id) showStatus();
+}
+</script>
+</body>
+</html>

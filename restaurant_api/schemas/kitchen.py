@@ -66,6 +66,9 @@ class KitchenLineResponse(BaseModel):
     store_id: UUID
     business_date: str  # ISO date — kitchen UIs treat it as opaque
     menu_item_id: UUID
+    # Joined display fields (P3) — the KDS card renders without extra fetches.
+    item_name: str | None = None
+    table_name: str | None = None
     qty: float
     notes: str | None
     kitchen_station: KitchenStation

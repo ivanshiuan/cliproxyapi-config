@@ -7,7 +7,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, ForeignKey, Index, String
+from sqlalchemy import Boolean, Date, ForeignKey, Index, String, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -63,6 +63,10 @@ class Employee(TenantScopedMixin, TimestampedMixin, SoftDeleteMixin, Base):
         SQLEnum(EmployeeRole, name="employee_role", native_enum=False, length=32),
         nullable=False,
     )
+    # POS PIN credential (PBKDF2 hash via services/pin_security). Nullable:
+    # an employee without a PIN simply can't log in to the POS yet — the boss
+    # sets it from the admin console. Never stores the raw PIN.
+    pin_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     hourly_wage: Mapped[Decimal] = mapped_column(Money, nullable=False)
     monthly_salary: Mapped[Decimal | None] = mapped_column(Money, nullable=True)
     hired_on: Mapped[date] = mapped_column(Date, nullable=False)
