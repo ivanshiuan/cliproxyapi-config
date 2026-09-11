@@ -1,0 +1,49 @@
+# 來源登記簿 — fetch 模組讀取此檔決定抓哪些 URL
+# 被 403 / 反爬的來源走 inbox 路線（瀏覽器另存新檔丟 data/subsidies/inbox/）
+
+sources:
+  - id: sbir
+    name: "SBIR 小型企業創新研發計畫"
+    url: "https://sbir.org.tw"
+    notes: "隨到隨審"
+
+  - id: siir
+    name: "SIIR 服務業創新研發計畫"
+    url: "https://gcis.nat.gov.tw/neo-s/Web/Default.aspx"
+    notes: "115 年度已截止"
+
+  - id: tcloud
+    name: "臺灣雲市集 TCloud"
+    url: "https://tcloud.gov.tw"
+    notes: "數位點數補助"
+
+  - id: small-biz-training
+    name: "小型企業人力提升計畫"
+    url: "https://onjobtraining.wda.gov.tw/"
+    notes: "小人提 — 50 人以下"
+
+  - id: energy-equipment
+    name: "商業服務業節能設備補助"
+    url: "https://www.essc.org.tw/subsidy/change_apply/info.aspx"
+    notes: "冷氣冰箱燈具"
+
+  - id: ai-shop
+    name: "提升商業服務業營運效能強化韌性計畫"
+    url: "https://aishop.smebiz.org.tw"
+    notes: "AI 導入補助"
+
+  - id: youth-startup-loan
+    name: "青年創業及啟動金貸款"
+    url: "https://startup.sme.gov.tw/home/modules/funding/detail/?sId=15"
+    notes: "貸款 + 利息補貼"
+
+  - id: mol-employment
+    name: "僱用獎助措施"
+    url: "https://www.taiwanjobs.gov.tw/"
+    notes: "每人每月 6000"
+
+  - id: arther-hub
+    name: "Arther TalentElevate 補助推薦頁"
+    url: "https://arther.talentelevate.co/get?contact_id=EK1H6wBFbyRV8WpKGDad"
+    notes: "個人化行銷頁 — 需瀏覽器開啟，無法直接抓取（403）。走 inbox 路線"
+    inbox_only: true
