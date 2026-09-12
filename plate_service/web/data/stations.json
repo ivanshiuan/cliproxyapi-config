@@ -1,0 +1,92 @@
+[
+ {
+  "code": "TPE-C",
+  "name": "臺北市區監理所",
+  "region": "北部"
+ },
+ {
+  "code": "TPE-R",
+  "name": "臺北區監理所（樹林）",
+  "region": "北部"
+ },
+ {
+  "code": "KEE",
+  "name": "基隆監理站",
+  "region": "北部"
+ },
+ {
+  "code": "TAO",
+  "name": "桃園監理站",
+  "region": "北部"
+ },
+ {
+  "code": "HSC",
+  "name": "新竹區監理所",
+  "region": "北部"
+ },
+ {
+  "code": "MIA",
+  "name": "苗栗監理站",
+  "region": "中部"
+ },
+ {
+  "code": "TXG",
+  "name": "臺中區監理所",
+  "region": "中部"
+ },
+ {
+  "code": "CHW",
+  "name": "彰化監理站",
+  "region": "中部"
+ },
+ {
+  "code": "NAN",
+  "name": "南投監理站",
+  "region": "中部"
+ },
+ {
+  "code": "CYI",
+  "name": "嘉義區監理所",
+  "region": "南部"
+ },
+ {
+  "code": "TNN",
+  "name": "臺南監理站",
+  "region": "南部"
+ },
+ {
+  "code": "KHH-C",
+  "name": "高雄市區監理所",
+  "region": "南部"
+ },
+ {
+  "code": "KHH-R",
+  "name": "高雄區監理所",
+  "region": "南部"
+ },
+ {
+  "code": "PIF",
+  "name": "屏東監理站",
+  "region": "南部"
+ },
+ {
+  "code": "ILA",
+  "name": "宜蘭監理站",
+  "region": "東部"
+ },
+ {
+  "code": "HUN",
+  "name": "花蓮監理站",
+  "region": "東部"
+ },
+ {
+  "code": "TTT",
+  "name": "臺東監理站",
+  "region": "東部"
+ },
+ {
+  "code": "PEH",
+  "name": "澎湖監理站",
+  "region": "離島"
+ }
+]

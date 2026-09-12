@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>選牌通 PlateGo｜全台監理站車牌選號查詢・標牌競標情報・代標服務</title>
+  <meta name="description" content="一站查詢全台監理所站可選車牌號碼，即時標牌競標公告與成交行情，並提供吉祥號碼代標選號服務。免費、即時、支援手機。">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A2%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav-bar">
+    <a class="brand" href="index.html">
+      <span class="brand-plate">選牌通</span> PlateGo
+    </a>
+    <button class="nav-toggle" aria-label="開啟選單" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links">
+      <li><a href="index.html#search" class="active">選號查詢</a></li>
+      <li><a href="auction.html">標牌競標</a></li>
+      <li><a href="auction.html#records">成交行情</a></li>
+      <li><a href="index.html#services">服務項目</a></li>
+      <li><a href="index.html#faq">常見問題</a></li>
+      <li class="nav-cta"><a href="index.html#agent">委託代標</a></li>
+    </ul>
+  </div>
+</header>
+
+<!-- ===== Hero ===== -->
+<section class="hero">
+  <div class="container">
+    <h1>好號碼，<em>一次看遍全台監理站</em></h1>
+    <p class="lead">
+      不用一站一站查、不用重複輸入驗證碼。選牌通整合全台監理所站的可選號牌與標售公告，
+      手機也能滑著選，看中的號碼一鍵前往監理服務網完成選號。
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-gold" href="#search">立即查詢可選號牌</a>
+      <a class="btn btn-ghost" href="auction.html">看標牌競標公告</a>
+    </div>
+    <div class="hero-stats">
+      <div class="stat"><div class="num" id="stat-plates">—</div><div class="cap">目前可選號牌</div></div>
+      <div class="stat"><div class="num" id="stat-stations">—</div><div class="cap">涵蓋監理所站</div></div>
+      <div class="stat"><div class="num" id="stat-auctions">—</div><div class="cap">競標中吉祥號</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Search ===== -->
+<section class="section" id="search">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">Plate Search</span>
+      <h2>全國可選號牌查詢</h2>
+      <p>依車種、監理所站與號碼條件篩選，吉祥度自動評分，喜歡的先收藏再去搶。</p>
+    </div>
+
+    <div class="search-panel">
+      <div class="filter-grid">
+        <div class="field">
+          <label for="f-type">車種</label>
+          <select id="f-type">
+            <option value="">全部車種</option>
+            <option value="car">自用小客車（白牌黑字）</option>
+            <option value="taxi">營業小客車（白牌紅字）</option>
+            <option value="ev">電動小客車（E 開頭）</option>
+            <option value="moto">普通重型機車</option>
+            <option value="moto_yellow">大型重機（黃牌）</option>
+            <option value="moto_red">大型重機（紅牌）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-station">監理所站</label>
+          <select id="f-station">
+            <option value="">全台所有監理所站</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-region">區域</label>
+          <select id="f-region">
+            <option value="">全部區域</option>
+            <option>北部</option><option>中部</option><option>南部</option>
+            <option>東部</option><option>離島</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-keyword">號碼關鍵字</label>
+          <div class="keyword-wrap">
+            <select id="f-mode">
+              <option value="contains">包含</option>
+              <option value="ends">結尾</option>
+              <option value="starts">開頭</option>
+            </select>
+            <input id="f-keyword" type="text" inputmode="numeric" maxlength="4" placeholder="例：888、168">
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-chips" id="quick-chips">
+        <button class="chip" data-quick="has8">含 8</button>
+        <button class="chip" data-quick="no4">避開 4</button>
+        <button class="chip" data-quick="repeat">疊字號</button>
+        <button class="chip" data-quick="straight">順子號</button>
+        <button class="chip" data-quick="mirror">對稱號</button>
+        <button class="chip" data-quick="lucky80">吉祥度 80+</button>
+      </div>
+    </div>
+
+    <div class="result-meta">
+      <span id="result-count">載入中…</span>
+      <span>
+        排序：
+        <select id="f-sort" style="padding:6px 8px;border:1.5px solid var(--line);border-radius:8px;">
+          <option value="lucky">吉祥度高→低</option>
+          <option value="date">最快可選</option>
+          <option value="plate">號碼 A→Z</option>
+        </select>
+      </span>
+    </div>
+
+    <div class="plate-grid" id="plate-grid"></div>
+    <div class="empty-state hidden" id="empty-state">
+      找不到符合條件的號牌。試著放寬條件，或到 <a href="auction.html">標牌競標</a> 看看有沒有你要的吉祥號。
+    </div>
+    <div class="load-more-wrap">
+      <button class="btn btn-navy" id="load-more">載入更多</button>
+    </div>
+
+    <div class="mt-lg text-center" style="color:var(--ink-soft);font-size:0.88rem;">
+      ⭐ 已收藏 <b id="fav-count">0</b> 面號牌 ·
+      選定後請至
+      <a href="https://www.mvdis.gov.tw/m3-emv-plate/webpickno/queryPickNo" target="_blank" rel="noopener">監理服務網</a>
+      完成選號與繳費（自小客 NT$2,000／機車 NT$1,000 起）
+    </div>
+  </div>
+</section>
+
+<!-- ===== Services ===== -->
+<section class="section alt" id="services">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">Services</span>
+      <h2>三種方式，拿到你要的號碼</h2>
+      <p>從免費查詢到全程代辦，依照號碼的稀有度選擇最適合的路徑。</p>
+    </div>
+    <div class="card-grid cols-3">
+      <div class="info-card">
+        <div class="icon">🔍</div>
+        <h3>自助選號（免費）</h3>
+        <p>整合全台監理所站可選號牌，一次篩選、即時更新。看中號碼直接連到監理服務網自行完成選號，全程免費。</p>
+      </div>
+      <div class="info-card featured">
+        <span class="flag">主力服務</span>
+        <div class="icon">🏁</div>
+        <h3>吉祥號代標競標</h3>
+        <p>8888、6666 這類吉祥號由監理站公開標售。我們提供行情估價、出價策略與全程代辦，用合理成本幫你標到心目中的號碼。</p>
+      </div>
+      <div class="info-card">
+        <div class="icon">🔔</div>
+        <h3>搶號通知</h3>
+        <p>設定想要的號碼條件（生日、幸運數字、避 4 帶 8），新一批號牌釋出或吉祥號開標時，LINE 第一時間通知你。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== How it works ===== -->
+<section class="section">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">How It Works</span>
+      <h2>代標服務怎麼進行？</h2>
+    </div>
+    <div class="steps">
+      <div class="step-item">
+        <div class="no"></div>
+        <div>
+          <h4>免費諮詢</h4>
+          <p>告訴我們你想要的號碼與預算，我們用歷史成交行情資料庫評估合理得標價位。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="no"></div>
+        <div>
+          <h4>簽署委託</h4>
+          <p>簽訂委託書並約定出價上限。競標以你本人（或公司）名義進行，號牌權利完全屬於你。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="no"></div>
+        <div>
+          <h4>策略出價</h4>
+          <p>我們盯場到截標，依對手出價節奏調整策略，在上限內爭取最低得標價。</p>
+        </div>
+      </div>
+      <div class="step-item">
+        <div class="no"></div>
+        <div>
+          <h4>得標領牌</h4>
+          <p>協助完成繳費、保留號牌與領牌流程。沒標到，服務費全額退還。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== Pricing ===== -->
+<section class="section alt" id="pricing">
+  <div class="container">
+    <div class="section-head">
+      <span class="kicker">Pricing</span>
+      <h2>服務方案</h2>
+      <p>查詢永久免費。付費方案只在你需要「更快、更省力拿到號碼」時才登場。</p>
+    </div>
+    <div class="card-grid cols-3">
+      <div class="info-card price-card">
+        <h3>自助查詢</h3>
+        <div class="price">免費</div>
+        <ul>
+          <li>全台監理所站號牌整合查詢</li>
+          <li>吉祥度評分與收藏清單</li>
+          <li>標牌公告與成交行情瀏覽</li>
+        </ul>
+        <a class="btn btn-navy btn-sm" href="#search">開始查詢</a>
+      </div>
+      <div class="info-card price-card">
+        <h3>搶號通知</h3>
+        <div class="price">NT$99 <small>/ 月</small></div>
+        <ul>
+          <li>自訂號碼條件 LINE 即時通知</li>
+          <li>新號牌釋出提醒（每日更新）</li>
+          <li>吉祥號開標／截標倒數提醒</li>
+        </ul>
+        <a class="btn btn-navy btn-sm" href="#agent">加入通知</a>
+      </div>
+      <div class="info-card price-card featured">
+        <span class="flag">主力服務</span>
+        <h3>代標競標</h3>
+        <div class="price">得標價 10%<small>（最低 NT$3,000）</small></div>
+        <ul>
+          <li>行情估價 + 出價策略規劃</li>
+          <li>全程盯場代操，截標前守盤</li>
+          <li>沒標到不收服務費</li>
+          <li>得標後繳費、領牌全程協助</li>
+        </ul>
+        <a class="btn btn-gold btn-sm" href="#agent">免費諮詢</a>
+      </div>
+    </div>
+    <p class="text-center mt-lg" style="color:var(--ink-soft);font-size:0.82rem;">
+      ※ 標牌底價與選號規費由監理機關收取，非本站費用。方案內容以正式服務條款為準。
+    </p>
+  </div>
+</section>
+
+<!-- ===== FAQ ===== -->
+<section class="section" id="faq">
+  <div class="container" style="max-width:820px;">
+    <div class="section-head">
+      <span class="kicker">FAQ</span>
+      <h2>常見問題</h2>
+    </div>
+    <details class="faq-item">
+      <summary>這裡查到的號牌可以直接購買嗎？</summary>
+      <div class="faq-body">不行。本站提供的是「整合查詢」，實際選號、競標出價與繳費都在交通部公路局監理服務網完成。我們的價值是幫你省去逐站查詢、重複輸入驗證碼的時間，以及提供代標代辦服務。</div>
+    </details>
+    <details class="faq-item">
+      <summary>吉祥號碼（例如 8888）要怎麼拿到？</summary>
+      <div class="faq-body">監理機關會將特殊吉祥號碼另行公開標售，價高者得，底價依號碼等級從數千元起。一般號碼則可付選號費自選（自小客 NT$2,000、機車 NT$1,000 起）。競標有截止時間與出價規則，委託我們代標可以避免錯過截標或出價策略失誤。</div>
+    </details>
+    <details class="faq-item">
+      <summary>標到的車牌可以轉賣嗎？</summary>
+      <div class="faq-body">車牌號碼不能單獨買賣或轉讓——號牌權利跟著車主與車輛走。所以代標一定是以「你本人或你的公司」名義得標，我們只負責策略與代操，權利從頭到尾都是你的。</div>
+    </details>
+    <details class="faq-item">
+      <summary>代標需要提供帳號密碼嗎？個資安全嗎？</summary>
+      <div class="faq-body">競標需以委託人的監理服務網會員身分進行。我們採書面委託 + 授權範圍明確化（僅限指定號牌、指定出價上限），過程全程留存紀錄，結案後即銷毀相關憑證，符合個資法規範。你也可以選擇「教練模式」：我們給策略，出價由你自己按。</div>
+    </details>
+    <details class="faq-item">
+      <summary>沒有標到會收費嗎？</summary>
+      <div class="faq-body">不會。代標服務費採成功報酬制——沒得標分文不收，得標才收取得標價 10%（最低 NT$3,000）。行情估價與諮詢永遠免費。</div>
+    </details>
+    <details class="faq-item">
+      <summary>資料多久更新一次？</summary>
+      <div class="faq-body">可選號牌與標售公告每日同步監理服務網公開資料；競標中的出價資訊於開標期間加密輪詢更新。頁面上顯示的開放日期與底價，最終仍以監理服務網公告為準。</div>
+    </details>
+  </div>
+</section>
+
+<!-- ===== CTA ===== -->
+<section class="cta-band" id="agent">
+  <div class="container">
+    <h2>看中了哪個號碼？讓我們幫你拿下</h2>
+    <p>加 LINE 免費估價：告訴我們號碼與預算，30 分鐘內回覆行情分析。</p>
+    <a class="btn btn-gold" href="https://line.me/R/ti/p/@plategoTW" target="_blank" rel="noopener">加 LINE 免費諮詢</a>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div>
+        <h4>選牌通 PlateGo</h4>
+        <p>全台車牌選號整合查詢與代標服務。<br>好號碼不必碰運氣，交給懂行情的人。</p>
+      </div>
+      <div>
+        <h4>快速連結</h4>
+        <a href="index.html#search">選號查詢</a>
+        <a href="auction.html">標牌競標</a>
+        <a href="auction.html#records">成交行情</a>
+        <a href="index.html#pricing">服務方案</a>
+      </div>
+      <div>
+        <h4>官方資源</h4>
+        <a href="https://www.mvdis.gov.tw/m3-emv-plate/webpickno/queryPickNo" target="_blank" rel="noopener">監理服務網・選號</a>
+        <a href="https://www.mvdis.gov.tw/m3-emv-plate/bid/announce" target="_blank" rel="noopener">監理服務網・標牌公告</a>
+        <a href="https://www.mvdis.gov.tw/m3-emv-plate/bid/queryBid" target="_blank" rel="noopener">監理服務網・標售紀錄</a>
+      </div>
+    </div>
+    <div class="disclaimer">
+      本站為民間資訊整合服務，非交通部公路局或任何監理機關之官方網站。號牌資料整理自監理服務網公開資訊，
+      實際可選狀態、底價與規費以監理機關公告為準。車牌號碼依法不得單獨買賣轉讓；本站代標服務僅以委託人名義
+      進行競標之代辦與顧問，不涉及號牌權利之移轉。示範站台資料為模擬展示用途。
+      © 2026 選牌通 PlateGo
+    </div>
+  </div>
+</footer>
+
+<script src="js/common.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
