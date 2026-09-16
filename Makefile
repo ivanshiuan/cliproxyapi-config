@@ -254,3 +254,20 @@ status: ## Print repo status: branch, commits, last-modified files
 	@echo
 	@echo "tracked files: $$(git ls-files | wc -l)"
 	@echo "untracked:     $$(git ls-files --others --exclude-standard | wc -l)"
+
+# ----- WrenAI (語意化 SQL / GenBI) ---------------------------------------
+
+.PHONY: wren
+wren: ## 【一鍵·冪等】裝 CLI + 建 demo + 驗證查詢,可重複跑 → 你只需最後審核
+	bash scripts/wren_up.sh
+
+.PHONY: wren-install
+wren-install: ## 安裝/更新 wren CLI(uv tool);補回 ephemeral 容器的執行檔
+	bash scripts/setup_wren.sh
+
+.PHONY: wren-demo
+wren-demo: ## 跑 WrenAI 餐飲 demo:重建資料 + 編譯 MDL + 跑範例查詢(需先 make wren-install)
+	@command -v wren >/dev/null 2>&1 || { echo "wren 未安裝 → 先跑: make wren-install"; exit 1; }
+	bash wren/demo/build.sh
+	@echo "=== 每家店營收(自然語言→受治理 SQL→Wren 引擎) ==="
+	@WREN_PROJECT_HOME=$(CURDIR)/wren/demo wren --sql "SELECT s.name AS store, s.city, COUNT(o.order_id) AS orders, SUM(o.total) AS revenue FROM orders o JOIN stores s ON o.store_id=s.store_id GROUP BY 1,2 ORDER BY revenue DESC" --connection-info '{"datasource":"duckdb","url":"$(CURDIR)/wren/demo","format":"duckdb"}' -o table
