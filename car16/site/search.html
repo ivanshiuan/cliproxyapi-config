@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>選號查詢 — car16</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main>
+  <h2>選號查詢</h2>
+  <div class="card">
+    <div class="field-row">
+      <div>
+        <label>號碼樣式（* 任意、? 單一字元）</label>
+        <input id="pattern" placeholder="例：*-8888、BX?-16*" maxlength="10">
+      </div>
+      <div>
+        <label>監理所</label>
+        <select id="region"><option value="">全部</option></select>
+      </div>
+      <div>
+        <label>車種</label>
+        <select id="vehicle_type"><option value="">全部</option></select>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn" id="go">查詢</button>
+      <span class="muted" style="font-size:13.5px">吉祥號快選：</span>
+      <button class="btn ghost sm lucky" data-p="*-8888">8888</button>
+      <button class="btn ghost sm lucky" data-p="*-168*">168</button>
+      <button class="btn ghost sm lucky" data-p="*-999*">999</button>
+      <button class="btn ghost sm lucky" data-p="*-5566">5566</button>
+    </div>
+    <div class="error-box" id="err"></div>
+  </div>
+
+  <div id="meta" class="notice" style="display:none"></div>
+  <div id="quota" class="muted" style="font-size:13.5px;margin:8px 0"></div>
+
+  <div class="card table-scroll" style="margin-top:8px">
+    <table class="data">
+      <thead><tr><th>車牌號碼</th><th>監理所</th><th>車種</th><th></th></tr></thead>
+      <tbody id="rows"><tr><td colspan="4" class="muted">輸入條件後按「查詢」</td></tr></tbody>
+    </table>
+    <div id="capped" style="display:none;text-align:center;padding:14px">
+      <span class="muted">免費會員僅顯示前 20 筆 — </span><a href="index.html#pricing">升級看全部結果</a>
+    </div>
+  </div>
+  <div style="margin-top:10px;text-align:right">
+    <button class="btn ghost sm" id="export" style="display:none">匯出 CSV</button>
+  </div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/search.js"></script>
+</body>
+</html>
