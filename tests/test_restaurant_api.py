@@ -36,7 +36,7 @@ def test_root_endpoint():
 def test_models_metadata_has_30_tables():
     """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national
     + 4 marketing-campaign (wheel-spin lottery) + 1 stored-value + 1 referral
-    + 1 UGC = 33 total."""
+    + 1 UGC + 3 procurement (suppliers, purchase_orders, po_lines) = 36 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -81,10 +81,41 @@ def test_models_metadata_has_30_tables():
         "referrals",
         # UGC (打卡 / 評論換獎) (1)
         "ugc_submissions",
+        # Procurement — supplier master + purchase orders (3)
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_lines",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 33
+    assert len(Base.metadata.tables) == 36
+
+
+def test_odoo_sync_job_registered_at_0445_taipei():
+    """The nightly Odoo AP sync is wired exactly once with the agreed guards.
+
+    The scheduler is only constructed and inspected — never started.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.triggers.cron import CronTrigger
+
+    from restaurant_api.jobs import _register
+
+    scheduler = AsyncIOScheduler()
+    _register(scheduler)
+    pending = [item[0] for item in scheduler._pending_jobs]
+    odoo_jobs = [j for j in pending if j.id == "odoo_sync"]
+    assert len(odoo_jobs) == 1  # registered exactly once
+    job = odoo_jobs[0]
+    assert job.max_instances == 1
+    assert job.coalesce is True
+    assert job.misfire_grace_time == 600
+    trigger = job.trigger
+    assert isinstance(trigger, CronTrigger)
+    fields = {f.name: str(f) for f in trigger.fields}
+    assert fields["hour"] == "4"
+    assert fields["minute"] == "45"
+    assert str(trigger.timezone) == "Asia/Taipei"
 
 
 def test_money_columns_are_numeric_14_4():

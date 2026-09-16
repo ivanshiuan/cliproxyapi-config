@@ -52,6 +52,12 @@ from .orders import (
     OrderStatus,
     PaymentMethod,
 )
+from .procurement import (
+    PurchaseOrder,
+    PurchaseOrderLine,
+    PurchaseOrderStatus,
+    Supplier,
+)
 from .public_holidays import PublicHoliday
 from .reservations import (
     QueueStatus,
@@ -115,6 +121,11 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "TimeClock",
     # cash drawer
     "CashDrawerSession",
+    # procurement (suppliers, purchase orders)
+    "Supplier",
+    "PurchaseOrder",
+    "PurchaseOrderLine",
+    "PurchaseOrderStatus",
     # public holiday calendar (Taiwan)
     "PublicHoliday",
     # audit trail

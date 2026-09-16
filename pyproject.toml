@@ -130,6 +130,9 @@ ignore = ["E501"]  # line length handled by formatter
 "scripts/line_check.py" = ["RUF001"]
 # Compliance disclaimer is canonical Chinese — fullwidth comma is correct.
 "tigerline/compliance_guard.py" = ["RUF001"]
+# 部署腳本的 docstring/註解/CLI 輸出刻意用中文寫給 Ivan 看。
+"scripts/deploy_staging.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_deploy_staging.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"

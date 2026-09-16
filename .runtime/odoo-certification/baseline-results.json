@@ -1,0 +1,13 @@
+{
+  "install": {"cmd": "make install", "exit": 0, "log": "raw-logs/baseline-install.log"},
+  "pip_check": {"exit": 0, "result": "No broken requirements found."},
+  "format_repo_wide": {"exit": 1, "result": "102 legacy files unformatted", "classification": "PRE_EXISTING — repo full-check gate (Makefile:164) has never included 'ruff format --check'; all 13 branch-changed files ARE format-clean", "log": "raw-logs/baseline-format.log"},
+  "ruff": {"exit": 0, "result": "All checks passed!", "log": "raw-logs/baseline-ruff.log"},
+  "pyright": {"exit": 0, "result": "0 errors, 0 warnings, 0 informations", "log": "raw-logs/baseline-pyright.log"},
+  "pytest_full": {"exit": 1, "result": "661 passed, 1 skipped, 1 failed", "log": "raw-logs/baseline-pytest.log",
+    "failed_test": {"id": "tests/routers/test_growth_endpoints.py::test_http_segments_and_broadcast", "classification": "EXTERNAL_DEPENDENCY_BLOCKED", "cause": "live HTTPS call to api.line.me blocked by sandbox egress proxy (httpx.ProxyError 403)", "predates_branch": "file last modified at a8dd147, ancestor of branch base 656ed1f", "unrelated_to_odoo": "imports zero symbols from integrations/odoo", "deterministic_alternative": "tests/test_line_integration.py exercises the same HttpLineMessenger path via httpx.MockTransport (passing)"}},
+  "migration_from_zero": {"db": "resto_cert (scratch)", "exit": 0, "head": "8307a94acb62", "log": "raw-logs/migration-from-zero.log"},
+  "migration_downgrade_roundtrip": {"exit": 0, "evidence": "procurement tables 3 -> 0 (downgrade to 41772db92af3) -> 3 (re-upgrade)", "logs": ["raw-logs/migration-downgrade.log","raw-logs/migration-reupgrade.log"]},
+  "migration_no_drift": {"result": "No new upgrade operations detected."},
+  "db_smoke": {"exit": 0, "result": "insert + select + FK relationships work end-to-end", "log": "raw-logs/baseline-dbsmoke.log"}
+}

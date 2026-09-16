@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12"]
+
+    # Real Postgres + pgvector so we can run migrations and DB smoke against
+    # the actual engine (catches SQL syntax / Alembic-autogen drift that
+    # mock-only tests miss).
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16

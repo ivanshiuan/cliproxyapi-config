@@ -174,6 +174,16 @@
 - Ivan 在 GitHub（手機或電腦）審核後按 Merge 進 main；要改就在同個 PR 上修。
 - 例外：Ivan 明講「先不要開 PR / 留分支就好」時就不開。
 
+### 交付原則：自動化取代 Runbook（Ivan 的鐵律 — 不用每次問）
+- **永遠不要把一串要 Ivan 手動照做的步驟（Runbook / SOP / checklist）當成交付物丟給他執行。**
+  凡是「有操作步驟」的東西，一律做成 **idempotent one-command automation**：
+  - **一支腳本 / 一個 `make` 目標** 就能從頭跑到尾（例：`make deploy-staging`）。
+  - **可重跑（idempotent）**：先查現狀再收斂，create-if-absent、不重複建、不亂 rotate secret；跑第二次是安全的 no-op。
+  - **預設 dry-run/plan**：先印「會做什麼」，不動真格；`apply` 才動手。
+  - **驗收也自動化**：把 checklist 寫成程式判斷（assert），輸出機器可讀證據（JSON + SHA256），不要要 Ivan 逐項手打勾。
+  - **最後停在 approval 閘門**：所有不可逆 / 對外 / production 的動作,都要 Ivan 明確 `--approve` 才執行。**Ivan 只負責最終 approval，不負責執行。**
+- 文件（runbook）可以留，但它的角色是「這支自動化在做什麼」的規格說明，**不是**給 Ivan 照抄的操作手冊。文件開頭要指向那一條指令。
+
 ---
 
 ## 經常踩到的坑（解法已就位）

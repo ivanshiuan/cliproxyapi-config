@@ -1,0 +1,17 @@
+{
+  "run_id": "odoo-cert-20260729T072525Z",
+  "captured_at_utc": "2026-07-29T07:25:46Z",
+  "repo_root": "/home/user/cliproxyapi-config",
+  "branch": "claude/odoo-inventory-integration-s4olur",
+  "head_sha": "25c807c381bc82d0d13e9c571cc3ecaaf3ca794b",
+  "default_branch": "claude/autonomous-resttech-enterprise-oW9jp",
+  "python_system": "Python 3.11.15",
+  "python_venv": "Python 3.12.3",
+  "venv_provenance": "created THIS session via 'make install' (python3.12 -m venv + pip install -e .) from pyproject.toml; full install log captured earlier this session, exit 0",
+  "postgres": "PostgreSQL 16.13 (Ubuntu 16.13-0ubuntu0.24.04.1) on x86_64-p",
+  "pg_extensions_resto_dev": "plpgsql,vector,citext,pgcrypto",
+  "alembic_head_applied": "8307a94acb62",
+  "live_odoo_available": false,
+  "live_odoo_note": "No Odoo instance exists in this environment. E2E runs against a deterministic in-process JSON-RPC contract fake; live-Odoo verification is EXTERNAL_DEPENDENCY_BLOCKED.",
+  "anthropic_api_key_present": false
+}
