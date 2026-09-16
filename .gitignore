@@ -112,3 +112,9 @@ tmp/
 /openapi.json
 /openapi.yaml
 .obsidian/
+
+# ──────────────────────────────────────────────────────────────────────────
+# Subsidy Radar — raw HTML snapshots (fetched pages) are ephemeral
+# ──────────────────────────────────────────────────────────────────────────
+data/subsidies/raw/
+data/subsidies/inbox/

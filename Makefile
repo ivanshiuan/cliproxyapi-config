@@ -238,6 +238,20 @@ docker-prod-up: ## Bring up production-shape stack (requires .env.production)
 docker-prod-down: ## Tear down production-shape stack
 	docker compose -f restaurant_api/docker-compose.production.yml down
 
+# ----- subsidy radar -----------------------------------------------------
+
+.PHONY: subsidy-scan
+subsidy-scan: install ## Run subsidy radar pipeline (offline) → docs/subsidies/RADAR_2026.md
+	$(PY) -m subsidy_radar scan
+
+.PHONY: subsidy-list
+subsidy-list: install ## List all subsidy programs in seed data
+	$(PY) -m subsidy_radar list
+
+.PHONY: subsidy-match
+subsidy-match: install ## Run eligibility matching only (no action plans)
+	$(PY) -m subsidy_radar match
+
 # ----- file ingest -------------------------------------------------------
 
 .PHONY: to-md
