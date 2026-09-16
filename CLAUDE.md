@@ -259,6 +259,7 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 | 「建檔 / digest / 整理這篇 / 幫我消化 / 存進知識庫 / 把 XX 學起來」+ 一條連結或內容 | 用 `digest` skill → 提煉成知識卡存 `docs/knowledge/` + 登進 `00_MOC.md` |
 | 「幫我開網站 / 登入抓資料 / 監看競品菜單價格 / 填沒 API 的後台表單 / 過驗證碼」 | 用 `browser-act` skill（需先開網路白名單，見 `docs/18`） |
 | 「帝國大腦怎麼運作 / 知識庫架構 / 格局圖」 | 看 `docs/19_empire_brain.md`；vault 入口 `docs/knowledge/00_MOC.md` |
+| 「設定 Obsidian / 裝 claude-obsidian / 第二大腦搬到本機」 | 看 `docs/20_obsidian_setup_guide.md`（本機安裝，雲端 session 裝不了，需在 Ivan 自己電腦上跑） |
 | 「早安 / 開工 / 今天狀況」 | 用 `/morning` command（起 DB、跑測試、列 backlog、亮 blocker） |
 | 「交接 / 收工 / 記錄進度」 | 用 `/handoff` command（更新 COMMANDER_HANDOFF.md） |
 | 「跑蜂群做 XX」 | 用 `/swarm` command（帶預算守門） |

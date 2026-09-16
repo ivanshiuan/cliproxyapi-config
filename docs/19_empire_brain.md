@@ -81,6 +81,7 @@
 | ✅ 已完成 | 知識庫結構 + 知識卡模板 + `digest` 技能 + skill 路由表更新 | 本 PR |
 | ✅ 現在可用 | 用 `digest` 消化**公開連結**（WebFetch）→ 歸檔 | 立即可跑 |
 | ⏳ 待開白名單 | 用 BrowserAct 抓**需登入/社群平台**內容、競品菜單監看 | 需先設 Network access = Custom + 開新 session（見 docs/18） |
+| ✅ 已就緒 | Obsidian 本機安裝教學 | 見 `docs/20_obsidian_setup_guide.md`（需在自己電腦上裝，非雲端 session） |
 | 🔜 之後 | 匯出到 Obsidian vault → 格局圖；競品定期監看排程 | 白名單通了再接 |
 
 ---
@@ -89,4 +90,4 @@
 
 1. **先跑通 `digest`**：丟一條你最近看到覺得有用的公開連結，我當場消化＋歸檔，你就有第一張知識卡＋可複用模板。
 2. **開網路白名單**（docs/18）→ 解鎖社群平台爬取與競品監看。
-3. **累積到一定量**再評估要不要搬進 Obsidian 做格局圖。
+3. **累積到一定量**再評估要不要搬進 Obsidian 做格局圖——本機安裝步驟見 `docs/20_obsidian_setup_guide.md`。
