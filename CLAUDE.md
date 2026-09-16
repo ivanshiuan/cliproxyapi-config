@@ -230,13 +230,17 @@ demo / seed 腳本已加 `RUF001` per-file ignore。
 1. **動手前先看 `docs/06_execution_plan.md`** 確認還沒做什麼、Phase 排在哪
 2. **改 schema 前先讀 `docs/04_data_schema.md`** 看設計理由
 3. **動 router 前先讀 `restaurant_api/api/deps.py` 和 `errors.py`** 用既有 DI/例外
-4. **新增測試前先看 `tests/conftest.py`** 用既有 fixture
-5. **跑 DevSwarm 前**：確認 `.env` 有 `ANTHROPIC_API_KEY`、用 `--budget` 旗標
-6. **commit 前**永遠跑 `make full-check`（ruff + pyright + pytest + alembic + smoke）
-7. **多檔大改用 sub-agent 平行**（看 `.claude/agents/` 有什麼角色）
-8. **長 session 超過 50K token 用 `/compact`**，保留重要決策與 spec contract
-9. **規劃新功能用 Plan Mode**（Shift+Tab×2），讓我先審計畫再動工
-10. **遇到不確定時用 AskUserQuestion**，給我 2-4 個具體選項，不要長段問題
+4. **動 `integrations/`（LINE 正式版、金流、電子發票、任何外部 SaaS/OAuth 串接）前**：
+   先讀 `docs/knowledge/2026-07-12-open-connector.md`，並**主動告訴 Ivan**「知識庫有
+   open-connector 架構參考卡（憑證邊界 / action schema / 稽核日誌）」— 不要等他問。
+   評估 Composio 或任何付費 iPaaS 時同樣主動提這張卡。
+5. **新增測試前先看 `tests/conftest.py`** 用既有 fixture
+6. **跑 DevSwarm 前**：確認 `.env` 有 `ANTHROPIC_API_KEY`、用 `--budget` 旗標
+7. **commit 前**永遠跑 `make full-check`（ruff + pyright + pytest + alembic + smoke）
+8. **多檔大改用 sub-agent 平行**（看 `.claude/agents/` 有什麼角色）
+9. **長 session 超過 50K token 用 `/compact`**，保留重要決策與 spec contract
+10. **規劃新功能用 Plan Mode**（Shift+Tab×2），讓我先審計畫再動工
+11. **遇到不確定時用 AskUserQuestion**，給我 2-4 個具體選項，不要長段問題
 
 ---
 
