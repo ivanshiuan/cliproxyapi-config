@@ -6,7 +6,7 @@ on:
   workflow_dispatch:           # Manual trigger from GitHub Actions tab
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   brief:
@@ -14,22 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: claude/autonomous-resttech-enterprise-oW9jp
+          ref: ${{ vars.CANONICAL_BRANCH || github.event.repository.default_branch }}
           fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Generate brief and update LOOP_STATE.md
+      - name: Generate brief (report-only, no commit/push)
         run: python scripts/morning_brief.py
 
-      - name: Commit state
-        run: |
-          git config user.name  "loop-bot"
-          git config user.email "loop@noreply.github.com"
-          git add LOOP_STATE.md
-          git diff --staged --quiet || (
-            git commit -m "chore(loop): daily brief $(date -u +%Y-%m-%d) [skip ci]" &&
-            git push origin claude/autonomous-resttech-enterprise-oW9jp
-          )
+      - name: Write to job summary
+        run: cat LOOP_STATE.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload LOOP_STATE.md as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loop-state
+          path: LOOP_STATE.md
