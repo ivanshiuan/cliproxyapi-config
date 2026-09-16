@@ -1,0 +1,25 @@
+{
+	"nodes":[
+		{"id":"core","type":"text","x":-200,"y":-140,"width":400,"height":280,"color":"1","text":"# 🏯 帝國核心\n\n**台灣全域 AI 餐飲智慧營運作業系統**\n\n- DevSwarm：AI 蜂群自動產碼\n- RestSwarm：真實餐飲後端\n\n願景：docs/00_vision.md"},
+		{"id":"brand","type":"text","x":-760,"y":-560,"width":400,"height":280,"color":"5","text":"# 🎨 品牌\n\n定位・命名・故事・視覺\n\n_相關知識卡：applies_to 含「品牌」_"},
+		{"id":"member","type":"text","x":-200,"y":-560,"width":400,"height":280,"color":"5","text":"# 💚 會員成長\n\n會員迴圈・LINE 經營・集點・召回\n\ndocs/13_membership_growth_loop.md"},
+		{"id":"pricing","type":"text","x":360,"y":-560,"width":400,"height":280,"color":"5","text":"# 💰 定價\n\n定價策略・折扣・心理帳戶\n\nspecs/discount_resolver.md"},
+		{"id":"ops","type":"text","x":-760,"y":-140,"width":400,"height":280,"color":"4","text":"# 🏪 門市營運\n\nSOP・排班・現場管理\n\ndocs/14_store_ops_playbook.md\ndocs/16_store_manager_handbook.md"},
+		{"id":"supply","type":"text","x":360,"y":-140,"width":400,"height":280,"color":"4","text":"# 📦 供應鏈\n\n進貨・BOM・成本控管\n\nspecs/bom_consumer.md\nspecs/cogs_variance_detector.md"},
+		{"id":"kds","type":"text","x":-760,"y":280,"width":400,"height":280,"color":"6","text":"# 🍳 內場 KDS\n\n廚房顯示・出餐流程\n\ndocs/09_phase1_extension_kit.md"},
+		{"id":"finance","type":"text","x":-200,"y":280,"width":400,"height":280,"color":"6","text":"# 📊 財務\n\n損益・發票・對帳\n\ndocs/04 mv_daily_pnl\nspecs/uniform_invoice_validator.md"},
+		{"id":"intel","type":"text","x":360,"y":280,"width":400,"height":280,"color":"2","text":"# 🔭 競品情報\n\n競品菜單・價格變動・市場動態\n\n工具：browser-act（需白名單，docs/18）"},
+		{"id":"moc","type":"file","x":-200,"y":640,"width":400,"height":120,"file":"00_MOC.md"}
+	],
+	"edges":[
+		{"id":"e1","fromNode":"brand","fromSide":"bottom","toNode":"core","toSide":"left"},
+		{"id":"e2","fromNode":"member","fromSide":"bottom","toNode":"core","toSide":"top"},
+		{"id":"e3","fromNode":"pricing","fromSide":"bottom","toNode":"core","toSide":"right"},
+		{"id":"e4","fromNode":"ops","fromSide":"right","toNode":"core","toSide":"left"},
+		{"id":"e5","fromNode":"supply","fromSide":"left","toNode":"core","toSide":"right"},
+		{"id":"e6","fromNode":"kds","fromSide":"top","toNode":"core","toSide":"left"},
+		{"id":"e7","fromNode":"finance","fromSide":"top","toNode":"core","toSide":"bottom"},
+		{"id":"e8","fromNode":"intel","fromSide":"top","toNode":"core","toSide":"right"},
+		{"id":"e9","fromNode":"core","fromSide":"bottom","toNode":"moc","toSide":"top"}
+	]
+}

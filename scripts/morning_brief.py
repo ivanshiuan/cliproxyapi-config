@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,7 +41,7 @@ def spec_list() -> list[str]:
 
 
 def main() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     now_str = now.strftime("%Y-%m-%d %H:%M UTC")
     taipei_hour = (now.hour + 8) % 24
     now_taipei = f"{taipei_hour:02d}:{now.minute:02d} Taipei"
