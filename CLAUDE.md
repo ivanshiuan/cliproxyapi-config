@@ -9,8 +9,8 @@
 ## 一句話這是什麼
 
 **台灣全域 AI 餐飲智慧營運作業系統**。雙層架構：
-- **DevSwarm**（LangGraph 4-agent 蜂群）→ 自動產出程式碼
-- **RestSwarm**（FastAPI + 25-table PG + LINE）→ 真實餐飲後端
+- **DevSwarm**（LangGraph 5-agent 蜂群：PM/Architect/Coder/Reviewer/QA）→ 自動產出程式碼
+- **RestSwarm**（FastAPI + 34-table PG + LINE）→ 真實餐飲後端
 
 完整願景：`docs/00_vision.md`、路徑：`docs/06_execution_plan.md`。
 
@@ -55,7 +55,7 @@
 │   ├── commands/                # 自訂 slash commands
 │   └── agents/                  # 正式 subagent 定義
 │
-├── devswarm/                    # AI 蜂群本體（2,500 LOC）
+├── devswarm/                    # AI 蜂群本體（~4,000 LOC）
 │   ├── cli.py / __main__.py     # 入口
 │   ├── graph.py                 # LangGraph 拓撲
 │   ├── state.py                 # SwarmState TypedDict
@@ -63,23 +63,25 @@
 │   ├── llm.py                   # Anthropic SDK wrapper (prompt cache)
 │   ├── sandbox.py               # pytest subprocess
 │   ├── workspace.py             # 沙盒檔案系統
-│   ├── prompts/                 # 4 agent 系統提示 + 版本登記
-│   └── nodes/                   # 4 agent node 實作
+│   ├── prompts/                 # 5 agent 系統提示 + 版本登記
+│   └── nodes/                   # 5 agent node 實作（pm/architect/coder/reviewer/qa）
 │
-├── restaurant_api/              # Phase 1 餐飲後端（6,500+ LOC）
+├── restaurant_api/              # Phase 1 餐飲後端（~17,000 LOC）
 │   ├── main.py                  # FastAPI app + 路由註冊 + middleware
 │   ├── config.py                # Pydantic Settings
 │   ├── database.py              # async engine + session
 │   ├── docker-compose.yml       # PG + Redis（開發用）
 │   ├── docker-compose.production.yml  # 真實上線 stack
 │   ├── Dockerfile               # multi-stage、non-root、tini PID-1
-│   ├── alembic/                 # 3 份遷移
-│   ├── models/                  # 25 表 SQLAlchemy（含 audit_log、embeddings）
+│   ├── alembic/                 # 10 份遷移
+│   ├── models/                  # 17 個 model 檔（含 audit_log、embeddings、hr、campaigns…）
 │   ├── middleware/              # RequestContext + 結構化 JSON 日誌
 │   ├── api/                     # deps.py + errors.py + health.py（/live + /ready）
 │   ├── schemas/                 # Pydantic 請求/回應（每 router 一檔）
 │   ├── services/                # 業務邏輯（純 async，無 HTTP；含 audit_service）
-│   ├── routers/                 # FastAPI APIRouter（每模組一檔）
+│   ├── routers/                 # 11 個 FastAPI APIRouter：orders/stock/clock/events/
+│   │                             #   reservations/campaigns/customers/membership/
+│   │                             #   kitchen/ugc/line_webhook
 │   ├── jobs/                    # APScheduler 背景任務（expiry/points/COGS）
 │   └── integrations/line/       # LINE 統一通道（Stub + HTTP skeleton）
 │
@@ -116,15 +118,20 @@
 │   ├── demo_flow.py             # `make demo-flow` 跑完整 POS 一日
 │   └── smoke_db.py              # `make db-smoke` DB 端到端驗證
 │
-├── tests/                       # 106 個 pytest
+├── tests/                       # 438 個 pytest（45 檔）
 │   ├── conftest.py              # DB savepoint fixtures + AsyncClient
-│   ├── routers/                 # 37 router 整合測（real PG）
-│   ├── test_state.py
-│   ├── test_workspace.py
-│   ├── test_sandbox.py
-│   ├── test_graph_mock.py       # mocked end-to-end DevSwarm
-│   ├── test_line_integration.py
-│   ├── test_restaurant_api.py
+│   ├── routers/                 # 147 個 router 整合測（real PG）：orders/stock/
+│   │                             #   clock/events/reservations/campaigns/customers/
+│   │                             #   kitchen/growth/admin_auth
+│   ├── services/                # profit_calc/bom_consumer/discount_resolver/
+│   │                             #   cogs_variance_detector/labor_hours_classifier/
+│   │                             #   uniform_invoice_validator/holiday_calendar
+│   ├── jobs/                    # campaign_expiry/membership_lifecycle/points_expire
+│   ├── test_state.py / test_workspace.py / test_sandbox.py / test_graph_mock.py
+│   ├── test_line_integration.py / test_line_webhook.py / test_restaurant_api.py
+│   ├── test_membership_service.py / test_membership_stats.py / test_rfm_service.py
+│   ├── test_referral_service.py / test_stored_value_service.py / test_streak_service.py
+│   ├── test_ugc_service.py / test_audit_service.py / test_middleware.py
 │   └── test_imports.py
 │
 └── workspace/                   # DevSwarm 產出（gitignored）
