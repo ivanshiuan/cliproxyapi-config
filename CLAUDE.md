@@ -196,6 +196,66 @@ DB 沒起：`sudo service postgresql start`。
 ### ruff 抱怨中文標點
 demo / seed 腳本已加 `RUF001` per-file ignore。
 
+### SQLEnum(native_enum=False) 存的是 enum **NAME** 不是 value
+`SQLEnum(OrderStatus, native_enum=False)` 寫進 DB 的是 `"OPEN"`（member name），不是 `"open"`（value）。
+所以：**server_default 要用 `.name`**（加 NOT NULL 欄位時會回填舊列，用 value 會讓舊列 ORM 讀不回來）、
+**partial index 的 WHERE 條件也要比對 NAME**（寫 `status = 'open'` 的唯一索引會永遠不生效）。
+測試釘在 `tests/test_tables_model.py`。
+
+### 測試中不要 `await db_session.rollback()`
+savepoint fixture 會連 seed_tenant/seed_store 一起回滾，之後的 INSERT 全撞 FK。
+要測 IntegrityError 就把它放在該測試最後一步，或拆成獨立測試。
+
+### 即時事件（WebSocket）廣播一定要在 commit 之後
+`services/event_hub.record_event()` 只做兩件事：寫 `order_events` 列（跟本次 mutation 同一 transaction，
+原子性 — 事件存在 ⟺ 交易 commit）＋ 把事件塞進 request-scoped 的 ContextVar buffer。
+**真正 `hub.publish()` 廣播是在 `api/deps.get_db` commit 成功之後才 drain buffer 執行**。
+不要在 service 裡直接 publish — 否則交易一 rollback，平板就收到幻影事件。
+斷線重連用 `?after=<seq>` 從 `order_events` 補拉（seq 是 IDENTITY 單調游標）；client 用 seq 去重，
+所以「subscribe 早於 catch-up」的重疊重送是安全的（設計如此，不是 bug）。
+測試的 `client` fixture 覆寫 `get_db`（不含 buffer 包裝）→ record_event 照樣寫列但不廣播，正好適合斷言持久層。
+
+### 已收款帳單不得再降價（拆單後退菜/招待的錢流洞）
+拆單先收部分款後，改量/退菜/招待/移除服務費都可能把應收壓到低於已收 →
+結帳算出負數叫店員「找零」。`pos_order_service._guard_not_below_paid` 在
+每個會降價的 mutation 後擋 409。新增會影響金額的操作時**必須**掛這個守衛。
+回歸測試在 test_p7_billing（每情境獨立開桌 — 見下一條）。
+
+### 同 session 重新 select 不會刷新已載入的 collection
+service 內 `session.add(子列)` 後再 `_load_order_with_relations` 重查，
+identity map 會回傳**同一個物件、collection 還是舊的**（selectinload 不會
+重跑）。要讓記憶體與 DB 同步：**append 到 relationship**（如
+`order.discounts.append(row)`），不要 bare `session.add`。
+apply_discount 的招待守衛曾因此漏擋。
+
+### L3 端到端驗證（起真 server 打真 DB）後一定要清 DB
+手動 curl/腳本 commit 進 resto_dev 的資料會殘留，讓 savepoint 測試（掃全表計數的那種，
+如 test_create_empty_order）看到多餘列而失敗。驗完跑 `make db-truncate` 清乾淨。
+
+L3 腳本裡連續兩支請求（例如 `POST /tables` 建桌緊接著 `POST /tables/{id}/open`）偶爾會在
+毫秒級間距內對剛 commit 的列讀到 404/查無資料——這是這個沙盒 Postgres 連線池偶發的
+read-after-write 可見度延遲，不是 app bug（用同一顆 DB session 的 pytest savepoint fixture
+從沒踩過）。不要因此改動 production code；L3 腳本裡對「建立後立刻讀」的呼叫加個 3-5 次、
+每次間隔 ~150ms 的重試即可，之後就穩定。
+
+### 退菜/折扣的 audit `actor_id` 是「授權者」，必須是真員工（FK employees）
+`pos_order_service.void_line`/`apply_discount` 經 `authorize_sensitive` 決定授權者
+（self=登入者、override=覆核主管），audit 用那個 `actor_id`。`audit_log.actor_id` 有 FK 到
+`employees`，所以測試若用假的 `PosPrincipal(employee_id=uuid4())` 覆寫 `get_pos_principal`，
+退菜一 audit 就撞 FK。**測試要建一個真的 Employee 當授權者**（見 test_pos_orders_router 的
+`client` fixture 建 manager）。gate 本身（deny/override/wrong-pin）在 test_pos_auth_router 用真 PIN 測。
+
+### POS 前台任何「取代 `#tmBody`」的 prompt，收尾一定要 `reopenOrder()` 不是 `loadOrder()`
+`pos_static/index.html` 的桌況帳單活在 `#tmBody` 底下的 `#orderPanel` 包裝 div。
+折扣/服務費/加點口味這類 prompt sheet 直接 `$("tmBody").innerHTML = "...表單..."` 整個蓋掉，
+連 `#orderPanel` 這個包裝 div 都一起消失。此時若收尾呼叫 `loadOrder(t.session)`（它内部抓
+`$("orderPanel")` 塞 innerHTML），會拿到 `null` 直接壞掉（`Cannot set properties of null`），
+帳單畫面卡在表單頁不會刷新——**這是瀏覽器互動才踩得到的 bug，L3 httpx 腳本測不出來**（P7.3
+用 Playwright 才抓到）。修法：用 `reopenOrder(sessionId)`（呼叫 `openTableModal(t)` 整個重建
+`tmBody`/`tmActions` 再重抓帳單），不要直接呼叫 `loadOrder`。新增任何會蓋掉 `tmBody` 的 prompt
+（口味選項、未來的加購/備註輸入）收尾都要走這條，並用 Playwright（`executablePath:
+'/opt/pw-browsers/chromium'`）真的點過一輪再算完工。
+
 ---
 
 ## 檔案攝取 — 看到檔案自己選武器（不用我下指令）

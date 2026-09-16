@@ -8,7 +8,8 @@ Starts the FastAPI app in-process, then drives one full POS day:
     4. 中途報廢 1 份食材 (POST /events/waste)
     5. 員工餐紀錄 (POST /events/staff-meal)
     6. 員工下班打卡 (POST /clock/out)
-    7. 查詢當日 stock movements、orders、events 串起完整營運紀錄
+    7. 店員 POS 全流程: 開桌 -> 桌邊點餐 -> 現金結帳找零 -> 即時桌況事件 -> 日結報表 -> CSV 匯出
+    8. 查詢當日 stock movements、orders、events 串起完整營運紀錄
 
 Requires:
     - Postgres reachable per .env
@@ -23,6 +24,7 @@ import asyncio
 import sys
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import func, select
@@ -34,6 +36,7 @@ from restaurant_api.models import (
     EmployeeRole,
     MenuItem,
     Order,
+    OrderEvent,
     OrderLine,
     StaffMealEvent,
     StockMovement,
@@ -44,6 +47,7 @@ from restaurant_api.models import (
 )
 
 _SEED_SLUG = "demo-restaurant"
+_TPE = ZoneInfo("Asia/Taipei")
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -263,12 +267,79 @@ async def run_demo() -> int:
         )
 
         # ─────────────────────────────────────────────────────────────
-        _step(7, "彙總：今日所有資料")
+        _step(7, "POS 店員全流程：開桌 → 點餐 → 現金結帳 → 桌況事件 → 日結報表")
+        biz_date = datetime.now(_TPE).date().isoformat()
+        tname = f"D{datetime.now().strftime('%H%M%S')}"
+        r = await client.post(
+            "/tables", json={"store_id": store_id, "name": tname, "seats": 4}
+        )
+        if r.status_code != 201:
+            _fail(f"create table failed: {r.status_code} {r.text[:300]}")
+            return 1
+        table = r.json()
+        sess = (
+            await client.post(f"/tables/{table['id']}/open", json={"party_size": 3})
+        ).json()
+        _ok(f"開桌 {tname} · session {sess['id'][:8]}…")
+
+        for mid, qty, label in ((burger_id, "2", "漢堡"), (coke_id, "1", "可樂")):
+            r = await client.post(
+                f"/tables/sessions/{sess['id']}/lines",
+                json={"menu_item_id": mid, "qty": qty},
+            )
+            if r.status_code != 201:
+                _fail(f"add line ({label}) failed: {r.status_code} {r.text[:300]}")
+                return 1
+        bill = r.json()
+        _ok(f"桌邊點餐：帳單 {len(bill['lines'])} 項（價格由菜單伺服器端快照）")
+
+        co = await client.post(
+            f"/tables/sessions/{sess['id']}/checkout", json={"tendered": "1000"}
+        )
+        if co.status_code != 200:
+            _fail(f"checkout failed: {co.status_code} {co.text[:300]}")
+            return 1
+        cob = co.json()
+        _ok(
+            f"現金結帳：應收 {cob['total']} 收 1000 找零 {cob['change']}，"
+            f"訂單={cob['order']['status']}、桌位自動結桌"
+        )
+
+        evs = (
+            await client.get(
+                "/tables/events", params={"store_id": store_id, "after": 0}
+            )
+        ).json()
+        _info(f"即時桌況事件流 {len(evs)} 筆，末段：{[e['type'] for e in evs][-4:]}")
+
+        rep = (
+            await client.get(
+                "/reports/sales", params={"store_id": store_id, "date_from": biz_date}
+            )
+        ).json()
+        _ok(
+            f"日結報表（{biz_date}）：{rep['order_count']} 單 · "
+            f"淨營收 {rep['net_sales']} · 客單 {rep['avg_ticket']}"
+        )
+        _info(f"付款方式明細：{[(p['method'], p['amount']) for p in rep['payments']]}")
+
+        csv_resp = await client.get(
+            "/reports/export/orders.csv",
+            params={"store_id": store_id, "date_from": biz_date},
+        )
+        _info(f"CSV 匯出可用：{csv_resp.status_code} · {len(csv_resp.content)} bytes")
+
+        # ─────────────────────────────────────────────────────────────
+        _step(8, "彙總：今日所有資料")
         await _report(store_id)
 
     await dispose_engine()
     print()
-    print("✅ End-to-end demo flow 完成。完整的 POS → BOM → 報廢 → 員工餐 → 工時 鏈跑通了。")
+    print(
+        "✅ End-to-end demo flow 完成。"
+        "外送進單 → BOM → 報廢 → 員工餐 → 工時 ＋ 店員 POS（開桌→桌邊點餐→現金結帳→"
+        "即時桌況事件→日結報表→CSV 匯出）全鏈跑通。"
+    )
     return 0
 
 
@@ -335,6 +406,11 @@ async def _report(store_id: str) -> None:
                 select(func.count(TimeClock.id)).where(TimeClock.store_id == store_id)
             )
         ).scalar_one()
+        n_events = (
+            await s.execute(
+                select(func.count(OrderEvent.id)).where(OrderEvent.store_id == store_id)
+            )
+        ).scalar_one()
 
     _info(f"orders       : {n_orders}")
     _info(f"order_lines  : {n_lines}")
@@ -342,6 +418,7 @@ async def _report(store_id: str) -> None:
     _info(f"waste events : {n_waste}")
     _info(f"staff meals  : {n_staff_meals}")
     _info(f"time clocks  : {n_clocks}")
+    _info(f"floor events : {n_events}")
 
 
 if __name__ == "__main__":

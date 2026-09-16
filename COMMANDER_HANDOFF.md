@@ -3,11 +3,30 @@
 > 我這邊已經完成的所有「不需要你決策、不需要 API key」的工作全部 commit + push 完。
 > 這份文件只列**你接下來要做的事**，按時間順序排好。
 >
-> **最後一次重寫：2026-06-06（autonomous 模式延長戰之後）**
+> **最後一次重寫：2026-07-10（iCHEF 級 POS 全套完成之後）**
 
 ---
 
 ## ✅ 我已完成（不需要你動手）
+
+### 🆕 iCHEF 級 POS 全套（本 session，全部已 commit + push 到 `claude/ichef-pos-system-design-xl6ckr`，PR #29 待你審）
+
+> **704 pytest 全綠** + ruff + pyright + alembic + smoke 全過；每個 slice 都用真伺服器+真 DB 端到端驗證過，收尾含 P1 復盤（5 個坑 → 防再發機制，見 docs/21 §6）。
+
+你點名的模組狀態：**點餐 ✅ POS ✅ 結帳 ✅ 報表 ✅ 後台匯出 ✅ 人資(打卡) ✅ 定位系統(訂位) ✅ 金流 🔴（等你，見下）**
+
+四個螢幕，共用同一條即時事件流（一邊動、其他邊即時跳）：
+- **店員平板** `/pos/?store=<uuid>`：桌況板、開/結/轉桌、點餐、退菜（主管 PIN 覆核）、折扣、現金結帳找零、PIN 登入、上下班打卡、訂位帶位。
+- **顧客手機** `/order/?t=<桌位qr_token>`：掃桌 QR 自助點餐、看帳單（未開桌會擋）。
+- **廚房螢幕** `/kds/?store=<uuid>`：三欄出餐看板（新單即時跳出、逾 15 分紅字、點按推進）。
+- **訂位頁** `/book/?store=<uuid>`：客人線上訂位 → POS 面板一鍵帶位（自動連結開桌）。
+
+後台：`/reports/sales`（日結）、`/reports/top-items`、`/reports/export/orders.csv`（Excel 對帳）；員工 PIN 由店長後台 `/pos-auth/set-pin` 設定。
+
+### 🔴 你要做的（POS 相關）
+1. **審 PR #29 並 Merge**（手機就能看，內文寫了改了什麼/為什麼/怎麼驗證）。
+2. **拍板金流供應商**（P5 唯一卡點）：TapPay / 藍新 / LINE Pay 直連，選定後提供**測試商戶憑證**，我就能串非現金支付 + 電子發票。資料欄位已全部就緒。
+3. 上線前照 docs/21 §5 gate：設定 production secrets、真店一日平行試跑、備份演練。
 
 ### 🆕 開幕輪盤行銷程式收尾（本 session，全部已 commit + push 到 `claude/launch-wheel-game-campaign-t7octp`）
 

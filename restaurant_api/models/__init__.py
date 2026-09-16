@@ -34,11 +34,13 @@ from .customers import (
     Referral,
     ReferralStatus,
 )
+from .discount_rules import DiscountRule
 from .embeddings import VECTOR_DIM, Embedding
 from .employees import Employee, EmployeeRole
 from .hr import LeaveRequest, LeaveStatus, LeaveType, Shift, TimeClock
 from .inventory import Ingredient, MovementType, Recipe, StockMovement
-from .menu import MenuCategory, MenuItem
+from .menu import ComboComponent, MenuCategory, MenuItem, ModifierGroup, ModifierOption
+from .order_events import OrderEvent
 from .orders import (
     DiscountKind,
     InvoiceMedia,
@@ -46,10 +48,13 @@ from .orders import (
     KitchenStation,
     KitchenStatus,
     Order,
+    OrderChannel,
     OrderDiscount,
     OrderLine,
+    OrderLineModifier,
     OrderPayment,
     OrderStatus,
+    OrderType,
     PaymentMethod,
 )
 from .public_holidays import PublicHoliday
@@ -60,6 +65,7 @@ from .reservations import (
     WalkInQueueEntry,
 )
 from .stores import Store
+from .tables import DiningTable, TableSession, TableSessionStatus
 from .tenants import Tenant
 from .ugc import UgcKind, UgcStatus, UgcSubmission
 
@@ -79,8 +85,11 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "Employee",
     "EmployeeRole",
     # menu
+    "ComboComponent",
     "MenuCategory",
     "MenuItem",
+    "ModifierGroup",
+    "ModifierOption",
     # inventory
     "Ingredient",
     "MovementType",
@@ -88,16 +97,26 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "StockMovement",
     # orders
     "DiscountKind",
+    "DiscountRule",
     "InvoiceMedia",
     "InvoiceStatus",
     "KitchenStation",
     "KitchenStatus",
     "Order",
+    "OrderChannel",
     "OrderDiscount",
     "OrderLine",
+    "OrderLineModifier",
     "OrderPayment",
     "OrderStatus",
+    "OrderType",
     "PaymentMethod",
+    # floor plan / table sessions (POS P1)
+    "DiningTable",
+    "TableSession",
+    "TableSessionStatus",
+    # floor real-time event stream (POS P1.5)
+    "OrderEvent",
     # reservations / queue
     "QueueStatus",
     "Reservation",

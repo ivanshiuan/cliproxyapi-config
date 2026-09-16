@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>自助點餐</title>
+<style>
+  :root { --bg: #101418; --card: #1b2129; --card2: #232b36; --ink: #eef2f7;
+          --sub: #8b96a5; --accent: #f97316; --ok: #22c55e; --line: #2c3540; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent;
+      user-select: none; }
+  body { font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         background: var(--bg); color: var(--ink); min-height: 100vh; padding-bottom: 110px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--card);
+           padding: 16px 20px; border-bottom: 1px solid var(--line);
+           display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 24px; }
+  header .sub { color: var(--sub); font-size: 15px; }
+  select { background: var(--card2); color: var(--ink); border: 1px solid var(--line);
+           border-radius: 10px; padding: 8px 10px; font-size: 16px; }
+  main { padding: 16px; max-width: 900px; margin: 0 auto; }
+  .section-title { font-weight: 800; margin: 14px 2px 10px; font-size: 18px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+          padding: 18px 16px; cursor: pointer; position: relative; min-height: 96px; }
+  .tile:active { background: var(--card2); }
+  .tile .name { font-weight: 700; font-size: 19px; }
+  .tile .price { color: var(--accent); font-weight: 800; font-size: 18px; margin-top: 8px; }
+  .tile .qty { position: absolute; top: -8px; right: -8px; background: var(--accent);
+               color: #fff; min-width: 30px; height: 30px; border-radius: 999px;
+               display: flex; align-items: center; justify-content: center;
+               font-weight: 800; font-size: 16px; }
+  .recs { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+  .recs .tile { flex: 0 0 190px; min-height: 78px; padding: 12px 14px; }
+  .cartbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+             background: var(--card); border-top: 1px solid var(--line);
+             padding: 14px 18px calc(14px + env(safe-area-inset-bottom));
+             display: flex; align-items: center; gap: 14px; }
+  .cartbar .sum { flex: 1; font-weight: 800; font-size: 19px; }
+  .cartbar button { border: 0; border-radius: 14px; padding: 16px 26px;
+                    font-size: 19px; font-weight: 800; cursor: pointer; }
+  #clearBtn { background: var(--card2); color: var(--sub); }
+  #submitBtn { background: var(--accent); color: #fff; }
+  #submitBtn:disabled { opacity: .4; }
+  /* done overlay */
+  .done { position: fixed; inset: 0; z-index: 30; background: var(--bg);
+          display: none; flex-direction: column; align-items: center;
+          justify-content: center; text-align: center; padding: 24px; }
+  .done.show { display: flex; }
+  .done .big { font-size: 30px; font-weight: 800; margin-bottom: 18px; }
+  .done .no { font-size: 88px; font-weight: 900; letter-spacing: 2px;
+              color: var(--accent); margin: 8px 0 18px; }
+  .done .hint { color: var(--sub); font-size: 20px; line-height: 1.6; }
+  .done .count { color: var(--sub); font-size: 15px; margin-top: 26px; }
+  .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+           background: #b91c1c; color: #fff; padding: 10px 18px; border-radius: 999px;
+           font-size: 15px; opacity: 0; transition: opacity .25s; z-index: 40; pointer-events: none; }
+  .toast.show { opacity: .96; }
+  .empty { color: var(--sub); text-align: center; padding: 40px 0; font-size: 17px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🍽️ 自助點餐</h1>
+  <span class="sub">點選餐點 → 送出 → 憑號碼到櫃檯付款取餐</span>
+  <span style="flex:1"></span>
+  <select id="langSel">
+    <option value="">中文</option>
+    <option value="en">EN</option>
+    <option value="ja">日本語</option>
+    <option value="ko">한국어</option>
+    <option value="zh-Hans">简体</option>
+    <option value="vi">Tiếng Việt</option>
+    <option value="th">ไทย</option>
+  </select>
+</header>
+
+<main>
+  <div id="recsWrap" style="display:none">
+    <div class="section-title">🎯 猜你想加點</div>
+    <div class="recs" id="recs"></div>
+  </div>
+  <div class="section-title">菜單</div>
+  <div class="grid" id="menu"><div class="empty">載入中…</div></div>
+</main>
+
+<div class="cartbar">
+  <span class="sum" id="cartSum">尚未選擇餐點</span>
+  <button id="clearBtn">清空</button>
+  <button id="submitBtn" disabled>送出點餐</button>
+</div>
+
+<div class="done" id="done">
+  <div class="big">✅ 點餐完成！</div>
+  <div>你的取餐號碼</div>
+  <div class="no" id="doneNo"></div>
+  <div class="hint">請到櫃檯出示號碼<br>付款後請留意取餐叫號螢幕</div>
+  <div class="count" id="doneCount"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// /kiosk/?store=<uuid> — 店內自助點餐機 (P9.1, docs/23 G1)。全螢幕、大按鈕、
+// 免留姓名電話。送單走 POST /online-takeout source=kiosk (channel=TABLET)，
+// 之後跟線上外帶同一條路: POS「外帶待取」收款 + 取餐叫號看板顯示。
+const API = "";
+const storeId = new URLSearchParams(location.search).get("store");
+let lang = localStorage.getItem("order_lang") || "";
+let menu = [];
+const cart = new Map();   // menu_item_id -> qty
+const RESET_SECS = 12;    // done-screen auto reset so the next customer starts fresh
+
+const $ = (id) => document.getElementById(id);
+function toast(msg) { const t = $("toast"); t.textContent = msg;
+  t.className = "toast show"; setTimeout(() => (t.className = "toast"), 2600); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function api(path, opts) {
+  const res = await fetch(API + path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { const j = await res.json(); detail = j.error?.message || detail; } catch (e) { /* ignore */ }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+function renderMenu() {
+  const el = $("menu");
+  if (!menu.length) { el.innerHTML = `<div class="empty">目前沒有可點的品項</div>`; return; }
+  el.innerHTML = menu.map((m) => {
+    const q = cart.get(m.id) || 0;
+    return `<div class="tile" onclick="bump('${m.id}',1)">
+      ${q ? `<div class="qty" onclick="event.stopPropagation();bump('${m.id}',-1)">${q}</div>` : ""}
+      <div class="name">${escapeHtml(m.name)}</div>
+      <div class="price">$${Number(m.price).toFixed(0)}</div>
+    </div>`;
+  }).join("");
+  renderCartBar();
+}
+
+function bump(id, d) {
+  const q = (cart.get(id) || 0) + d;
+  if (q <= 0) cart.delete(id); else cart.set(id, q);
+  renderMenu();
+  loadRecs();
+}
+
+function renderCartBar() {
+  let count = 0, sum = 0;
+  for (const [id, q] of cart) {
+    const m = menu.find((x) => x.id === id);
+    if (m) { count += q; sum += q * Number(m.price); }
+  }
+  $("cartSum").textContent = count ? `${count} 項 · $${sum.toFixed(0)}` : "尚未選擇餐點";
+  $("submitBtn").disabled = !count;
+}
+
+let recs = [];
+async function loadRecs() {
+  if (!storeId) return;
+  try {
+    const qs = new URLSearchParams({ store_id: storeId, limit: "4" });
+    [...cart.keys()].forEach((id) => qs.append("cart_item_ids", id));
+    recs = await api(`/menu/recommendations?${qs.toString()}`);
+  } catch { recs = []; }
+  const shown = recs.filter((r) => !cart.has(r.menu_item_id));
+  $("recsWrap").style.display = shown.length ? "" : "none";
+  $("recs").innerHTML = shown.map((r) => `<div class="tile" onclick="bump('${r.menu_item_id}',1)">
+    <div class="name">${r.reason === "cart_pairing" ? "🔗" : "🔥"} ${escapeHtml(r.name)}</div>
+    <div class="price">$${Number(r.price).toFixed(0)}</div>
+  </div>`).join("");
+}
+
+async function submit() {
+  const items = [...cart.entries()].map(([menu_item_id, qty]) => ({ menu_item_id, qty: String(qty) }));
+  if (!items.length) return;
+  $("submitBtn").disabled = true;
+  try {
+    const res = await api("/online-takeout", {
+      method: "POST",
+      body: JSON.stringify({ store_id: storeId, source: "kiosk", items }),
+    });
+    showDone(res.order.order_no);
+  } catch (e) { toast(e.message); $("submitBtn").disabled = false; }
+}
+
+function showDone(orderNo) {
+  $("doneNo").textContent = orderNo.slice(-6).toUpperCase();
+  $("done").classList.add("show");
+  let left = RESET_SECS;
+  const tick = setInterval(() => {
+    left -= 1;
+    $("doneCount").textContent = `${left} 秒後自動回到點餐畫面（點任意處立即返回）`;
+    if (left <= 0) { clearInterval(tick); resetKiosk(); }
+  }, 1000);
+  $("done").onclick = () => { clearInterval(tick); resetKiosk(); };
+  $("doneCount").textContent = `${RESET_SECS} 秒後自動回到點餐畫面（點任意處立即返回）`;
+}
+
+function resetKiosk() {
+  cart.clear();
+  $("done").classList.remove("show");
+  renderMenu();
+  loadRecs();
+}
+
+async function boot() {
+  if (!storeId) { $("menu").innerHTML = `<div class="empty">請在網址加上 ?store=&lt;門市UUID&gt;</div>`; return; }
+  const langQ = lang ? `&lang=${encodeURIComponent(lang)}` : "";
+  try {
+    menu = await api(`/menu/items?store_id=${encodeURIComponent(storeId)}&available_only=true&available_now=true${langQ}`);
+  } catch (e) { $("menu").innerHTML = `<div class="empty">載入菜單失敗: ${escapeHtml(e.message)}</div>`; return; }
+  renderMenu();
+  loadRecs();
+}
+
+$("langSel").value = lang;
+$("langSel").onchange = () => {
+  lang = $("langSel").value;
+  localStorage.setItem("order_lang", lang);
+  boot();
+};
+$("submitBtn").onclick = submit;
+$("clearBtn").onclick = () => { cart.clear(); renderMenu(); loadRecs(); };
+boot();
+// 時段菜單: refresh every 10 min so an all-day kiosk rolls onto the next
+// service period's menu without staff touching it.
+setInterval(boot, 600000);
+</script>
+</body>
+</html>

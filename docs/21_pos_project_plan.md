@@ -1,0 +1,117 @@
+# 21 — POS 工程案：專案管理章程（PM 制度）
+
+> 本檔是「iCHEF 級 POS」工程案的**專案憲法**。角色、節奏、品質防線、WBS、復盤制度全在這。
+> 拆解與架構見 `docs/20_ichef_teardown.md`。本檔只管「怎麼把它做出來、做到能上線自用、未來能賣」。
+> 建立：2026-07-09。負責 PM：Claude（常駐角色 `.claude/agents/pos-pm.md`）。
+
+---
+
+## 1. 工作模式（Ivan 拍板的 PM 模型）
+
+```
+Ivan（指揮官/產品負責人）
+  │  用人話下需求、審 PR、拍板決策 — 不需要看程式碼
+  ▼
+PM 工程師（Claude，本 session 常駐角色）
+  │  需求 → 規格 → 拆工 → 派工 → 驗收 → 復盤，全流程負責
+  ▼
+執行層（subagents / DevSwarm / 直接實作）
+     router-implementer、spec-writer、code-review、verify …
+```
+
+**溝通契約**：
+- Ivan 說「做 X」→ PM 先回：**這一步的範圍、驗收標準、預估工作量**，超過一個 session 的工作先拆 milestone 再動工。
+- 每個 milestone 完成 → 開 PR（人話標題 + 改了什麼/為什麼/怎麼驗證）→ Ivan 手機審核 Merge。
+- 卡決策 → AskUserQuestion 給 2-4 個具體選項，不丟開放式問題。
+- 每次收工 → `/handoff` 更新 `COMMANDER_HANDOFF.md`；每次開工 → `/morning`。
+
+## 2. 品質防線（「不會有 bug」的工程化翻譯）
+
+沒有「零 bug」，只有**每一層都攔一次**。上線自用的標準如下，任何一關不過就不進 main：
+
+| 防線 | 工具 | 時機 |
+|---|---|---|
+| L1 靜態 | `make full-check`（ruff + pyright + pytest + alembic + smoke） | 每次 commit 前，無例外 |
+| L2 審查 | `/code-review`（找正確性 bug）＋高風險改動加 `/security-review` | 每個 PR |
+| L3 實跑 | `verify` skill：起真 server、打真 API、走完整流程（不是只跑測試） | 每個 milestone |
+| L4 情境 | `make demo-flow` 擴充：POS 開桌→點餐→出餐→結帳→報表 一日全流程腳本 | 每個 Phase 收尾 |
+| L5 復盤 | 見 §4 bug 復盤 SOP | 每個 bug、每個 Phase |
+
+**Definition of Done（每個任務）**：功能可用 + 測試綠 + 家規遵守（Decimal/tenant_id/audit/軟刪）+ 文件更新 + demo 腳本能跑過。
+
+## 3. WBS（工作分解，對照 docs/20 §6.4）
+
+### P1 店員 POS（先做 — Ivan 拍板）
+| # | 任務 | 驗收標準（摘要） | 狀態 |
+|---|---|---|---|
+| 1.1 | 桌位資料層：`dining_tables` + `table_sessions` + orders 加欄（order_type/table_session_id/channel）+ migration | alembic 升降級乾淨；模型過 pyright | ✅ 2026-07-09 |
+| 1.2 | 菜單 CRUD API（categories/items，含軟刪與排序） | 整合測試綠；seed 可跑 | ✅ 2026-07-09 |
+| 1.3a | 樓面/桌位層：桌位 CRUD + 開桌/結桌/取消/轉桌 + 桌況板（/tables） | 9 測全綠；既有訂單流程不動 | ✅ 2026-07-09 |
+| 1.3b | 訂單升級：綁桌開單、逐項加點/改量/退菜（audit）— 建在 /tables 之上 | 既有進單流程不破壞；7 測 + 端到端 | ✅ 2026-07-09 |
+| 1.4 | 現金結帳 + 找零 + 結桌（走 order_payments） | 端到端跑過；金額全 Decimal | ✅ 2026-07-09 |
+| 1.5 | WebSocket hub + `order_events` append-only 事件表 | 斷線重連用 last_event_id 補拉 | ✅ 2026-07-10 |
+| 1.6a | POS 前台 shell（輕量 Web：桌況圖/開桌/結桌/轉桌/菜單瀏覽，/pos） | 真 HTTP 端到端跑過一輪 | ✅ 2026-07-09 |
+| 1.6b | POS 前台點餐/結帳（綁 P1.3b 訂單操作 + P1.4 結帳） | 前台帳單/加點/退菜/結帳找零 UI；API 全端到端驗過 | ✅ 2026-07-09 |
+| 1.7 | P1 驗收：demo-flow 全流程 + 復盤 | L1–L5 全過 | ✅ 2026-07-10 |
+
+### P2 桌邊平板點餐（第二優先 — Ivan 拍板）
+| # | 任務 | 驗收標準（摘要） | 狀態 |
+|---|---|---|---|
+| 2.3+2.4 | 顧客掃碼點餐：`/t/{qr_token}` 公開 API（context/cart/bill，token 即憑證、tenant 由桌位反查）＋ `/order/?t=<token>` 手機點餐頁；未開桌擋單（409）、價格伺服器快照、顧客單 `channel=table_qr`、菜單不漏成本欄；加點經 P1.5 事件流即時跳上店員 POS | 7 整合測 + L3 全鏈（掃碼→點→POS 即時收到→結帳） | ✅ 2026-07-10 |
+| 2.1 | devices 裝置註冊（角色/綁桌 kiosk 模式） | 平板常駐綁一桌的 kiosk 需要時再做 | ⬜ |
+| 2.2 | 綁桌 kiosk 顧客模式（限定菜單/鎖桌） | 同上 | ⬜ |
+| 2.5 | P2 驗收復盤 | 2.1/2.2 完成後 | ⬜ |
+
+（前端維持單檔 vanilla JS——與 POS 前台一致、零 build；要商用再升級 React PWA，屆時 API 不用動。）
+
+### P3–P6（順序照 docs/20 §6.4）
+P3 KDS 螢幕 → P4 會員+折扣+**報表與後台匯出（CSV/Excel，Ivan 圈定）** → P5 金流+電子發票 → P6 訂位（訂金）+線上點餐。
+人資（打卡/工時）後端已有，需求出現再排前端。
+
+| 任務 | 驗收標準 | 狀態 |
+|---|---|---|
+| P3 KDS 廚房出餐螢幕：`/kds/?store=<uuid>` 三欄看板（待製作/製作中/可出餐，卡片含桌名/品名/數量/備註/等待分鐘、逾 15 分紅字）；POS/掃碼加點自動上板（kitchen_station 預設 kitchen）；每次狀態變更發 `kitchen.status_changed` 進 P1.5 事件流（KDS 多螢幕 + POS 同步）；`/kitchen` 佇列補 item_name/table_name（免前端二次查詢） | 3 整合測 + L3 全鏈（QR 點餐→上板→cooking 即時事件→ready→served 離板） | ✅ 2026-07-10 |
+| 人資前台（打卡）：POS 表頭「上班/下班打卡」鈕 — 用 PIN 登入身分打卡，下班即顯示工時分桶（正常/加班），走既有 `/clock` 後端 | L3 全鏈（登入→上班→在班名單→下班工時）驗過 | ✅ 2026-07-10 |
+| 訂位前台（P6 前段）：`/book/?store=<uuid>` 顧客線上訂位頁（姓名/電話/人數/日期時間/備註，source=online）＋ POS「訂位」面板（今日待帶位清單 → 選桌帶位：開桌自動連結 reservation_id + 標記 seated），走既有 `/reservations` 後端零新端點 | L3 全鏈（線上訂→今日清單→帶位開桌連結→入座→桌況佔用）驗過 | ✅ 2026-07-10 |
+| 外帶快速單（iCHEF 快速結帳）：`POST /tables/takeout` 一步完成 建單(TAKEOUT)+伺服器快照價加點+現金收款+關單找零，不綁桌；照樣上 KDS + 進日結報表 + 發 `order.takeout_sale` 事件；POS 表頭「外帶」鈕（點選加購物車 → 收現 → 單號+找零） | 4 整合測 + L3（一步賣 2 便當 → 找零 → 進日結） | ✅ 2026-07-10 |
+| 候位面板（現場排隊）：POS 表頭「候位」鈕 — 取號（稱呼/電話/人數）、等待清單（含等待分鐘/已叫號標記）、叫號、帶位（選空桌開桌；waiting 直接帶位時自動先叫號過狀態機）、棄號。走既有 `/queue` 後端零新端點 | L3 全鏈（取號→清單→叫號→帶位→409 防直跳）驗過 | ✅ 2026-07-10 |
+
+**已提前實作（Ivan 圈定，跳出 P4 順序先做）**
+| 任務 | 驗收標準 | 狀態 |
+|---|---|---|
+| 營運報表 + 後台匯出：`/reports/sales`（日結/區間營收、付款方式明細、客單價）、`/reports/top-items`（熱銷排行）、`/reports/export/orders.csv`（BOM CSV 對帳匯出） | net_sales 與收銀台 `_compute_net_revenue` 一致（零分歧）；6 整合測 + L3 真伺服器驗過 | ✅ 2026-07-10 |
+| 認證/權限（Ivan 拍板：PIN 登入 + 角色權限 + 主管覆核）：員工 4-6 碼 PIN（PBKDF2 純標準庫）、`/pos-auth` login/me/set-pin(admin)/employees、HMAC POS token；退菜/折扣角色 gate + 主管 PIN 覆核（audit 記錄授權者與 self/override）；折扣走既有折扣引擎、checkout 用伺服器 quote（零分歧）；前台登入 + 覆核 PIN 彈窗 | 16 整合/單元測；L3 login/deny/override/discount 全驗；full-check 綠 | ✅ 2026-07-10 |
+
+## 4. Bug 復盤 SOP（每個 bug 都要留下防再發機制）
+
+1. **記錄**：bug 現象、root cause、影響範圍，一律寫進當次 PR 描述或 `COMMANDER_HANDOFF.md`。
+2. **防再發**（至少一項）：加一個會抓到它的測試 / 加 lint 或 pyright 規則 / 把坑寫進 `CLAUDE.md`「經常踩到的坑」。
+3. **Phase 復盤**：每個 Phase 收尾做一次 — 哪些估錯、哪些返工、哪條家規要新增。結論寫進本檔 §6。
+
+## 5. 上線 gate（自用上線前的最後一關）
+
+- 走 `docs/11_production_deployment.md` SOP（Docker + Cloudflare）。
+- 真實資料演練：一家店、真菜單、營業一整天的平行試跑（POS 記一份、舊方式記一份，日結對帳一致才切換）。
+- 備份與回復演練一次（DB dump → restore 成功）。
+- 商用化（賣給其他店）前另立資安/個資審查，不在本檔範圍。
+
+## 6. 復盤記錄（隨 Phase 累積）
+
+### 復盤 #1 — P1 店員 POS（2026-07-10）
+
+**做完了什麼**：一套平板打開就能用的完整收銀系統 — 桌位/菜單資料層、樓面桌況板、開桌/結桌/取消/轉桌、桌邊點餐（伺服器端快照價防改價）、改量/退菜（回沖庫存）、現金結帳找零 + 自動結桌、多平板即時桌況同步（WebSocket + append-only 事件流）、日結/熱銷報表 + CSV 對帳匯出、單檔 vanilla JS 前台。demo-flow 一日全流程（外送進單 + 店員 POS）跑通，678 測試綠。
+
+**遇到的坑 → 防再發機制**（每個都留了測試/lint/文件擋下次）：
+| # | 坑 | Root cause | 防再發 |
+|---|---|---|---|
+| 1 | 加 NOT NULL enum 欄回填舊列後 ORM 讀不回、partial index 永遠不生效 | `SQLEnum(native_enum=False)` 存的是 member **NAME**（"OPEN"）不是 value（"open"） | `tests/test_tables_model.py` 釘死 + CLAUDE.md 坑清單；server_default / index predicate 一律用 `.name` |
+| 2 | menu/tables 整合測撞 tenant FK | 預設租戶（全 0）未 seed | 各測試檔本地 `client` fixture 覆寫 `get_current_tenant_id`→`seed_tenant.id` |
+| 3 | 退菜刪不掉、reload 後還在 | `session.delete(line)` 未走 collection cascade | 改用 `order.lines.remove(line)`（delete-orphan）；測試釘住 `lines == []` |
+| 4 | 手動 L3 驗證污染 DB，savepoint 全表計數測試假性失敗 | curl/腳本 commit 進 resto_dev 殘留 | `make db-truncate` 納入所有新表 + CLAUDE.md「L3 後清 DB」坑；每次 L3 收尾實際清 |
+| 5 | WebSocket 廣播可能漏出幻影事件 | 若在 service 內 publish，交易 rollback 後平板已收到 | record_event 只寫列 + 塞 ContextVar buffer，**commit 成功後**才 drain publish（`api/deps.get_db`）；CLAUDE.md 記錄 |
+
+**估算 vs 實際**：P1.3b/P1.4（綁桌點餐 + 結帳）比預期省工 — 靠重用既有 `orders_service` 私有 helper（BOM 扣料/KDS/回應形狀零分歧），沒有另刻一套。P1.5 即時同步比預期多花在「廣播時機正確性」而非 WebSocket 本身。
+
+**新增的家規**（已進 CLAUDE.md）：enum NAME vs value、測試中不要 `db_session.rollback()`、L3 後清 DB、即時事件廣播必在 commit 之後。
+
+**下階段開工前要拍板的決策**：認證/權限模型（店員 PIN vs 獨立憑證表；刪單/折扣的 manager gate 機制）— 屬 security-sensitive，動工前用 AskUserQuestion 給 Ivan 選項，不自作主張定 credentials schema。
