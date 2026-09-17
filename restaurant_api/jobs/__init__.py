@@ -31,6 +31,13 @@ from ..config import get_settings
 from ..middleware import configure_logging
 from .campaign_expiry import run_campaign_voucher_expiry
 from .cogs_variance import run_cogs_variance_check
+from .daily_brief import _dispatch as _brief_dispatch
+from .daily_brief import (
+    run_engineering_gaps,
+    run_investor_qa_prep,
+    run_today_top5,
+    run_weekly_review,
+)
 from .expiry_warning import run_expiry_warning
 from .membership_lifecycle import run_membership_lifecycle
 from .points_expire import run_points_expire
@@ -86,6 +93,72 @@ def _register(scheduler: AsyncIOScheduler) -> None:
         coalesce=True,
         misfire_grace_time=600,
     )
+    # ── BUFF OS Week 3 · daily / weekly briefs (proposal, not action) ──
+    #
+    # Build real LLM + embedding + retrieval clients from settings ONCE,
+    # then hand each cron a closure that reuses them. If either the LLM
+    # key or the embedding backend can't authenticate, we register the
+    # jobs anyway but they'll skip loudly rather than crash the scheduler.
+    from ..services.knowledge_ingestion.embed_backends import (
+        make_embedding_client_from_settings,
+    )
+    from ..services.knowledge_retrieval import (
+        build_retrieval_client_from_settings,
+    )
+    from ..services.llm_client import build_llm_client_from_settings
+
+    llm_client = build_llm_client_from_settings()
+    embed_client = make_embedding_client_from_settings()
+    retrieval_client = None
+    if embed_client is not None:
+        retrieval_client = build_retrieval_client_from_settings(
+            embedding_client=embed_client,
+        )
+
+    def _brief_runner(kind: str):
+        async def runner() -> None:
+            if llm_client is None or retrieval_client is None:
+                logger.warning(
+                    "brief.skip_no_credentials",
+                    extra={
+                        "brief_kind": kind,
+                        "has_llm": llm_client is not None,
+                        "has_retrieval": retrieval_client is not None,
+                    },
+                )
+                return
+            await _brief_dispatch(
+                kind,  # type: ignore[arg-type]
+                session=None,
+                now=None,
+                sink=None,
+                retrieval=retrieval_client,
+                llm=llm_client,
+                tenant_id=None,
+            )
+
+        return runner
+
+    for job_id, cron_kwargs in (
+        ("today_top5", {"hour": 9, "minute": 0}),
+        ("engineering_gaps", {"hour": 18, "minute": 0}),
+        (
+            "investor_qa_prep",
+            {"day_of_week": "mon", "hour": 9, "minute": 0},
+        ),
+        (
+            "weekly_review",
+            {"day_of_week": "fri", "hour": 17, "minute": 0},
+        ),
+    ):
+        scheduler.add_job(
+            _wrap(job_id, _brief_runner(job_id)),
+            trigger=CronTrigger(timezone=tz, **cron_kwargs),
+            id=job_id,
+            max_instances=1,
+            coalesce=True,
+            misfire_grace_time=600,
+        )
 
 
 def _wrap(name: str, fn: JobFn) -> JobFn:
@@ -128,8 +201,12 @@ async def run_scheduler() -> None:
 __all__ = [
     "run_campaign_voucher_expiry",
     "run_cogs_variance_check",
+    "run_engineering_gaps",
     "run_expiry_warning",
+    "run_investor_qa_prep",
     "run_membership_lifecycle",
     "run_points_expire",
     "run_scheduler",
+    "run_today_top5",
+    "run_weekly_review",
 ]

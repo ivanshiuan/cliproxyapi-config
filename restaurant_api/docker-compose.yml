@@ -3,7 +3,10 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    # pgvector/pgvector:pg16 = official postgres:16 + the pgvector extension
+    # baked in. The knowledge-base migrations (embeddings / BUFF OS) run
+    # CREATE EXTENSION vector, which plain postgres:16-alpine can't satisfy.
+    image: pgvector/pgvector:pg16
     container_name: resto-db
     restart: unless-stopped
     environment:
