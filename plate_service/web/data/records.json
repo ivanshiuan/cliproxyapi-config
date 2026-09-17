@@ -1,0 +1,58 @@
+[
+ {
+  "plate": "BBB-8888",
+  "station": "臺北市區監理所",
+  "closeDate": "2026-05-12",
+  "finalPrice": 352000,
+  "bidCount": 41
+ },
+ {
+  "plate": "AKV-6666",
+  "station": "臺中區監理所",
+  "closeDate": "2026-05-28",
+  "finalPrice": 128000,
+  "bidCount": 22
+ },
+ {
+  "plate": "EAF-8888",
+  "station": "高雄市區監理所",
+  "closeDate": "2026-06-02",
+  "finalPrice": 96000,
+  "bidCount": 18
+ },
+ {
+  "plate": "BPD-9999",
+  "station": "新竹區監理所",
+  "closeDate": "2026-06-09",
+  "finalPrice": 88000,
+  "bidCount": 15
+ },
+ {
+  "plate": "BRF-1688",
+  "station": "桃園監理站",
+  "closeDate": "2026-06-16",
+  "finalPrice": 36000,
+  "bidCount": 11
+ },
+ {
+  "plate": "MQA-8888",
+  "station": "臺南監理站",
+  "closeDate": "2026-06-20",
+  "finalPrice": 25000,
+  "bidCount": 9
+ },
+ {
+  "plate": "BTG-5200",
+  "station": "彰化監理站",
+  "closeDate": "2026-06-24",
+  "finalPrice": 15000,
+  "bidCount": 6
+ },
+ {
+  "plate": "BUH-6789",
+  "station": "嘉義區監理所",
+  "closeDate": "2026-06-30",
+  "finalPrice": 21000,
+  "bidCount": 8
+ }
+]
