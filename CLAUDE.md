@@ -154,11 +154,18 @@
 - 測試查詢要 scope 到 fixture 的 `seed_tenant`/`seed_store`，**不要**全表掃描（會撞 seed/demo 資料）
 - 跑前若 DB 髒了：`make db-truncate`
 
-### 蜂群任務
+### 蜂群任務 — Spec Discipline（詳見 `docs/12_spec_discipline_playbook.md`）
 - DevSwarm Coder 輸出**一個** module 檔 + **一個** test_module 檔，不要多檔
 - system prompt 改了要 bump `devswarm/prompts/_versions.py`
-- 跑任務前先想 spec 寫完整、AC ≥ 10、out-of-scope 列清
 - 一個任務預算 USD < $5；月總額 < $50
+- **四條硬規**（機制自動 gate；違反時停下來問 Ivan）：
+  1. 寫 spec 一律 `/spec`，不手寫 markdown（frontmatter 會漏欄位）
+  2. 跑 swarm 一律 `/swarm SPEC=specs/foo.md`，不用 inline `REQ=`（除非 prototype）
+  3. 新 spec 首次跑先 `/bakeoff` 定型 `preferred_model`，之後才 `/swarm`
+  4. 每月最後週五：抽 3 個 `implemented` spec 重跑 `/bakeoff` 做 model regression check
+- **一個 spec 的一生（10 步）**：想法 → `/spec` → 人審 5-10 分 → `/bakeoff` → 更新
+  `preferred_model` → `/swarm` → `make promote` → `make full-check` → 開 PR → merge → 一個月後 regression
+- **判準**：這件事會不會產生一個新 module？會 → 走全套；不會（hotfix / 重構 / 文件）→ 跳過
 
 ### Git
 - 永遠在 `claude/autonomous-resttech-enterprise-oW9jp` 分支

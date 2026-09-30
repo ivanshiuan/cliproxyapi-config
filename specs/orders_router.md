@@ -1,3 +1,15 @@
+---
+id: orders_router
+title: Spec: Orders Router (`/orders`)
+module: orders_router
+kind: router
+status: implemented
+preferred_model: opus
+budget_usd: 5.0
+tags: [ordering, router, transactional]
+ac_count: 17
+---
+
 # Spec: Orders Router (`/orders`)
 
 > **Module name:** `restaurant_api.routers.orders`

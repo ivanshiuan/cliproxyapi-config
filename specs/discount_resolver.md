@@ -1,3 +1,15 @@
+---
+id: discount_resolver
+title: Discount Resolver (MVP Module)
+module: discount_resolver
+kind: pure-function
+status: implemented
+preferred_model: sonnet
+budget_usd: 5.0
+tags: [finance, mvp, pure-function]
+ac_count: 17
+---
+
 # Task Brief: Discount Resolver (MVP Module)
 
 > **Module name:** `discount_resolver`

@@ -1,3 +1,15 @@
+---
+id: profit_calc
+title: Real Profit Calculator (MVP Module)
+module: profit_calc
+kind: pure-function
+status: implemented
+preferred_model: sonnet
+budget_usd: 5.0
+tags: [finance, mvp, pure-function]
+ac_count: 15
+---
+
 # Task Brief: Real Profit Calculator (MVP Module)
 
 > **Module name:** `real_profit_calculator`

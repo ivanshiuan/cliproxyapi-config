@@ -1,3 +1,15 @@
+---
+id: uniform_invoice_validator
+title: 任務簡報 — 台灣統一編號驗證模組
+module: uniform_invoice_validator
+kind: pure-function
+status: implemented
+preferred_model: haiku
+budget_usd: 3.0
+tags: [accounting, validation, pure-function]
+ac_count: 15
+---
+
 # 任務簡報 — 台灣統一編號驗證模組
 
 ## 背景
