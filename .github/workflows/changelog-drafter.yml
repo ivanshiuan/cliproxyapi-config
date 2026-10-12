@@ -5,11 +5,11 @@ on:
     branches: [claude/autonomous-resttech-enterprise-oW9jp]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   draft:
-    # Skip loop-bot's own commits to avoid infinite triggers
+    # Skip loop-bot's own commits to avoid redundant runs
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     steps:
@@ -21,15 +21,14 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Draft changelog
+      - name: Draft changelog (report-only, no commit/push)
         run: python scripts/draft_changelog.py
 
-      - name: Commit draft
-        run: |
-          git config user.name  "loop-bot"
-          git config user.email "loop@noreply.github.com"
-          git add RELEASE_NOTES_DRAFT.md
-          git diff --staged --quiet || (
-            git commit -m "chore(loop): update changelog draft [skip ci]" &&
-            git push origin claude/autonomous-resttech-enterprise-oW9jp
-          )
+      - name: Write draft to job summary
+        run: cat RELEASE_NOTES_DRAFT.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload changelog draft as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes-draft
+          path: RELEASE_NOTES_DRAFT.md

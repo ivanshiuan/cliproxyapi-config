@@ -1,6 +1,6 @@
 # Release Notes Draft
 
-> Auto-generated 2026-07-15 11:24 UTC — 132 commit(s) since first commit
+> Auto-generated 2026-09-16 10:39 UTC — 180 commit(s) since first commit
 > **Human review required before publishing.**
 
 ## ✨ Features
@@ -64,6 +64,7 @@
 - LangGraph agent swarm — PM/Architect/Coder/QA + self-heal (`7fb1040`)
 
 ## 🐛 Bug Fixes
+- make daily brief report-only (#46) (`b93bace`)
 - 用 datetime.UTC alias 修 ruff UP017（morning_brief / draft_changelog） (`020985b`)
 - 把 workflow branch 從 main 改成實際主幹 [skip ci] (`d4d8d5d`)
 - 處理 PR #13 review 回饋(對抗式審查 + 守衛強化) (`292e87f`)
@@ -125,6 +126,53 @@
 - full project planning artifacts (`c50de45`)
 
 ## 🔧 Chores
+- daily brief 2026-09-16 [skip ci] (`e663bd6`)
+- daily brief 2026-09-16 [skip ci] (`9f397fe`)
+- daily brief 2026-09-15 [skip ci] (`6fba3f8`)
+- daily brief 2026-09-14 [skip ci] (`a3ec6e2`)
+- daily brief 2026-09-11 [skip ci] (`731ab80`)
+- daily brief 2026-09-10 [skip ci] (`d84e61a`)
+- daily brief 2026-09-09 [skip ci] (`6e4a2cb`)
+- daily brief 2026-09-08 [skip ci] (`0167b8c`)
+- daily brief 2026-09-07 [skip ci] (`dcc6833`)
+- daily brief 2026-09-04 [skip ci] (`5ccd903`)
+- daily brief 2026-09-03 [skip ci] (`33290d6`)
+- daily brief 2026-09-02 [skip ci] (`0f3320f`)
+- daily brief 2026-09-01 [skip ci] (`92ef720`)
+- daily brief 2026-08-31 [skip ci] (`4b1a600`)
+- daily brief 2026-08-28 [skip ci] (`2806c04`)
+- daily brief 2026-08-27 [skip ci] (`2c4de6e`)
+- daily brief 2026-08-26 [skip ci] (`2bf957d`)
+- daily brief 2026-08-25 [skip ci] (`7f478b2`)
+- daily brief 2026-08-24 [skip ci] (`b60a0e4`)
+- daily brief 2026-08-21 [skip ci] (`b51fa56`)
+- daily brief 2026-08-20 [skip ci] (`3df9f44`)
+- daily brief 2026-08-19 [skip ci] (`d95008a`)
+- daily brief 2026-08-18 [skip ci] (`9747140`)
+- daily brief 2026-08-17 [skip ci] (`bdfca27`)
+- daily brief 2026-08-14 [skip ci] (`4d79e6a`)
+- daily brief 2026-08-13 [skip ci] (`46a5fef`)
+- daily brief 2026-08-12 [skip ci] (`b8072ef`)
+- daily brief 2026-08-11 [skip ci] (`c5f8c4b`)
+- daily brief 2026-08-10 [skip ci] (`eefc2ae`)
+- daily brief 2026-08-07 [skip ci] (`1d0d480`)
+- daily brief 2026-08-06 [skip ci] (`3c04b00`)
+- daily brief 2026-08-05 [skip ci] (`72a39af`)
+- daily brief 2026-08-04 [skip ci] (`14abd1d`)
+- daily brief 2026-08-03 [skip ci] (`fcdc6a8`)
+- daily brief 2026-07-31 [skip ci] (`9ef1988`)
+- daily brief 2026-07-30 [skip ci] (`9b44c6f`)
+- daily brief 2026-07-29 [skip ci] (`2778d16`)
+- daily brief 2026-07-28 [skip ci] (`a37c218`)
+- daily brief 2026-07-27 [skip ci] (`656ed1f`)
+- daily brief 2026-07-24 [skip ci] (`1ce9017`)
+- daily brief 2026-07-23 [skip ci] (`e39d288`)
+- daily brief 2026-07-22 [skip ci] (`20a2837`)
+- daily brief 2026-07-21 [skip ci] (`c2d3e62`)
+- daily brief 2026-07-20 [skip ci] (`a60ef3d`)
+- daily brief 2026-07-17 [skip ci] (`eea1afe`)
+- daily brief 2026-07-16 [skip ci] (`d76aebf`)
+- update changelog draft [skip ci] (`3e38208`)
 - daily brief 2026-07-15 [skip ci] (`4fba0de`)
 - daily brief 2026-07-14 [skip ci] (`f4d74ec`)
 - daily brief 2026-07-13 [skip ci] (`7b309f2`)
