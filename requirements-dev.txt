@@ -1,0 +1,10 @@
+# Quality-gate toolchain — pinned EXACTLY on purpose.
+#
+# Runtime deps float within major versions (pyproject.toml). The tools that decide
+# "green or red" must not: an unpinned ruff/pyright turns CI red with zero code change
+# (that is how restaurant_api/jobs/expiry_warning.py started failing pyright overnight).
+#
+# These versions passed `make full-check` on 2026-10-14. Bump deliberately, in its own
+# commit, and re-run `make full-check` before merging the bump.
+ruff==0.17.0
+pyright==1.1.414
