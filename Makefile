@@ -177,6 +177,10 @@ full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smok
 	@echo
 	@echo "✅ Full quality gate green."
 
+.PHONY: status-report
+status-report: install ## Regenerate docs/STATUS.md from the checkout (measured facts: tests, tables, API, engine wiring)
+	$(PY) scripts/status_report.py
+
 .PHONY: tigerline-check
 tigerline-check: install ## Run the TIGER LINE PRIME (sports CLI) tests — separate product, separate gate
 	$(PYTEST) tests/tigerline
