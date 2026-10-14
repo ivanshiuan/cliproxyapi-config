@@ -26,7 +26,7 @@ status: inbox
 
 ## 架構蒸餾（一張圖）
 
-```
+```text
 一句需求 ──① NL→UML(範本或LLM)──▶ PlantUML 文字
                                       ▲│
                           ② parser/printer（雙向）
