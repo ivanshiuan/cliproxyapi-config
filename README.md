@@ -6,7 +6,7 @@
 
 > **台灣全域 AI 餐飲智慧營運作業系統**。雙層架構：
 > - **DevSwarm**（LangGraph 4-agent 蜂群）→ 自動產出程式碼
-> - **RestSwarm**（FastAPI + 25 表 PG + LINE）→ 真實餐飲後端
+> - **RestSwarm**（FastAPI + PostgreSQL + LINE）→ 真實餐飲後端（實測規模見 [`docs/STATUS.md`](docs/STATUS.md)）
 
 ## 文件導覽
 
