@@ -139,7 +139,14 @@ setup_db() {
     major="$(( $(psql_super -c 'show server_version_num') / 10000 ))"
     log "pgvector missing — installing postgresql-${major}-pgvector"
     if command -v apt-get >/dev/null 2>&1 && [ "$(id -u)" = "0" ]; then
-      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "postgresql-${major}-pgvector" >/dev/null
+      # A fresh container has empty apt lists ("Unable to locate package"). Extra PPAs may 403
+      # behind an egress proxy; that is harmless — the main archive is all we need.
+      if ! apt-cache show "postgresql-${major}-pgvector" >/dev/null 2>&1; then
+        log "apt package lists are empty or stale — running apt-get update"
+        apt-get update -qq >/dev/null 2>&1 || true
+      fi
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "postgresql-${major}-pgvector" >/dev/null \
+        || die "could not install postgresql-${major}-pgvector (apt unreachable?). Install it manually and re-run."
     else
       die "install pgvector for Postgres ${major} (Debian/Ubuntu: apt install postgresql-${major}-pgvector) and re-run."
     fi
