@@ -78,7 +78,12 @@ async def _scan_and_warn(session: AsyncSession) -> int:
         on_hand = Decimal(qty) if qty is not None else Decimal("0")
         if on_hand <= 0:
             continue
-        days_left = (ingredient.expiry_date - today).days
+        # The query above already excludes NULL expiry dates; the guard states that
+        # invariant to the type checker and keeps the job safe if the query changes.
+        expiry = ingredient.expiry_date
+        if expiry is None:
+            continue
+        days_left = (expiry - today).days
         await audit(
             session,
             action="expiry.warning",
@@ -87,7 +92,7 @@ async def _scan_and_warn(session: AsyncSession) -> int:
             target=("ingredients", ingredient.id),
             after={
                 "lot_no": ingredient.lot_no,
-                "expiry_date": ingredient.expiry_date.isoformat(),
+                "expiry_date": expiry.isoformat(),
                 "days_left": days_left,
                 "on_hand": str(on_hand),
                 "name": ingredient.name,

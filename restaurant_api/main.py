@@ -108,6 +108,22 @@ app.include_router(health_router.router)
 if not any(getattr(r, "path", "").startswith("/admin") for r in app.routes):
     app.include_router(auth_router.router)
 
+
+def _mount_daily_pnl() -> None:
+    """Owner-facing daily P&L (read-only, admin-gated), mounted apart from the CRUD routers above.
+
+    The import is local on purpose: this router has no ordering dependency on the others (nor on the
+    POS reports router that shares the /reports prefix). No path guard here: with FastAPI >= 0.14x
+    ``app.routes`` holds ``_IncludedRouter`` objects without a ``.path``, so the guards above no longer
+    detect an existing mount.
+    """
+    from .routers import pnl as pnl_router
+
+    app.include_router(pnl_router.router)
+
+
+_mount_daily_pnl()
+
 # Static wheel-spin demo page (門口 QR Code 指向 /demo/?campaign=<id>). Same-origin
 # with the API so no CORS is needed. Mounted last so it can't shadow API routes.
 _STATIC_DIR = Path(__file__).parent / "static"

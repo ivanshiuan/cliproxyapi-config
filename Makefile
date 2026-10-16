@@ -26,8 +26,16 @@ $(VENV)/bin/python:
 	$(PIP) install --upgrade pip
 
 .PHONY: install
-install: $(VENV)/bin/python ## Create venv and install DevSwarm in editable mode
-	$(PIP) install -e .
+install: $(VENV)/bin/python ## Create venv; install the project (editable) + the pinned lint/type toolchain
+	$(PIP) install -e . -r requirements-dev.txt
+
+.PHONY: bootstrap
+bootstrap: ## One command from a bare checkout: venv + deps + local Postgres role/db/extensions + migrations (no docker)
+	bash scripts/bootstrap_env.sh
+
+.PHONY: env-check
+env-check: ## Report what the dev environment is missing (changes nothing; exit 1 if anything is)
+	bash scripts/bootstrap_env.sh --check
 
 .PHONY: clean
 clean: ## Remove caches and build artifacts (keeps venv and workspace)
@@ -52,11 +60,10 @@ test-fast: ## Run tests assuming env is already set up
 
 .PHONY: lint
 lint: install ## Lint with ruff (read-only)
-	$(VENV)/bin/python -m ruff check devswarm restaurant_api tests scripts
+	$(VENV)/bin/python -m ruff check devswarm restaurant_api tigerline tests scripts
 
 .PHONY: typecheck
-typecheck: install ## Run pyright type checker
-	$(VENV)/bin/pip install --quiet pyright
+typecheck: install ## Run pyright type checker (version pinned in requirements-dev.txt)
 	$(VENV)/bin/pyright
 
 .PHONY: fmt
@@ -162,13 +169,21 @@ demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳�
 
 .PHONY: full-check
 full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smoke + migration drift
-	$(VENV)/bin/ruff check devswarm restaurant_api tests scripts
+	$(VENV)/bin/ruff check devswarm restaurant_api tigerline tests scripts
 	$(VENV)/bin/pyright
-	$(PYTEST) tests/
+	$(PYTEST) tests/ --ignore=tests/tigerline
 	cd restaurant_api && ../$(VENV)/bin/alembic check
 	$(PY) scripts/smoke_db.py
 	@echo
 	@echo "✅ Full quality gate green."
+
+.PHONY: status-report
+status-report: install ## Regenerate docs/STATUS.md from the checkout (measured facts: tests, tables, API, engine wiring)
+	$(PY) scripts/status_report.py
+
+.PHONY: tigerline-check
+tigerline-check: install ## Run the TIGER LINE PRIME (sports CLI) tests — separate product, separate gate
+	$(PYTEST) tests/tigerline
 
 .PHONY: coverage
 coverage: install ## Run the suite with line + branch coverage; term-missing summary

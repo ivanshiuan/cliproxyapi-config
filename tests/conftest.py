@@ -12,6 +12,7 @@ Skip strategy:
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import AsyncIterator, Iterator
 from datetime import date
@@ -36,6 +37,28 @@ from restaurant_api.models import (
     Store,
     Tenant,
 )
+
+# ──────────────────────────────────────────────────────────────────────────
+# Hermetic by construction — the suite must never reach the real LINE API
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Blank the LINE credentials for the whole session.
+
+    ``get_messenger()`` returns the real ``HttpLineMessenger`` whenever
+    ``LINE_CHANNEL_ACCESS_TOKEN`` is set in the OS environment or ``.env``. A dev
+    machine (or a cloud session with environment secrets) that carries live
+    credentials would otherwise let a test that bypasses DI push to real customers.
+    An empty value overrides ``.env`` too, so the stub is always selected. The
+    settings and messenger caches are cleared because this module's own import
+    already called ``get_settings()`` with the host environment.
+    """
+    for name in ("LINE_CHANNEL_ACCESS_TOKEN", "LINE_CHANNEL_SECRET"):
+        os.environ[name] = ""
+    get_settings.cache_clear()
+    reset_messenger()
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # Detect DB availability — skip router tests cleanly when no Postgres around
