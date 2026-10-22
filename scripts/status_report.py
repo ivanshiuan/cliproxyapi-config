@@ -3,7 +3,7 @@
 
 Hand-typed counts drift: the repo's own docs once said 47, 274, 304 and 398 tests and
 18, 25 and 33 tables at the same time. Everything here is computed from the checkout
-(git, ORM metadata, the FastAPI app, migration files, grep), so it cannot disagree
+(git, ORM metadata, the FastAPI app, migration files, AST scan), so it cannot disagree
 with the code. Regenerate with ``make status-report`` before merging.
 
 No network, no database connection, no secrets.
@@ -12,6 +12,7 @@ No network, no database connection, no secrets.
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import importlib.metadata as md
 import re
@@ -102,6 +103,11 @@ def migrations() -> tuple[int, list[str]]:
 
 
 def engine_wiring(files: list[str]) -> list[tuple[str, str, int]]:
+    """Real call sites of each engine (AST ``Call`` nodes) in application code.
+
+    Counting text matches instead would also count imports, re-exports, docstrings, and this very table,
+    and so report an engine nobody calls as "wired".
+    """
     app_py = [
         f for f in files
         if f.endswith(".py")
@@ -109,12 +115,20 @@ def engine_wiring(files: list[str]) -> list[tuple[str, str, int]]:
         and not f.startswith("restaurant_api/services/calc/")
         and not f.startswith("restaurant_api/alembic/")
     ]
-    texts = {f: (ROOT / f).read_text(encoding="utf-8", errors="ignore") for f in app_py}
-    rows = []
-    for fn, label in CALC_ENGINES.items():
-        pat = re.compile(rf"\b{fn}\b")
-        rows.append((fn, label, sum(len(pat.findall(t)) for t in texts.values())))
-    return rows
+    calls: Counter[str] = Counter()
+    for f in app_py:
+        try:
+            tree = ast.parse((ROOT / f).read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = fn.id if isinstance(fn, ast.Name) else fn.attr if isinstance(fn, ast.Attribute) else None
+            if name in CALC_ENGINES:
+                calls[name] += 1
+    return [(fn, label, calls[fn]) for fn, label in CALC_ENGINES.items()]
 
 
 def build() -> str:
@@ -159,7 +173,7 @@ def build() -> str:
         a(f"| `{d}/` | {len(in_d)} | {loc(pyd):,} |")
     a(f"| 全部 | {len(files)} | {loc(py):,} |")
     a("")
-    a("## 計算引擎有沒有真的接到系統（grep 應用程式碼，排除 `services/calc/` 與測試）")
+    a("## 計算引擎有沒有真的接到系統（掃描應用程式碼的實際呼叫，排除 `services/calc/` 與測試）")
     a("")
     a("| 引擎函式 | 用途 | 應用程式呼叫點 | 狀態 |")
     a("|---|---|---:|---|")
