@@ -9,14 +9,20 @@ from __future__ import annotations
 import uuid
 from datetime import date
 from decimal import Decimal as D
+from types import SimpleNamespace
+from typing import cast
 
+from restaurant_api.models import Order
 from restaurant_api.services.daily_pnl_html import render_html
 from restaurant_api.services.daily_pnl_service import (
     DayFacts,
     OrderFacts,
     PnlSettings,
     StaffDay,
+    _order_facts,
     compose,
+    q2,
+    till_service_charge,
 )
 
 STORE = uuid.UUID("00000000-0000-0000-0000-0000000000aa")
@@ -106,6 +112,35 @@ def test_service_charge_is_on_the_pre_discount_total():
     assert r.billed_incl_vat == D("1000.00")  # 900 discounted + 100 charge, NOT 900 + 90
 
 
+def test_service_charge_rounds_like_the_till_not_like_the_rest_of_the_code():
+    """The POS till quantizes half-EVEN; plain half-up would be a cent off on every exact tie."""
+    ten = D("0.10")
+    assert till_service_charge(D("1000"), ten) == D("100.00")
+    assert till_service_charge(D("1555"), ten) == D("155.50")
+    assert till_service_charge(D("0"), ten) == D("0.00")
+    assert till_service_charge(D("1000"), D("0")) == D("0.00")
+    # exact ties (the third decimal is a lone 5): the even neighbour wins
+    assert till_service_charge(D("11.25"), ten) == D("1.12")  # 1.125 -> 1.12
+    assert till_service_charge(D("12.35"), ten) == D("1.24")  # 1.235 -> 1.24
+    assert till_service_charge(D("12.25"), ten) == D("1.22")  # 1.225 -> 1.22
+    assert till_service_charge(D("33.35"), ten) == D("3.34")  # 3.335 -> 3.34
+    # not a tie: ordinary rounding
+    assert till_service_charge(D("50.175"), ten) == D("5.02")  # 5.0175
+    # and the difference from the generic half-up helper is real, which is why this function exists
+    assert q2(D("1.125")) == D("1.13") != till_service_charge(D("11.25"), ten)
+
+
+def test_schema_without_a_service_charge_column_reads_as_zero_not_an_error():
+    """Before PR #29 there is no orders.service_charge_rate at all: read it defensively, never crash or invent."""
+    line = SimpleNamespace(line_total=D("1000"), cogs_theoretical=D("300"), cogs_actual=None)
+    bare = SimpleNamespace(lines=[line], discounts=[], payments=[])
+    f = _order_facts(cast(Order, bare))
+    assert (f.gross, f.discounted, f.service_charge) == (D("1000"), D("1000"), D("0.00"))
+    assert f.cogs_actual == D("300")  # an order without a measured cost falls back to the theoretical one
+    with_rate = SimpleNamespace(lines=[line], discounts=[], payments=[], service_charge_rate=D("0.10"))
+    assert _order_facts(cast(Order, with_rate)).service_charge == D("100.00")
+
+
 def test_vat_can_be_switched_off():
     r = compose(facts([order(1050, charge=D("0"))]), settings(prices_include_vat=False))
     assert r.vat == D("0.00") and r.revenue_ex_vat == r.billed_incl_vat == D("1050.00")
@@ -177,6 +212,10 @@ def test_fixed_cost_hints():
     assert any("水電" in w for w in rent_only.warnings) and not any("看不到" in w for w in rent_only.warnings)
     both = compose(facts([]), settings(fixed_costs_monthly={"租金": D("1"), "水電": D("1")}))
     assert not any("固定成本裡沒有看到" in w for w in both.warnings)
+    english = compose(facts([]), settings(fixed_costs_monthly={"Rent": D("1"), "Utilities": D("1")}))
+    assert not any("固定成本裡沒有看到" in w for w in english.warnings)
+    phone_is_not_utilities = compose(facts([]), settings(fixed_costs_monthly={"rent": D("1"), "網路電話": D("1")}))
+    assert any("水電" in w for w in phone_is_not_utilities.warnings)
 
 
 def test_payment_mismatch_is_reported_with_direction():

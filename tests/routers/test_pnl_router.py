@@ -14,10 +14,14 @@ from decimal import Decimal as D
 from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 
 from restaurant_api.models import (
     Employee,
     Order,
+    OrderPayment,
+    PaymentMethod,
     StaffMealEvent,
     Store,
     TastingEvent,
@@ -25,10 +29,13 @@ from restaurant_api.models import (
     WasteEvent,
 )
 from restaurant_api.models.employees import EmployeeRole
+from restaurant_api.models.orders import OrderStatus
 
 DAY = date(2026, 10, 14)  # a 31-day month
 TPE = ZoneInfo("Asia/Taipei")
 URL = "/reports/daily-pnl"
+# PR #29 adds orders.service_charge_rate as a real column; this branch alone does not have it.
+HAS_SERVICE_CHARGE_COLUMN = "service_charge_rate" in Order.__table__.c
 
 
 @pytest.fixture(autouse=True)
@@ -56,12 +63,28 @@ async def _order(client, store, item, *, qty, discounts=None, payments=None, clo
     return oid
 
 
-@pytest.fixture
-async def scenario(client, db_session, seed_tenant, seed_store, seed_menu_item, seed_recipe, seed_employee, monkeypatch):
-    """Two closed orders (one with 10% off), one open, one voided; costs; two staff; a 10% service charge."""
-    # The service-charge column arrives with PR #29; until then simulate it so the loader's path is covered.
-    monkeypatch.setattr(Order, "service_charge_rate", D("0.10"), raising=False)
+async def _record_service_charge(db_session, monkeypatch, store, rate: D) -> None:
+    """Put a service-charge rate on every order of ``store``.
 
+    With PR #29 the rate lives in a real column, so write it (patching the class would be ignored: a loaded
+    row's own value wins). Without #29 there is no column to write, so simulate it on the class; the report
+    reads it with ``getattr`` either way.
+    """
+    if HAS_SERVICE_CHARGE_COLUMN:
+        await db_session.execute(
+            update(Order)
+            .where(Order.store_id == store.id)
+            .values(service_charge_rate=rate)
+            .execution_options(synchronize_session="fetch")
+        )
+        await db_session.flush()
+    else:
+        monkeypatch.setattr(Order, "service_charge_rate", rate, raising=False)
+
+
+@pytest.fixture
+async def day_without_service_charge(client, db_session, seed_tenant, seed_store, seed_menu_item, seed_recipe, seed_employee):
+    """Two closed orders (one with 10% off), one open, one voided; costs; two staff. No service charge recorded."""
     await _order(  # 4 x 250 = 1000, 10% off -> 900, service 10% of 1000 = 100, due 1000
         client, seed_store, seed_menu_item, qty=4,
         discounts=[{"kind": "percent", "value": "0.10"}],
@@ -103,6 +126,13 @@ async def scenario(client, db_session, seed_tenant, seed_store, seed_menu_item, 
     return seed_store
 
 
+@pytest.fixture
+async def scenario(day_without_service_charge, db_session, monkeypatch):
+    """The same day with the 10% service charge the till adds at checkout."""
+    await _record_service_charge(db_session, monkeypatch, day_without_service_charge, D("0.10"))
+    return day_without_service_charge
+
+
 async def test_full_day_from_real_orders(client, scenario):
     r = await client.get(URL, params={"store_id": str(scenario.id), "date": DAY.isoformat()})
     assert r.status_code == 200, r.text
@@ -139,14 +169,46 @@ async def test_full_day_from_real_orders(client, scenario):
     assert "收款合計" not in warnings and "服務費合計是 0" not in warnings
 
 
-async def test_without_the_service_charge_column_it_is_zero_and_says_so(client, scenario, monkeypatch):
-    """On a schema without Order.service_charge_rate nothing is invented: charge 0 + a visible warning."""
-    monkeypatch.delattr(Order, "service_charge_rate")
-    r = await client.get(URL, params={"store_id": str(scenario.id), "date": DAY.isoformat()})
+async def test_without_a_recorded_service_charge_it_is_zero_and_says_so(client, day_without_service_charge):
+    """Nothing is invented: no recorded rate means charge 0, a visible warning, and the till gap is flagged."""
+    day = day_without_service_charge
+    r = await client.get(URL, params={"store_id": str(day.id), "date": DAY.isoformat()})
     body = r.json()
     assert D(body["service_charge"]) == D("0.00") and D(body["billed_incl_vat"]) == D("1400.00")
     assert any("服務費合計是 0" in w for w in body["warnings"])
     assert any("收款合計" in w for w in body["warnings"])  # cash collected (1550) != due (1400): flagged
+
+
+async def test_report_reads_current_rows_not_a_stale_session_cache(client, db_session, scenario):
+    """A checkout and the report can share one session; the payment just written must still be counted."""
+    first = (
+        (
+            await db_session.execute(
+                select(Order)
+                .where(Order.store_id == scenario.id, Order.status == OrderStatus.CLOSED)
+                .options(selectinload(Order.payments))  # the collection is now loaded (and about to go stale)
+                .limit(1)
+            )
+        )
+        .scalars()
+        .one()
+    )
+    db_session.add(
+        OrderPayment(
+            tenant_id=first.tenant_id,
+            order_id=first.id,
+            method=PaymentMethod.CASH,
+            amount=D("5"),
+            fee_amount=D("0"),
+            paid_at=datetime(2026, 10, 14, 13, 0, tzinfo=TPE),
+        )
+    )
+    await db_session.flush()  # written to the table, not to first.payments
+
+    r = await client.get(URL, params={"store_id": str(scenario.id), "date": DAY.isoformat()})
+    body = r.json()
+    assert D(body["payments_total"]) == D("1555.00") and D(body["payments_diff"]) == D("5.00")
+    assert any("多於應收" in w for w in body["warnings"])
 
 
 async def test_html_page(client, scenario):

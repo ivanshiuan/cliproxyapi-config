@@ -33,7 +33,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -73,6 +73,17 @@ _ONE = Decimal("1")
 
 def q2(value: Decimal) -> Decimal:
     return value.quantize(_Q2, rounding=ROUND_HALF_UP)
+
+
+def till_service_charge(gross: Decimal, rate: Decimal) -> Decimal:
+    """The service charge exactly as the till computes it (``pos_order_service.amount_due`` in PR #29).
+
+    The till quantizes with Python's default decimal context, i.e. half-EVEN (banker's rounding), while the
+    rest of the code base rounds half-up. On an exact tie (11.25 x 10% = 1.125) the two differ by one cent,
+    which would show up here as a bogus "collected != due" difference. So mirror the till, explicitly.
+    ``tests/test_daily_pnl_till_parity.py`` pins the two together as soon as #29 is in the tree.
+    """
+    return (gross * rate).quantize(_Q2, rounding=ROUND_HALF_EVEN)
 
 
 # -----------------------------------------------------------------------------
@@ -249,13 +260,14 @@ def compose(facts: DayFacts, settings: PnlSettings) -> DailyPnlReport:
         for name, amount in sorted(settings.fixed_costs_monthly.items())
         if amount > _ZERO
     ]
-    names = " ".join(settings.fixed_costs_monthly)
+    names = " ".join(settings.fixed_costs_monthly).lower()
     if not settings.fixed_costs_monthly:
         warnings.append("沒有設定任何固定成本(RESTO_PNL_FIXED_COSTS_MONTHLY), 淨利沒有扣租金與水電, 嚴重偏高。")
     else:
-        if "租" not in names:
+        # Labels are free text the owner chose, in Chinese or English: accept both for the two basics.
+        if not any(k in names for k in ("租", "rent", "lease")):
             warnings.append("固定成本裡沒有看到「租金」。")
-        if not any(k in names for k in ("水", "電", "瓦斯")):
+        if not any(k in names for k in ("水電", "水費", "電費", "瓦斯", "utilit", "electric", "water", "gas")):
             warnings.append("固定成本裡沒有看到「水電」。")
     warnings.append("沒有計入設備與裝潢折舊、營業稅申報與所得稅。")
     assumptions.append(f"固定成本只含你設定的項目, 月金額 / 當月 {dim} 天, 平均攤到每天。")
@@ -383,7 +395,7 @@ def _order_facts(order: Order) -> OrderFacts:
     gross = sum((ln.line_total for ln in order.lines), _ZERO)
     discounted = orders_service._compute_net_revenue(order)
     rate = getattr(order, "service_charge_rate", None) or _ZERO
-    charge = q2(gross * rate)
+    charge = till_service_charge(gross, rate)
     fees: dict[str, Decimal] = defaultdict(lambda: _ZERO)
     for p in order.payments:
         fees[p.method.value] += p.fee_amount or _ZERO
@@ -424,6 +436,9 @@ async def load_day_facts(session: AsyncSession, store: Store, business_date: dat
                     selectinload(Order.discounts),
                     selectinload(Order.payments),
                 )
+                # Money report: read the rows as they are now. Without this, an order this session loaded
+                # earlier (say, a checkout in the same request) keeps its stale in-memory payments list.
+                .execution_options(populate_existing=True)
             )
         )
         .scalars()
