@@ -266,7 +266,7 @@ class TestPipeline:
         if not SEED_PATH.exists():
             pytest.skip("seed file not found")
         programs = load_programs_from_seed(SEED_PATH)
-        assert len(programs) >= 9
+        assert len(programs) >= 19
         for p in programs:
             assert p.id
             assert p.confidence in DataConfidence
@@ -286,7 +286,7 @@ class TestPipeline:
         assert output.exists()
         content = output.read_text()
         assert "雷達報告" in content
-        assert len(report.matches) >= 9
+        assert len(report.matches) >= 19
         eligible_count = sum(
             1
             for m in report.matches
