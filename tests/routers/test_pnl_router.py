@@ -219,6 +219,15 @@ async def test_html_page(client, scenario):
     assert "<script" not in r.text
 
 
+async def test_a_broken_setting_is_reported_with_its_name_not_a_bare_500(client, seed_store, monkeypatch):
+    monkeypatch.setenv("RESTO_PNL_FIXED_COSTS_MONTHLY", "{\u201c租金\u201d: 100000}")  # smart quotes from a chat app
+    r = await client.get(URL, params={"store_id": str(seed_store.id), "date": DAY.isoformat()})
+    assert r.status_code == 503
+    error = r.json()["error"]
+    assert error["code"] == "PNL_SETTINGS_INVALID"
+    assert "RESTO_PNL_FIXED_COSTS_MONTHLY" in error["message"] and "半形" in error["message"]
+
+
 async def test_requires_admin(anon_client, seed_store):
     r = await anon_client.get(URL, params={"store_id": str(seed_store.id)})
     assert r.status_code == 401

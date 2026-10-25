@@ -12,15 +12,19 @@ from decimal import Decimal as D
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
+
 from restaurant_api.models import Order
 from restaurant_api.services.daily_pnl_html import render_html
 from restaurant_api.services.daily_pnl_service import (
     DayFacts,
     OrderFacts,
+    PnlNotConfiguredError,
     PnlSettings,
     StaffDay,
     _order_facts,
     compose,
+    load_settings,
     q2,
     till_service_charge,
 )
@@ -263,3 +267,33 @@ def test_html_escapes_everything_from_configuration():
     page = render_html(r)
     assert "<script" not in page and "&lt;script&gt;" in page
     assert "今日估算淨利" in page and "NT$" in page and "Test Store" in page
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("FIXED_COSTS_MONTHLY", '{"租金": 100000,}'),  # trailing comma
+        ("FIXED_COSTS_MONTHLY", "{\u201c租金\u201d: 100000}"),  # full-width quotes pasted from a chat app
+        ("FIXED_COSTS_MONTHLY", "not json"),
+        ("FIXED_COSTS_MONTHLY", '{"租金": "十三萬"}'),  # an amount in words
+        ("FIXED_COSTS_MONTHLY", '{"租金": -5}'),  # a negative rent would otherwise be ignored silently
+        ("FIXED_COSTS_MONTHLY", "[1, 2]"),
+        ("LABOR_ON_COST_RATE", "17"),  # 17% written as 17
+        ("LABOR_ON_COST_RATE", "-0.1"),
+        ("VAT_RATE", "5"),  # 5% written as 5
+        ("PRICES_INCLUDE_VAT", "maybe"),
+    ],
+)
+def test_a_bad_setting_names_the_variable_instead_of_an_opaque_error(monkeypatch, variable, value):
+    monkeypatch.setenv(f"RESTO_PNL_{variable}", value)
+    with pytest.raises(PnlNotConfiguredError) as caught:
+        load_settings()
+    assert caught.value.status_code == 503
+    assert f"RESTO_PNL_{variable}" in caught.value.detail["message"]
+    assert caught.value.detail["details"]["settings"] == [f"RESTO_PNL_{variable}"]
+
+
+def test_good_settings_load_unchanged(monkeypatch):
+    monkeypatch.setenv("RESTO_PNL_FIXED_COSTS_MONTHLY", '{"租金": 100000, "水電": 0}')  # zero is allowed
+    monkeypatch.setenv("RESTO_PNL_LABOR_ON_COST_RATE", "0.17")
+    assert load_settings().fixed_costs_monthly == {"租金": D("100000"), "水電": D("0")}

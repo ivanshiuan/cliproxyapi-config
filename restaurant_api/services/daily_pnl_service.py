@@ -29,6 +29,7 @@ User-facing strings use ASCII punctuation, matching the rest of ``restaurant_api
 from __future__ import annotations
 
 import calendar
+import re
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -37,13 +38,14 @@ from decimal import ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic import ValidationError as PydanticValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict, SettingsError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..api.errors import NotFoundError, ValidationError
+from ..api.errors import DomainError, NotFoundError, ValidationError
 from ..models.cost_events import StaffMealEvent, TastingEvent, WasteEvent
 from ..models.employees import Employee
 from ..models.hr import TimeClock
@@ -103,11 +105,58 @@ class PnlSettings(BaseSettings):
     )
 
     prices_include_vat: bool = True
-    vat_rate: Decimal = Decimal("0.05")
+    vat_rate: Decimal = Field(default=Decimal("0.05"), ge=0, lt=1)
     # {"rent": 130000, "utilities": 45000}: NT$ per month, spread over the days of the month.
     fixed_costs_monthly: dict[str, Decimal] = Field(default_factory=dict)
     # Employer-side labor insurance / pension as a ratio of wages, e.g. 0.17. 0 = not included.
-    labor_on_cost_rate: Decimal = Decimal("0")
+    labor_on_cost_rate: Decimal = Field(default=Decimal("0"), ge=0, le=1)
+
+    @field_validator("fixed_costs_monthly")
+    @classmethod
+    def _no_negative_amounts(cls, value: dict[str, Decimal]) -> dict[str, Decimal]:
+        negative = sorted(name for name, amount in value.items() if amount < 0)
+        if negative:  # silently ignoring a negative rent would look like "rent is included"
+            raise ValueError(f"amounts cannot be negative: {', '.join(negative)}")
+        return value
+
+
+class PnlNotConfiguredError(DomainError):
+    """A RESTO_PNL_* value is malformed: name the variable and show the fix instead of an opaque 500."""
+
+    code = "PNL_SETTINGS_INVALID"
+    status_code = 503
+
+
+# What a person editing .env by hand most likely got wrong, per setting.
+_SETTING_HINTS = {
+    "fixed_costs_monthly": (
+        '必須是 JSON, 金額是數字, 例如 {"租金": 100000, "水電": 30000}'
+        "(引號要半形 \", 最後一項後面不能有逗號, 金額不能是負數)"
+    ),
+    "labor_on_cost_rate": "必須是 0 到 1 之間的小數, 17% 要寫 0.17",
+    "vat_rate": "必須是小於 1 的小數, 營業稅 5% 要寫 0.05",
+    "prices_include_vat": "只能寫 true 或 false",
+}
+
+
+def load_settings() -> PnlSettings:
+    """``PnlSettings()``, but a bad hand-edited value becomes a message that says which one and why."""
+    try:
+        return PnlSettings()
+    except SettingsError as exc:  # JSON that does not parse; the message names the field
+        found = re.search(r'field "(\w+)"', str(exc))
+        fields = [found.group(1)] if found else []
+        reason = str(exc.__cause__ or exc)
+    except PydanticValidationError as exc:  # parsed, but not acceptable
+        errors = exc.errors()
+        fields = list(dict.fromkeys(str(e["loc"][0]) for e in errors if e["loc"]))
+        reason = "; ".join(f"{'.'.join(str(part) for part in e['loc'])}: {e['msg']}" for e in errors)
+    names = [f"RESTO_PNL_{f.upper()}" for f in fields] or ["RESTO_PNL_*"]
+    hints = " ".join(f"{n}: {_SETTING_HINTS.get(f, '值不正確')}。" for n, f in zip(names, fields or [""], strict=False))
+    raise PnlNotConfiguredError(
+        message=f"每日損益的設定有誤, 請修正後重啟 api 容器。{hints}",
+        details={"settings": names, "reason": reason},
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -530,18 +579,21 @@ async def build_daily_pnl(
     business_date: date,
     settings: PnlSettings | None = None,
 ) -> DailyPnlReport:
+    settings = settings or load_settings()  # fail on a bad .env value before touching the database
     store = await resolve_store(session, store_id)
     facts = await load_day_facts(session, store, business_date)
-    return compose(facts, settings or PnlSettings())
+    return compose(facts, settings)
 
 
 __all__ = [
     "DayFacts",
     "OrderFacts",
+    "PnlNotConfiguredError",
     "PnlSettings",
     "StaffDay",
     "build_daily_pnl",
     "compose",
     "labor_lines",
+    "load_settings",
     "resolve_store",
 ]
