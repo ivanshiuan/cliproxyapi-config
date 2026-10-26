@@ -6,7 +6,7 @@
 
 > **台灣全域 AI 餐飲智慧營運作業系統**。雙層架構：
 > - **DevSwarm**（LangGraph 4-agent 蜂群）→ 自動產出程式碼
-> - **RestSwarm**（FastAPI + 25 表 PG + LINE）→ 真實餐飲後端
+> - **RestSwarm**（FastAPI + PostgreSQL + LINE）→ 真實餐飲後端（實測規模見 [`docs/STATUS.md`](docs/STATUS.md)）
 
 ## 文件導覽
 
@@ -14,6 +14,7 @@
 |---|---|---|
 | **入口** | [CLAUDE.md](CLAUDE.md) | 專案說明書、不變法則 |
 | **指揮官** | [COMMANDER_HANDOFF.md](COMMANDER_HANDOFF.md) | 你還沒做的事 |
+| **決策** | [docs/DECISIONS.md](docs/DECISIONS.md) | 老闆已決定／待決定的事（試營運日、損益規則…） |
 | **CHANGELOG** | [CHANGELOG.md](CHANGELOG.md) | 版本歷史 |
 | 00 | [docs/00_vision.md](docs/00_vision.md) | 願景凍結（SSOT） |
 | 01 | [docs/01_tech_stack_recommendation.md](docs/01_tech_stack_recommendation.md) | 技術選型 |
