@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KDS 廚房出餐</title>
+<style>
+  :root {
+    --bg: #14161a; --card: #23262d; --ink: #eceff4; --sub: #9aa3af;
+    --queued: #f59e0b; --cooking: #3b82f6; --ready: #22c55e; --line: #33363e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         background: var(--bg); color: var(--ink); height: 100vh; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+           border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 20px; }
+  header .stat { color: var(--sub); font-size: 14px; }
+  .spacer { flex: 1; }
+  #liveDot { font-size: 13px; }
+  main { flex: 1; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;
+         padding: 12px 14px; overflow: hidden; }
+  .col { display: flex; flex-direction: column; min-height: 0; background: #191c21;
+         border: 1px solid var(--line); border-radius: 14px; }
+  .col h2 { font-size: 16px; padding: 12px 14px 8px; display: flex; justify-content: space-between; }
+  .col .count { color: var(--sub); font-weight: 400; }
+  .cards { flex: 1; overflow-y: auto; padding: 0 10px 12px; }
+  .card { background: var(--card); border-left: 6px solid var(--sub); border-radius: 10px;
+          padding: 10px 12px; margin-bottom: 10px; }
+  .card.queued { border-left-color: var(--queued); }
+  .card.cooking { border-left-color: var(--cooking); }
+  .card.ready { border-left-color: var(--ready); }
+  .card .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .card .tname { font-weight: 800; font-size: 17px; }
+  .card .age { color: var(--sub); font-size: 13px; }
+  .card .age.warn { color: #f87171; font-weight: 700; }
+  .card .item { font-size: 18px; margin: 6px 0 2px; }
+  .card .qty { font-weight: 800; }
+  .card .notes { color: #fbbf24; font-size: 14px; }
+  .card button { margin-top: 8px; width: 100%; padding: 10px; font-size: 16px; font-weight: 700;
+                 border: 0; border-radius: 8px; color: #fff; }
+  .card.queued button { background: var(--cooking); }
+  .card.cooking button { background: var(--ready); }
+  .card.ready button { background: #6b7280; }
+  .empty { color: var(--sub); text-align: center; padding: 30px 0; font-size: 14px; }
+  .toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+           background: #000; color: #fff; padding: 10px 18px; border-radius: 999px;
+           font-size: 14px; opacity: 0; transition: opacity .25s; z-index: 20; }
+  .toast.show { opacity: .95; }
+</style>
+</head>
+<body>
+<header>
+  <h1>👨‍🍳 KDS 出餐板</h1>
+  <span class="stat" id="summary">—</span>
+  <span class="spacer"></span>
+  <span id="liveDot" title="即時連線狀態">●</span>
+</header>
+
+<main>
+  <div class="col"><h2>待製作 <span class="count" id="cQueued"></span></h2><div class="cards" id="queued"></div></div>
+  <div class="col"><h2>製作中 <span class="count" id="cCooking"></span></h2><div class="cards" id="cooking"></div></div>
+  <div class="col"><h2>可出餐 <span class="count" id="cReady"></span></h2><div class="cards" id="ready"></div></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// KDS board: three-lane flow 待製作 → 製作中 → 可出餐 → (出餐完成離板).
+// Live via the same /tables/ws stream the POS uses; poll fallback when down.
+const API = "";
+const storeId = new URLSearchParams(location.search).get("store");
+let ws = null, lastSeq = 0, wsBackoff = 1000, reconnectTimer = null, refreshTimer = null;
+
+const $ = (id) => document.getElementById(id);
+function toast(msg) { const t = $("toast"); t.textContent = msg;
+  t.className = "toast show"; setTimeout(() => (t.className = "toast"), 2000); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+async function api(path, opts) {
+  const res = await fetch(API + path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) {
+    let d = res.statusText;
+    try { const j = await res.json(); d = j.error?.message || d; } catch (e) { /* ignore */ }
+    throw new Error(d);
+  }
+  return res.json();
+}
+
+function ageMin(iso) { return iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 60000) : 0; }
+
+function card(l) {
+  const st = l.kitchen_status;
+  const since = st === "queued" ? l.sent_to_kitchen_at : st === "cooking" ? l.cooking_started_at : l.ready_at;
+  const mins = ageMin(since);
+  const next = st === "queued" ? ["cooking", "開始製作"] : st === "cooking" ? ["ready", "完成 → 可出餐"] : ["served", "已送上桌"];
+  return `<div class="card ${st}">
+    <div class="top">
+      <span class="tname">${escapeHtml(l.table_name || l.order_no)}</span>
+      <span class="age ${mins >= 15 ? "warn" : ""}">${mins} 分</span>
+    </div>
+    <div class="item"><span class="qty">${Number(l.qty)}×</span> ${escapeHtml(l.item_name || "品項")}</div>
+    ${l.notes ? `<div class="notes">📝 ${escapeHtml(l.notes)}</div>` : ""}
+    <button onclick="advance('${l.line_id}','${next[0]}')">${next[1]}</button>
+  </div>`;
+}
+
+async function refresh() {
+  if (!storeId) { $("summary").textContent = "請在網址加上 ?store=<門市UUID>"; return; }
+  try {
+    const rows = await api(`/kitchen/queue?store_id=${encodeURIComponent(storeId)}`);
+    const lanes = { queued: [], cooking: [], ready: [] };
+    for (const l of rows) if (lanes[l.kitchen_status]) lanes[l.kitchen_status].push(l);
+    for (const k of Object.keys(lanes)) {
+      $(k).innerHTML = lanes[k].length ? lanes[k].map(card).join("") : `<div class="empty">—</div>`;
+      $("c" + k[0].toUpperCase() + k.slice(1)).textContent = lanes[k].length || "";
+    }
+    $("summary").textContent = `待 ${lanes.queued.length} · 製作 ${lanes.cooking.length} · 可出 ${lanes.ready.length}`;
+  } catch (e) { $("summary").textContent = "載入失敗: " + e.message; }
+}
+
+async function advance(lineId, status) {
+  try {
+    await api(`/kitchen/lines/${lineId}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
+    refresh();
+  } catch (e) { toast(e.message); }
+}
+
+// ── live sync (same protocol as the POS board) ──
+function setLive(on) { const d = $("liveDot");
+  d.style.color = on ? "#22c55e" : "#f59e0b";
+  d.title = on ? "即時連線中" : "即時中斷 · 輪詢中"; }
+function connectWS() {
+  if (!storeId) return;
+  clearTimeout(reconnectTimer);
+  try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) { /* ignore */ }
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  try { ws = new WebSocket(`${proto}//${location.host}/tables/ws?store_id=${encodeURIComponent(storeId)}&after=${lastSeq}`); }
+  catch (e) { setLive(false); scheduleReconnect(); return; }
+  ws.onopen = () => { wsBackoff = 1000; setLive(true); };
+  ws.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch (e) { return; }
+    if (ev.type === "ping") return;
+    if (typeof ev.seq === "number" && ev.seq > lastSeq) lastSeq = ev.seq;
+    // New lines or kitchen transitions → re-pull the board (coalesced).
+    if (ev.type === "order.line_added" || ev.type.startsWith("kitchen.")
+        || ev.type === "order.line_voided") {
+      clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 150);
+    }
+  };
+  ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  ws.onclose = () => { setLive(false); scheduleReconnect(); };
+}
+function scheduleReconnect() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(connectWS, wsBackoff);
+  wsBackoff = Math.min(wsBackoff * 2, 15000);
+}
+
+refresh(); connectWS();
+setInterval(() => { const live = ws && ws.readyState === WebSocket.OPEN;
+  if (storeId && !live) refresh(); }, 5000);
+setInterval(refresh, 60000); // refresh ages every minute even when idle
+</script>
+</body>
+</html>

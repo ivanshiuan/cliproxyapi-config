@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>取餐叫號</title>
+<style>
+  :root { --bg: #14161a; --card: #23262d; --ink: #eceff4; --sub: #9aa3af;
+          --accent: #22c55e; --line: #33363e; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         background: var(--bg); color: var(--ink); height: 100vh;
+         display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 14px; padding: 20px 28px;
+           border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 30px; }
+  header .sub { color: var(--sub); font-size: 16px; }
+  .spacer { flex: 1; }
+  #liveDot { font-size: 16px; }
+  main { flex: 1; padding: 24px 28px; overflow: hidden; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+          gap: 20px; }
+  .num { background: var(--card); border: 2px solid var(--accent); border-radius: 20px;
+         padding: 28px 10px; text-align: center; animation: pop .35s ease-out; }
+  .num .no { font-size: 46px; font-weight: 900; letter-spacing: 1px; }
+  .num .ago { color: var(--sub); font-size: 15px; margin-top: 6px; }
+  @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .empty { color: var(--sub); text-align: center; padding: 80px 0; font-size: 22px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔔 取餐叫號</h1>
+  <span class="sub">號碼被叫到請至櫃檯取餐</span>
+  <span class="spacer"></span>
+  <span id="liveDot" title="即時連線狀態">●</span>
+</header>
+
+<main>
+  <div id="board"><div class="empty">目前沒有叫號中的餐點</div></div>
+</main>
+
+<script>
+// /pickup-board/?store=<uuid> — public display, no login. Same WS reconnect
+// protocol as the KDS/POS boards; the event only triggers a refetch, the
+// REST /online-takeout/board call is the source of truth for what's shown.
+const API = "";
+const storeId = new URLSearchParams(location.search).get("store");
+let ws = null, lastSeq = 0, wsBackoff = 1000, reconnectTimer = null, refreshTimer = null;
+
+const $ = (id) => document.getElementById(id);
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+async function api(path) {
+  const res = await fetch(API + path);
+  if (!res.ok) throw new Error(res.statusText);
+  return res.json();
+}
+function agoMin(iso) { return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60000)); }
+
+async function refresh() {
+  if (!storeId) { $("board").innerHTML = `<div class="empty">請在網址加上 ?store=&lt;門市UUID&gt;</div>`; return; }
+  try {
+    const rows = await api(`/online-takeout/board?store_id=${encodeURIComponent(storeId)}&limit=24`);
+    $("board").innerHTML = rows.length
+      ? `<div class="grid">` + rows.map((r) => `<div class="num">
+          <div class="no">${escapeHtml(r.order_no.slice(-6))}</div>
+          <div class="ago">${agoMin(r.called_at)} 分鐘前</div>
+        </div>`).join("") + `</div>`
+      : `<div class="empty">目前沒有叫號中的餐點</div>`;
+  } catch (e) { /* keep last good state on a transient failure */ }
+}
+
+function setLive(on) { const d = $("liveDot");
+  d.style.color = on ? "#22c55e" : "#f59e0b";
+  d.title = on ? "即時連線中" : "即時中斷 · 輪詢中"; }
+function connectWS() {
+  if (!storeId) return;
+  clearTimeout(reconnectTimer);
+  try { if (ws) { ws.onclose = null; ws.close(); } } catch (e) { /* ignore */ }
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  try { ws = new WebSocket(`${proto}//${location.host}/tables/ws?store_id=${encodeURIComponent(storeId)}&after=${lastSeq}`); }
+  catch (e) { setLive(false); scheduleReconnect(); return; }
+  ws.onopen = () => { wsBackoff = 1000; setLive(true); };
+  ws.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch (e) { return; }
+    if (ev.type === "ping") return;
+    if (typeof ev.seq === "number" && ev.seq > lastSeq) lastSeq = ev.seq;
+    if (ev.type === "order.pickup_called" || ev.type === "order.online_takeout_collected") {
+      clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 150);
+    }
+  };
+  ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  ws.onclose = () => { setLive(false); scheduleReconnect(); };
+}
+function scheduleReconnect() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(connectWS, wsBackoff);
+  wsBackoff = Math.min(wsBackoff * 2, 15000);
+}
+
+refresh(); connectWS();
+setInterval(() => { const live = ws && ws.readyState === WebSocket.OPEN;
+  if (storeId && !live) refresh(); }, 5000);
+setInterval(refresh, 60000); // refresh "分鐘前" labels even when idle
+</script>
+</body>
+</html>

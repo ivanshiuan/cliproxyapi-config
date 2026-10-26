@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>線上訂位</title>
+<style>
+  :root { --bg: #f7f5f2; --card: #fff; --ink: #1f2328; --sub: #6b7280;
+          --accent: #0f766e; --line: #e5e7eb; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang TC", "Noto Sans TC", sans-serif;
+         background: var(--bg); color: var(--ink); }
+  main { max-width: 480px; margin: 0 auto; padding: 22px 18px 40px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--sub); font-size: 14px; margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+          padding: 18px; }
+  .row { margin-bottom: 14px; }
+  .row label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .row input, .row select, .row textarea {
+    width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--line);
+    border-radius: 10px; background: #fff; }
+  button.primary { width: 100%; padding: 14px; font-size: 17px; font-weight: 700;
+    background: var(--accent); color: #fff; border: 0; border-radius: 12px; }
+  button.primary:disabled { opacity: .5; }
+  .ok { text-align: center; padding: 30px 6px; }
+  .ok .big { font-size: 46px; }
+  .ok h2 { margin: 10px 0 6px; }
+  .ok .detail { color: var(--sub); line-height: 1.7; }
+  .err { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
+         border-radius: 10px; padding: 12px; margin-bottom: 12px; font-size: 14px;
+         display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🍽️ 線上訂位</h1>
+  <div class="sub">留下資料，我們為您保留座位。</div>
+
+  <div class="card" id="form">
+    <div class="err" id="err"></div>
+    <div class="row"><label>姓名</label><input id="name" placeholder="王小明" maxlength="80" /></div>
+    <div class="row"><label>電話</label><input id="phone" type="tel" placeholder="09xx-xxx-xxx" maxlength="32" /></div>
+    <div class="row"><label>人數</label>
+      <select id="party"></select></div>
+    <div class="row"><label>日期</label><input id="date" type="date" /></div>
+    <div class="row"><label>時間</label><input id="time" type="time" step="900" value="18:00" /></div>
+    <div class="row"><label>備註（過敏、兒童椅…可留空）</label>
+      <textarea id="notes" rows="2" maxlength="500"></textarea></div>
+    <button class="primary" id="submitBtn">送出訂位</button>
+  </div>
+
+  <div class="card ok" id="done" style="display:none">
+    <div class="big">✅</div>
+    <h2>訂位完成</h2>
+    <div class="detail" id="doneDetail"></div>
+  </div>
+</main>
+
+<script>
+// Consumer booking page — /book/?store=<uuid>. POSTs the existing
+// /reservations API with source=online; staff seats the party from the POS.
+const API = "";
+const storeId = new URLSearchParams(location.search).get("store");
+const $ = (id) => document.getElementById(id);
+
+// party-size options 1..12
+$("party").innerHTML = Array.from({ length: 12 }, (_, i) =>
+  `<option value="${i + 1}" ${i + 1 === 2 ? "selected" : ""}>${i + 1} 位</option>`).join("");
+// default date = today (device local, which for a TW restaurant is TW time)
+$("date").value = new Date().toISOString().slice(0, 10);
+
+function fail(msg) { const e = $("err"); e.textContent = msg; e.style.display = "block"; }
+
+$("submitBtn").onclick = async () => {
+  $("err").style.display = "none";
+  if (!storeId) return fail("連結不完整 — 請透過店家提供的訂位連結進入。");
+  const name = $("name").value.trim();
+  const phone = $("phone").value.trim();
+  if (!name) return fail("請填姓名");
+  if (!phone) return fail("請填電話，方便為您保留與聯繫");
+  const dt = `${$("date").value}T${$("time").value}:00+08:00`; // Asia/Taipei
+  if (new Date(dt) < new Date()) return fail("訂位時間需在未來");
+  $("submitBtn").disabled = true;
+  try {
+    const res = await fetch(API + "/reservations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        store_id: storeId,
+        contact_name: name,
+        contact_phone: phone,
+        party_size: parseInt($("party").value, 10),
+        reserved_for: dt,
+        source: "online",
+        notes: $("notes").value.trim() || null,
+      }),
+    });
+    if (!res.ok) {
+      let d = res.statusText;
+      try { const j = await res.json(); d = j.error?.message || d; } catch (e) { /* ignore */ }
+      throw new Error(d);
+    }
+    const bk = await res.json();
+    $("form").style.display = "none";
+    $("done").style.display = "block";
+    $("doneDetail").innerHTML =
+      `${name}，已為您保留 <b>${bk.party_size} 位</b><br>` +
+      `${new Date(bk.reserved_for).toLocaleString("zh-TW", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}<br>` +
+      `訂位代號 <b>${bk.id.slice(0, 8).toUpperCase()}</b><br>如需更改請來電告知。`;
+  } catch (e) { fail("訂位失敗：" + e.message); $("submitBtn").disabled = false; }
+};
+</script>
+</body>
+</html>
