@@ -128,10 +128,15 @@ async def test_create_empty_order(client, db_session: AsyncSession, seed_store):
     assert payload["payments"] == []
 
     # Verify DB state through the same rolled-back session.
-    n_orders = await db_session.execute(select(func.count()).select_from(Order))
+    # Scoped to this test's store: the dev DB may already hold seed/demo rows.
+    n_orders = await db_session.execute(
+        select(func.count()).select_from(Order).where(Order.store_id == seed_store.id),
+    )
     assert n_orders.scalar_one() == 1
     n_movements = await db_session.execute(
-        select(func.count()).select_from(StockMovement),
+        select(func.count())
+        .select_from(StockMovement)
+        .where(StockMovement.store_id == seed_store.id),
     )
     assert n_movements.scalar_one() == 0
 
@@ -166,6 +171,7 @@ async def test_create_order_with_two_lines(
     # Phase-1 stub: one negative-qty SALE_CONSUME movement per line.
     mv_result = await db_session.execute(
         select(StockMovement).where(
+            StockMovement.store_id == seed_store.id,
             StockMovement.movement_type == MovementType.SALE_CONSUME,
         ),
     )
@@ -242,6 +248,7 @@ async def test_void_writes_reversing_movements(
     before_rows = (
         await db_session.execute(
             select(StockMovement.id, StockMovement.qty).where(
+                StockMovement.store_id == seed_store.id,
                 StockMovement.movement_type == MovementType.SALE_CONSUME,
             ),
         )
@@ -308,12 +315,15 @@ async def test_idempotent_create_returns_same_id(
 
     # Exactly one order, exactly one sale_consume movement total.
     n_orders = (
-        await db_session.execute(select(func.count()).select_from(Order))
+        await db_session.execute(
+            select(func.count()).select_from(Order).where(Order.store_id == seed_store.id),
+        )
     ).scalar_one()
     assert n_orders == 1
     n_consumes = (
         await db_session.execute(
             select(func.count()).select_from(StockMovement).where(
+                StockMovement.store_id == seed_store.id,
                 StockMovement.movement_type == MovementType.SALE_CONSUME,
             ),
         )

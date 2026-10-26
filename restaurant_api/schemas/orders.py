@@ -189,11 +189,21 @@ class OrderVoidRequest(BaseModel):
 # ──────────────────────────────────────────────────────────────────────────
 
 
+class OrderLineModifierResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    option_name: str
+    price_delta: Decimal
+
+
 class OrderLineResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
     menu_item_id: UUID
+    # 套餐組合: set when this line is an auto-expanded $0 component ticket of
+    # a combo item's line (see pos_order_service._expand_combo).
+    combo_parent_id: UUID | None = None
     qty: Decimal
     unit_price: Decimal
     line_total: Decimal
@@ -204,6 +214,7 @@ class OrderLineResponse(BaseModel):
     kitchen_station: str | None = None
     kitchen_status: str | None = None
     sent_to_kitchen_at: datetime | None = None
+    modifiers: list[OrderLineModifierResponse] = Field(default_factory=list)
 
 
 class OrderDiscountResponse(BaseModel):
@@ -241,6 +252,12 @@ class OrderResponse(BaseModel):
     opened_at: datetime
     closed_at: datetime | None = None
     status: Literal["open", "closed", "voided", "refunded"]
+    # POS provenance (P1/P2): how the order was placed and which seating owns it.
+    order_type: Literal["dine_in", "takeout", "delivery"] | None = None
+    channel: Literal["pos", "table_qr", "tablet", "online", "external"] | None = None
+    table_session_id: UUID | None = None
+    pickup_at: datetime | None = None
+    pickup_called_at: datetime | None = None
     invoice_number: str | None = None
     carrier_type: str | None = None
     carrier_id: str | None = None
@@ -259,6 +276,7 @@ __all__ = [
     "OrderDiscountCreate",
     "OrderDiscountResponse",
     "OrderLineCreate",
+    "OrderLineModifierResponse",
     "OrderLineResponse",
     "OrderPaymentCreate",
     "OrderPaymentResponse",

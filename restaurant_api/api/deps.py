@@ -17,6 +17,7 @@ from ..config import get_settings
 from ..database import get_session as _get_session
 from ..integrations.line import LineMessenger
 from ..integrations.line import get_messenger as _get_messenger
+from ..services import event_hub
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -27,15 +28,25 @@ async def get_db() -> AsyncIterator[AsyncSession]:
     returns successfully, we commit; if it raised, we roll back.
     Tests override this with the savepoint-rolled-back fixture so this
     commit never reaches the DB during pytest.
+
+    Real-time (P1.5): a per-request buffer collects floor events recorded by
+    services; we publish them to the WebSocket hub only *after* a successful
+    commit, so a rolled-back request never leaks a phantom event to tablets.
     """
-    async for session in _get_session():
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
-        else:
-            await session.commit()
+    token = event_hub.begin_request_buffer()
+    try:
+        async for session in _get_session():
+            try:
+                yield session
+            except Exception:
+                await session.rollback()
+                raise
+            else:
+                await session.commit()
+                for ev in event_hub.drain_pending():
+                    event_hub.get_hub().publish(uuid.UUID(ev["store_id"]), ev)
+    finally:
+        event_hub.reset_request_buffer(token)
 
 
 def get_line_messenger() -> LineMessenger:

@@ -1,5 +1,7 @@
 # 指揮官晨報 — 隔夜開發成果速覽
 
+> ⚠️ **這份是 2026-05 的快照，數字全部過期**（例如「47 個測試 / 18 表」；實測請看 [`docs/STATUS.md`](docs/STATUS.md)）。待老闆決定的事看 [`docs/DECISIONS.md`](docs/DECISIONS.md)，交付實測結論看 [`docs/DELIVERY_READINESS.md`](docs/DELIVERY_READINESS.md)。
+
 > 一句話：**DevSwarm 蜂群已建成、Phase 1 餐飲後端骨架已就位、47 個測試全綠、CI 已配置、可立刻 `make demo` 跑第一個 AI 自動產出的真實損益模組。**
 
 ---

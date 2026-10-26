@@ -102,6 +102,8 @@
 
 ## 「全線執行」當前進度（2026-06-06 更新）
 
+> ⚠️ **以下數字是 6/06 的手寫快照，已過期**（測試數、表數、端點數都已不同）。實測請看 [`docs/STATUS.md`](STATUS.md)；交付現況見 [`docs/DELIVERY_READINESS.md`](DELIVERY_READINESS.md)。
+
 | 項目 | 狀態 |
 |---|---|
 | Phase 0 — DevSwarm 蜂群骨架 | ✅ 完成、Mocked 端到端通過 |
