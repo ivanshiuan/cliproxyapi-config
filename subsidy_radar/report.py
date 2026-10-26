@@ -70,13 +70,18 @@ def render_summary_table(matches: list[MatchResult]) -> str:
 
 
 def render_action_plan(plan: ActionPlan) -> str:
+    deadline = f"{plan.deadline}（官方公告，建議提前一週送件）" if plan.deadline else "常態受理"
     lines = [
         f"### P{plan.priority}：{plan.program_name}",
         "",
-        f"- 截止日：{plan.deadline or '常態受理'}",
+        f"- 截止日：{deadline}",
         f"- 緊急度：{plan.urgency}",
         "",
     ]
+    if plan.draft_notes:
+        lines.append("**🤖 AI 申請策略（需人工覆核）：**\n")
+        lines.extend(f"> {line}" for line in plan.draft_notes.split("\n"))
+        lines.append("")
     if plan.steps:
         lines.append("**步驟：**\n")
         for s in plan.steps:
@@ -99,11 +104,8 @@ def render_action_plan(plan: ActionPlan) -> str:
 def render_report(report: RadarReport) -> str:
     ts = report.generated_at.astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M %Z")
     p = report.profile
-    eligible_value = sum(
-        m.estimated_value_twd
-        for m in report.matches
-        if m.verdict in {Verdict.eligible, Verdict.likely} and m.estimated_value_twd
-    )
+    high = [m for m in report.matches if m.verdict in {Verdict.eligible, Verdict.likely}]
+    eligible_value = sum(m.estimated_value_twd for m in high if m.estimated_value_twd)
 
     sections = [
         "# 🛰️ 2026 政府補助雷達報告",
@@ -118,11 +120,16 @@ def render_report(report: RadarReport) -> str:
         1 for m in report.matches if m.verdict in {Verdict.eligible, Verdict.likely, Verdict.conditional}
     )
     sections.append(
-        f"**掃描 {len(report.programs)} 項補助案 → "
-        f"{actionable_count} 項可行動 → "
-        f"預估可爭取 NT$ {_fmt_amount(eligible_value)}**"
+        f"**掃描 {len(report.programs)} 項補助案 → {actionable_count} 項可行動"
+        f"（{len(high)} 項高度符合，預估可爭取 NT$ {_fmt_amount(eligible_value)}）**"
     )
     sections.append("")
+    if actionable_count > len(high):
+        sections.append(
+            f"> 🟠 另 {actionable_count - len(high)} 項「有條件」案件需先釐清待確認項目，"
+            "確認後才計入預估金額。"
+        )
+        sections.append("")
 
     if p.assumptions:
         sections.append("⚠️ **以下資料為推測值，送件前務必確認：**")

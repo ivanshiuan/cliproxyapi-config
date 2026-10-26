@@ -9,13 +9,21 @@ score 0-100 = 基底 50 + pass 各 +5 + hard_fail 各 -50 + uncertainty 各 -3
               + 金額加成 + 截止日臨近加成
 
 已截止但有 next_round_hint 的案件 → watch（追蹤下一輪），不是 ineligible。
+
+LLM 精煉只能讓判定更保守並補上申請策略：截止日與結構化硬門檻由規則決定，
+LLM 認為不符的案件降為 conditional 並標註依據，交人工判斷，不會被直接剔除。
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
+import logging
 import os
 from datetime import date
+from typing import Literal
+
+import anthropic
+from pydantic import BaseModel, ValidationError
 
 from subsidy_radar.models import (
     CompanyProfile,
@@ -23,7 +31,12 @@ from subsidy_radar.models import (
     ProgramStatus,
     SubsidyProgram,
     Verdict,
+    taipei_today,
 )
+
+logger = logging.getLogger(__name__)
+
+_ACTIONABLE_RANK = {Verdict.eligible: 0, Verdict.likely: 1, Verdict.conditional: 2}
 
 
 def _industry_matches(profile_code: str, scopes: list[str]) -> bool:
@@ -41,13 +54,17 @@ def _industry_matches(profile_code: str, scopes: list[str]) -> bool:
     return False
 
 
+def _normalize_region(name: str) -> str:
+    return name.replace("臺", "台").replace("市", "").replace("縣", "").strip()
+
+
 def _region_matches(profile_region: str, allowed: list[str]) -> bool:
-    """地區配對：allowed 為空表示不限地區。"""
+    """地區配對：allowed 為空表示不限地區；臺/台、有無市/縣視為相同。"""
     if not allowed:
         return True
-    region = profile_region.replace("市", "").replace("縣", "").strip()
+    region = _normalize_region(profile_region)
     for a in allowed:
-        norm = a.replace("市", "").replace("縣", "").strip()
+        norm = _normalize_region(a)
         if norm in region or region in norm:
             return True
     return False
@@ -81,12 +98,16 @@ def _amount_bonus(program: SubsidyProgram) -> int:
     return 0
 
 
+def _reasoning(passes: list[str], hard_fails: list[str], uncertainties: list[str]) -> str:
+    return f"通過 {len(passes)} 條、否決 {len(hard_fails)} 條、待確認 {len(uncertainties)} 條"
+
+
 def match_one(
     program: SubsidyProgram,
     profile: CompanyProfile,
     today: date | None = None,
 ) -> MatchResult:
-    today = today or date.today()
+    today = today or taipei_today()
     passes: list[str] = []
     hard_fails: list[str] = []
     uncertainties: list[str] = []
@@ -208,8 +229,6 @@ def match_one(
     else:
         verdict = Verdict.conditional
 
-    estimated_value = program.max_amount_twd
-
     return MatchResult(
         program_id=program.id,
         program_name=program.name,
@@ -218,8 +237,8 @@ def match_one(
         passes=passes,
         hard_fails=hard_fails,
         uncertainties=uncertainties,
-        estimated_value_twd=estimated_value,
-        reasoning=f"通過 {len(passes)} 條、否決 {len(hard_fails)} 條、待確認 {len(uncertainties)} 條",
+        estimated_value_twd=program.max_amount_twd,
+        reasoning=_reasoning(passes, hard_fails, uncertainties),
     )
 
 
@@ -232,99 +251,162 @@ def match_all(
     return sorted(results, key=lambda r: (-r.score, r.program_name))
 
 
-_LLM_MATCH_SYSTEM = """你是台灣政府補助案資格審查專家。使用者會提供一個補助案和一間公司的資料。
-請分析這間公司是否符合該補助案的資格，輸出 JSON：
-{
-  "verdict": "eligible|likely|conditional|watch|ineligible",
-  "confidence": 0.0-1.0,
-  "passes": ["通過的條件..."],
-  "hard_fails": ["不符合的條件..."],
-  "uncertainties": ["待確認的事項..."],
-  "strategic_notes": "對這間公司的具體申請建議（200字內）",
-  "recommended_angle": "建議的申請切角（如何包裝題目讓審查委員認可）"
-}
-不要加 markdown 格式。直接回 JSON。"""
+# ── LLM 精煉 ──────────────────────────────────────────────────────────────
+
+_LLM_MODEL_DEFAULT = "claude-opus-5-5"
+
+_LLM_MATCH_SYSTEM = """你是台灣政府補助案的資格審查顧問，協助一間公司判斷能否申請某個補助案、以及該怎麼申請。
+
+判斷規則：
+- 只依使用者提供的補助案資料與公司資料判斷；公司資料標「未確認」的事項不要自行假設。
+- hard_fails 只列補助案資料有明文依據、且公司資料明確不符的條件，每條註明依據。
+- 需要查證的文件、證照、身分，或資料不足之處，列入 uncertainties。
+- strategic_notes：200 字內，具體說明這間公司要怎麼準備與送件。
+- recommended_angle：建議的計畫題目切角，說明如何連結公司本業讓審查委員認可。
+- 一律使用繁體中文。"""
+
+
+class _LLMJudgment(BaseModel):
+    verdict: Literal["eligible", "likely", "conditional", "ineligible"]
+    hard_fails: list[str]
+    uncertainties: list[str]
+    strategic_notes: str
+    recommended_angle: str
+
+
+class LLMMatchError(RuntimeError):
+    """Claude 沒有回傳可用的判定（拒答或沒有結構化輸出）。"""
+
+
+def _yes_no(value: bool | None) -> str:
+    if value is None:
+        return "未確認"
+    return "是" if value else "否"
+
+
+def _llm_prompt(program: SubsidyProgram, profile: CompanyProfile, today: date) -> str:
+    insured = profile.insured_employees if profile.insured_employees is not None else "未確認"
+    owner_age = profile.owner_age if profile.owner_age is not None else "未確認"
+    return f"""## 補助案
+- 名稱：{program.name}
+- 主辦機關：{program.agency}
+- 類別：{program.category}
+- 狀態：{program.status}
+- 申請期間：{program.window_open or "未載明"} ～ {program.window_close or "常態受理"}
+- 最高金額：{program.max_amount_twd or "未載明"}（補助比率：{program.subsidy_rate or "未載明"}）
+- 金額說明：{program.amount_notes or "無"}
+- 結構化資格條件：{program.eligibility.model_dump_json()}
+- 申請方式：{program.how_to_apply or "未載明"}
+- 應備文件：{"、".join(program.required_documents) or "未載明"}
+- 備註：{program.notes or "無"}
+
+## 公司
+- 名稱：{profile.company_name}
+- 行業：{profile.industry_desc}（主計總處行業代碼 {profile.industry_code}）
+- 員工數：{profile.employee_count}（勞保投保 {insured} 人）
+- 實收資本額：{profile.capital_twd:,} 元
+- 設立日期：{profile.founded}
+- 所在地：{profile.region}
+- 負責人年齡：{owner_age}
+- 已完成 20 小時創業課程：{_yes_no(profile.owner_has_20h_startup_course)}
+- 有公司或商業登記：{_yes_no(profile.is_company_registered)}
+- 有欠稅：{_yes_no(profile.has_tax_debt)}
+- 有勞動法規違規紀錄：{_yes_no(profile.has_labor_law_violations)}
+- 曾獲補助：{"、".join(profile.previous_grants) or "無"}
+- 數位工具：{"、".join(profile.digital_tools) or "未提供"}
+
+今天日期：{today}"""
+
+
+def _merge_llm(heuristic: MatchResult, judgment: _LLMJudgment) -> MatchResult:
+    flagged = [f"AI 判讀可能不符：{f}" for f in judgment.hard_fails]
+    if judgment.verdict == "ineligible" and not flagged:
+        flagged = ["AI 判讀為不符但未列依據，請人工確認"]
+
+    if heuristic.verdict not in _ACTIONABLE_RANK:
+        verdict = heuristic.verdict
+    elif flagged:
+        verdict = Verdict.conditional
+    else:
+        verdict = max(
+            heuristic.verdict, Verdict(judgment.verdict), key=_ACTIONABLE_RANK.__getitem__
+        )
+
+    uncertainties = list(
+        dict.fromkeys(
+            heuristic.uncertainties + flagged + [f"AI：{u}" for u in judgment.uncertainties]
+        )
+    )
+    return heuristic.model_copy(
+        update={
+            "verdict": verdict,
+            "uncertainties": uncertainties,
+            "reasoning": _reasoning(heuristic.passes, heuristic.hard_fails, uncertainties)
+            + "（AI 精煉）",
+            "strategic_notes": judgment.strategic_notes,
+            "recommended_angle": judgment.recommended_angle,
+        }
+    )
 
 
 async def llm_match_one(
     program: SubsidyProgram,
     profile: CompanyProfile,
+    client: anthropic.AsyncAnthropic,
     today: date | None = None,
-    api_key: str | None = None,
 ) -> MatchResult:
-    """用 Claude 做深度資格分析，回傳精準 MatchResult + 策略建議。"""
-    try:
-        import anthropic
-    except ImportError as exc:
-        raise RuntimeError("需安裝 anthropic SDK：pip install anthropic") from exc
-
-    today = today or date.today()
-    api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY 未設定")
-
-    prompt = f"""## 補助案資料
-- 名稱：{program.name}
-- 主辦機關：{program.agency}
-- 類別：{program.category}
-- 狀態：{program.status}
-- 申請截止：{program.window_close or '常態受理'}
-- 最高金額：{program.max_amount_twd or '未定'}
-- 補助比率：{program.subsidy_rate or '未定'}
-- 金額說明：{program.amount_notes or ''}
-- 資格條件：{program.eligibility.model_dump_json(indent=2)}
-- 申請方式：{program.how_to_apply or ''}
-- 備註：{program.notes or ''}
-
-## 公司資料
-- 公司名稱：{profile.company_name}
-- 行業：{profile.industry_desc}（{profile.industry_code}）
-- 員工數：{profile.employee_count}
-- 資本額：{profile.capital_twd:,} 元
-- 設立日期：{profile.founded}
-- 地區：{profile.region}
-- 負責人年齡：{profile.owner_age or '未知'}
-- 公司登記：{'是' if profile.is_company_registered else '否'}
-- 數位工具：{', '.join(profile.digital_tools) if profile.digital_tools else '未知'}
-
-## 今天日期：{today}
-
-請分析這間公司申請此補助案的資格與策略。"""
-
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-    resp = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        system=_LLM_MATCH_SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    raw = resp.content[0].text.strip()
-    data = json.loads(raw)
-
-    verdict_map = {v.value: v for v in Verdict}
-    verdict = verdict_map.get(data.get("verdict", "unknown"), Verdict.unknown)
-
+    """規則配對 + Claude 深度判讀，回傳合併後的 MatchResult（含申請策略）。"""
+    today = today or taipei_today()
     heuristic = match_one(program, profile, today=today)
-    merged_passes = list(dict.fromkeys(heuristic.passes + data.get("passes", [])))
-    merged_fails = list(dict.fromkeys(heuristic.hard_fails + data.get("hard_fails", [])))
-    merged_unc = list(dict.fromkeys(heuristic.uncertainties + data.get("uncertainties", [])))
-
-    strategic = data.get("strategic_notes", "")
-    angle = data.get("recommended_angle", "")
-    reasoning = f"通過 {len(merged_passes)} 條、否決 {len(merged_fails)} 條、待確認 {len(merged_unc)} 條"
-    if strategic:
-        reasoning += f"\n策略：{strategic}"
-    if angle:
-        reasoning += f"\n切角：{angle}"
-
-    return MatchResult(
-        program_id=program.id,
-        program_name=program.name,
-        verdict=verdict if not merged_fails else Verdict.ineligible,
-        score=heuristic.score,
-        passes=merged_passes,
-        hard_fails=merged_fails,
-        uncertainties=merged_unc,
-        estimated_value_twd=program.max_amount_twd,
-        reasoning=reasoning,
+    resp = await client.beta.messages.parse(
+        model=os.environ.get("SUBSIDY_RADAR_MODEL", _LLM_MODEL_DEFAULT),
+        max_tokens=16000,
+        system=_LLM_MATCH_SYSTEM,
+        messages=[{"role": "user", "content": _llm_prompt(program, profile, today)}],
+        output_format=_LLMJudgment,
+        output_config={"effort": "high"},
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
     )
+    if resp.stop_reason == "refusal" or resp.parsed_output is None:
+        raise LLMMatchError(f"{program.id}: stop_reason={resp.stop_reason}")
+    return _merge_llm(heuristic, resp.parsed_output)
+
+
+def _is_transient(exc: anthropic.APIStatusError) -> bool:
+    return exc.status_code == 429 or exc.status_code >= 500
+
+
+async def llm_refine_all(
+    programs: list[SubsidyProgram],
+    matches: list[MatchResult],
+    profile: CompanyProfile,
+    today: date | None = None,
+    client: anthropic.AsyncAnthropic | None = None,
+    max_concurrency: int = 4,
+) -> list[MatchResult]:
+    """只精煉可行動案件；單案暫時性失敗保留規則結果，認證或參數錯誤直接拋出。"""
+    llm = client or anthropic.AsyncAnthropic()
+    prog_map = {p.id: p for p in programs}
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def refine(m: MatchResult) -> MatchResult:
+        program = prog_map.get(m.program_id)
+        if program is None or m.verdict not in _ACTIONABLE_RANK:
+            return m
+        async with sem:
+            try:
+                return await llm_match_one(program, profile, llm, today=today)
+            except anthropic.APIStatusError as exc:
+                if not _is_transient(exc):
+                    raise
+                error = type(exc).__name__
+            except (LLMMatchError, ValidationError, anthropic.APIConnectionError) as exc:
+                error = type(exc).__name__
+        logger.warning(
+            "subsidy.llm_match_failed", extra={"program_id": m.program_id, "error": error}
+        )
+        return m
+
+    refined = await asyncio.gather(*(refine(m) for m in matches))
+    return sorted(refined, key=lambda r: (-r.score, r.program_name))

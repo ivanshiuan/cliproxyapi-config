@@ -22,6 +22,7 @@ from subsidy_radar.models import (
     ProgramCategory,
     ProgramStatus,
     SubsidyProgram,
+    taipei_today,
 )
 
 _AMOUNT_RE = re.compile(
@@ -112,7 +113,7 @@ def heuristic_distill(
     today: date | None = None,
 ) -> SubsidyProgram:
     """靠規則 + 正規表達式從原始文字粗抽一張補助卡。"""
-    today = today or date.today()
+    today = today or taipei_today()
     name_line = text.split("\n")[0][:80] if text else source_id
     dates = _extract_dates(text)
     window_open = dates[0] if dates else None
@@ -182,19 +183,23 @@ async def llm_distill(
     except ImportError as exc:
         raise RuntimeError("需安裝 anthropic SDK：pip install anthropic") from exc
 
-    today = today or date.today()
+    today = today or taipei_today()
     api_key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY 未設定")
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
-    resp = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=2048,
+    resp = await client.beta.messages.create(
+        model=os.environ.get("SUBSIDY_RADAR_MODEL", "claude-opus-5-5"),
+        max_tokens=16000,
         system=_LLM_SYSTEM,
         messages=[{"role": "user", "content": text[:12000]}],
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
     )
-    raw_json = resp.content[0].text.strip()
+    if resp.stop_reason == "refusal":
+        raise RuntimeError(f"Claude 拒絕蒸餾 {source_id}")
+    raw_json = next((b.text for b in resp.content if b.type == "text"), "").strip()
     data = json.loads(raw_json)
 
     return SubsidyProgram(

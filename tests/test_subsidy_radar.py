@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -17,7 +19,16 @@ from subsidy_radar.distill import (
     heuristic_distill,
 )
 from subsidy_radar.extract import html_links, html_to_text
-from subsidy_radar.match import match_all, match_one
+from subsidy_radar.match import (
+    _amount_bonus,
+    _deadline_bonus,
+    _LLMJudgment,
+    _region_matches,
+    llm_match_one,
+    llm_refine_all,
+    match_all,
+    match_one,
+)
 from subsidy_radar.models import (
     CompanyProfile,
     DataConfidence,
@@ -31,12 +42,27 @@ from subsidy_radar.models import (
 )
 from subsidy_radar.pipeline import load_profile, load_programs_from_seed, run_offline
 from subsidy_radar.plan import generate_plans
-from subsidy_radar.report import generate_report, render_summary_table
+from subsidy_radar.report import generate_report, render_action_plan, render_summary_table
 
 # ── fixtures ──────────────────────────────────────────────────────────────
 
 SEED_PATH = Path("data/subsidies/seed_2026.json")
 PROFILE_PATH = Path("data/subsidies/company_profile.yaml")
+TODAY = date(2026, 10, 26)
+
+
+def _program(**overrides: Any) -> SubsidyProgram:
+    fields: dict[str, Any] = {
+        "id": "p",
+        "name": "Program",
+        "agency": "Agency",
+        "category": ProgramCategory.grant,
+        "status": ProgramStatus.open,
+        "as_of": date(2026, 10, 1),
+        "confidence": DataConfidence.manual,
+    }
+    fields.update(overrides)
+    return SubsidyProgram(**fields)
 
 
 @pytest.fixture
@@ -206,6 +232,150 @@ class TestMatch:
         assert results[0].program_id == "test-grant"
 
 
+class TestMatchRules:
+    def test_region_normalizes_tai_and_suffix(self) -> None:
+        assert _region_matches("台北市", ["臺北市"])
+        assert _region_matches("臺北", ["台北市"])
+        assert not _region_matches("新北市", ["台北市"])
+        assert _region_matches("高雄市", [])
+
+    def test_region_mismatch_is_hard_fail(self, sample_profile: CompanyProfile) -> None:
+        prog = _program(eligibility=EligibilityRule(allowed_regions=["高雄市"]))
+        result = match_one(prog, sample_profile, today=TODAY)
+        assert result.verdict == Verdict.ineligible
+        assert any("地區" in f for f in result.hard_fails)
+
+    @pytest.mark.parametrize(
+        ("days", "bonus"), [(-1, 0), (0, 8), (30, 8), (31, 4), (90, 4), (91, 1)]
+    )
+    def test_deadline_bonus(self, days: int, bonus: int) -> None:
+        assert _deadline_bonus(TODAY + timedelta(days=days), TODAY) == bonus
+
+    def test_deadline_bonus_rolling(self) -> None:
+        assert _deadline_bonus(None, TODAY) == 0
+
+    @pytest.mark.parametrize(
+        ("amount", "bonus"),
+        [(None, 0), ("99999", 0), ("100000", 1), ("500000", 3), ("1000000", 5)],
+    )
+    def test_amount_bonus(self, amount: str | None, bonus: int) -> None:
+        assert _amount_bonus(_program(max_amount_twd=amount)) == bonus
+
+    def test_closed_with_next_round_is_watch(self, sample_profile: CompanyProfile) -> None:
+        prog = _program(
+            status=ProgramStatus.closed,
+            window_close=date(2026, 6, 30),
+            next_round_hint="2027 年再開",
+        )
+        result = match_one(prog, sample_profile, today=TODAY)
+        assert result.verdict == Verdict.watch
+        assert result.hard_fails == []
+
+    def test_closed_without_next_round_is_ineligible(
+        self, sample_profile: CompanyProfile
+    ) -> None:
+        prog = _program(status=ProgramStatus.closed, window_close=date(2026, 6, 30))
+        result = match_one(prog, sample_profile, today=TODAY)
+        assert result.verdict == Verdict.ineligible
+        assert result.score == 0
+
+    def test_closed_with_hard_fail_stays_ineligible(
+        self, sample_profile: CompanyProfile
+    ) -> None:
+        prog = _program(
+            status=ProgramStatus.closed,
+            next_round_hint="2027 年再開",
+            eligibility=EligibilityRule(industry_scopes=["64"]),
+        )
+        result = match_one(prog, sample_profile, today=TODAY)
+        assert result.verdict == Verdict.ineligible
+
+
+# ── llm refine (fake client, no API calls) ────────────────────────────────
+
+
+class _FakeMessages:
+    def __init__(self, judgment: _LLMJudgment | None, stop_reason: str) -> None:
+        self.judgment = judgment
+        self.stop_reason = stop_reason
+        self.calls: list[dict[str, Any]] = []
+
+    async def parse(self, **kwargs: Any) -> SimpleNamespace:
+        self.calls.append(kwargs)
+        return SimpleNamespace(stop_reason=self.stop_reason, parsed_output=self.judgment)
+
+
+def _fake_client(judgment: _LLMJudgment | None, stop_reason: str = "end_turn") -> Any:
+    return SimpleNamespace(beta=SimpleNamespace(messages=_FakeMessages(judgment, stop_reason)))
+
+
+def _judgment(**overrides: Any) -> _LLMJudgment:
+    fields: dict[str, Any] = {
+        "verdict": "eligible",
+        "hard_fails": [],
+        "uncertainties": [],
+        "strategic_notes": "先備妥勞保投保清冊",
+        "recommended_angle": "AI 排班降低人力成本",
+    }
+    fields.update(overrides)
+    return _LLMJudgment(**fields)
+
+
+class TestLLMMatch:
+    async def test_llm_cannot_upgrade_verdict(
+        self, sample_program: SubsidyProgram, sample_profile: CompanyProfile
+    ) -> None:
+        client = _fake_client(_judgment(verdict="eligible"))
+        result = await llm_match_one(sample_program, sample_profile, client, today=TODAY)
+        heuristic = match_one(sample_program, sample_profile, today=TODAY)
+        assert result.verdict == heuristic.verdict == Verdict.likely
+        assert result.score == heuristic.score
+        assert result.recommended_angle == "AI 排班降低人力成本"
+        call = client.beta.messages.calls[0]
+        assert call["output_format"] is _LLMJudgment
+        assert call["fallbacks"] == "default"
+
+    async def test_llm_ineligible_is_flagged_not_dropped(
+        self, sample_program: SubsidyProgram, sample_profile: CompanyProfile
+    ) -> None:
+        client = _fake_client(_judgment(verdict="ineligible", hard_fails=["限製造業申請"]))
+        result = await llm_match_one(sample_program, sample_profile, client, today=TODAY)
+        assert result.verdict == Verdict.conditional
+        assert any("限製造業申請" in u for u in result.uncertainties)
+        assert result.hard_fails == []
+
+    async def test_llm_cannot_reopen_closed_program(
+        self, sample_profile: CompanyProfile
+    ) -> None:
+        closed = _program(status=ProgramStatus.closed, next_round_hint="2027 年再開")
+        client = _fake_client(_judgment(verdict="eligible"))
+        result = await llm_match_one(closed, sample_profile, client, today=TODAY)
+        assert result.verdict == Verdict.watch
+
+    async def test_refine_all_only_calls_llm_for_actionable(
+        self, sample_program: SubsidyProgram, sample_profile: CompanyProfile
+    ) -> None:
+        closed = _program(id="closed", status=ProgramStatus.closed, next_round_hint="2027")
+        programs = [sample_program, closed]
+        matches = match_all(programs, sample_profile, today=TODAY)
+        client = _fake_client(_judgment())
+        refined = await llm_refine_all(programs, matches, sample_profile, TODAY, client=client)
+        assert len(client.beta.messages.calls) == 1
+        by_id = {m.program_id: m for m in refined}
+        assert by_id["test-grant"].strategic_notes
+        assert by_id["closed"].verdict == Verdict.watch
+
+    async def test_refine_all_keeps_rule_result_on_refusal(
+        self, sample_program: SubsidyProgram, sample_profile: CompanyProfile
+    ) -> None:
+        matches = match_all([sample_program], sample_profile, today=TODAY)
+        client = _fake_client(None, stop_reason="refusal")
+        refined = await llm_refine_all(
+            [sample_program], matches, sample_profile, TODAY, client=client
+        )
+        assert refined == matches
+
+
 # ── plan ──────────────────────────────────────────────────────────────────
 
 
@@ -224,6 +394,26 @@ class TestPlan:
         if plans:
             assert plans[0].program_id == "test-grant"
             assert len(plans[0].steps) > 0
+
+    def test_urgent_first_with_official_deadline(self, sample_profile: CompanyProfile) -> None:
+        urgent = _program(id="urgent", name="Urgent", window_close=date(2026, 10, 31))
+        rolling = _program(
+            id="rolling",
+            name="Rolling",
+            status=ProgramStatus.rolling,
+            max_amount_twd="5000000",
+            eligibility=EligibilityRule(
+                max_employees=200, max_capital_twd="100000000", industry_scopes=["45-96"]
+            ),
+        )
+        programs = [urgent, rolling]
+        matches = match_all(programs, sample_profile, today=TODAY)
+        assert matches[0].program_id == "rolling"
+        plans = generate_plans(programs, matches, today=TODAY)
+        assert [p.program_id for p in plans] == ["urgent", "rolling"]
+        assert plans[0].deadline == date(2026, 10, 31)
+        assert "剩 5 天" in plans[0].urgency
+        assert "2026-10-31" in render_action_plan(plans[0])
 
 
 # ── report ────────────────────────────────────────────────────────────────

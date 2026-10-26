@@ -32,6 +32,9 @@ _DEFAULT_OUTPUT = Path("docs/subsidies/RADAR_2026.md")
 _OPT_SEED = typer.Option(_DEFAULT_SEED, help="補助案 seed JSON")
 _OPT_PROFILE = typer.Option(_DEFAULT_PROFILE, help="公司側寫 YAML")
 _OPT_OUTPUT = typer.Option(_DEFAULT_OUTPUT, help="輸出報告路徑")
+_OPT_LLM = typer.Option(
+    False, "--llm", help="用 Claude 精煉可行動案件（需 ANTHROPIC_API_KEY，會產生 API 費用）"
+)
 
 
 @app.command()
@@ -39,15 +42,17 @@ def scan(
     seed: Path = _OPT_SEED,
     profile: Path = _OPT_PROFILE,
     output: Path = _OPT_OUTPUT,
+    llm: bool = _OPT_LLM,
 ) -> None:
     """跑完整 pipeline → 輸出 Markdown 雷達報告。"""
     console.print("[bold cyan]🛰️ 補助雷達啟動[/]")
     console.print(f"  補助 seed ：{seed}")
     console.print(f"  公司側寫  ：{profile}")
     console.print(f"  輸出報告  ：{output}")
+    console.print(f"  AI 精煉   ：{'開' if llm else '關'}")
     console.print()
 
-    report = run_offline(seed, profile, output)
+    report = run_offline(seed, profile, output, llm=llm)
 
     from subsidy_radar.models import Verdict
 
@@ -55,6 +60,9 @@ def scan(
     actionable = [m for m in report.matches if m.verdict in {Verdict.eligible, Verdict.likely, Verdict.conditional}]
 
     console.print(f"[green]掃描完成[/]：{len(report.programs)} 案 → {len(actionable)} 可行動 → {len(eligible)} 高度符合")
+    if llm:
+        refined = sum(1 for m in actionable if m.strategic_notes)
+        console.print(f"AI 精煉：{refined}/{len(actionable)} 案完成（其餘保留規則判定）")
     if eligible:
         total = sum(m.estimated_value_twd for m in eligible if m.estimated_value_twd)
         console.print(f"[bold green]預估可爭取：NT$ {total:,.0f}[/]")

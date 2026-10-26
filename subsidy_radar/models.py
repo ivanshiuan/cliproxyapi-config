@@ -12,10 +12,16 @@ from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 TAIPEI_TZ = "Asia/Taipei"
+
+
+def taipei_today() -> date:
+    """補助截止日都是台灣日期；容器跑 UTC，不能用 date.today()。"""
+    return datetime.now(ZoneInfo(TAIPEI_TZ)).date()
 
 
 def _no_float(v: Any) -> Any:
@@ -151,6 +157,9 @@ class MatchResult(BaseModel):
     uncertainties: list[str] = Field(default_factory=list)
     estimated_value_twd: TWD | None = None
     reasoning: str = ""
+    # LLM 精煉產出，需人工覆核
+    strategic_notes: str = ""
+    recommended_angle: str = ""
 
 
 class ActionStep(BaseModel):
