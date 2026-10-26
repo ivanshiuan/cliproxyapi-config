@@ -44,6 +44,6 @@ sources:
 
   - id: arther-hub
     name: "Arther TalentElevate 補助推薦頁"
-    url: "https://arther.talentelevate.co/get?contact_id=EK1H6wBFbyRV8WpKGDad"
-    notes: "個人化行銷頁 — 需瀏覽器開啟，無法直接抓取（403）。走 inbox 路線"
+    url: "https://arther.talentelevate.co/"
+    notes: "個人化行銷頁（個人連結含收件人識別碼，不放進版控）— 需瀏覽器開啟，無法直接抓取（403）。走 inbox 路線"
     inbox_only: true

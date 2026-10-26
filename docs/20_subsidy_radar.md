@@ -2,6 +2,9 @@
 
 > 「把 2026 年所有能領的補助都找出來、蒸餾成結構化資料、配對資格、產出行動包。」
 
+**涵蓋範圍**：只含 `seed_2026.json` 收錄的補助案（目前 20 項）與 `sources.yaml` 登記的來源，
+不是全台所有補助。新案件要手動加進 seed。
+
 ## 一句話
 
 `subsidy_radar` 是獨立的 Python 套件，跑「抓取 → 蒸餾 → 配對 → 行動包 → 報告」
@@ -9,9 +12,9 @@
 
 ## 架構
 
-```
+```text
 data/subsidies/
-├── seed_2026.json          ← 已蒸餾好的 10 項補助案（離線跑不需網路）
+├── seed_2026.json          ← 已蒸餾好的 20 項補助案（離線跑不需網路）
 ├── company_profile.yaml    ← 公司側寫（配對引擎的輸入）
 ├── sources.yaml            ← 來源登記簿（fetch 模組讀取）
 ├── raw/                    ← httpx 抓下來的 HTML 快照（gitignored）
@@ -43,6 +46,10 @@ make subsidy-scan
 # 或直接用 CLI
 python -m subsidy_radar scan
 
+# 用 Claude 精煉可行動案件 + 產出申請策略（需 ANTHROPIC_API_KEY，會產生 API 費用；
+# 模型預設 claude-opus-5-5，可用 SUBSIDY_RADAR_MODEL 覆寫）
+python -m subsidy_radar scan --llm
+
 # 只看配對結果
 make subsidy-match
 
@@ -64,11 +71,8 @@ make subsidy-list
 4. 重跑 `make subsidy-scan`
 
 ### 新增補助案
-1. 在 `data/subsidies/seed_2026.json` 加一筆（照既有格式）
-2. 或在 `sources.yaml` 加 URL → 用 LLM 蒸餾：
-   ```bash
-   python -m subsidy_radar scan --llm  # 需 ANTHROPIC_API_KEY
-   ```
+目前只能在 `data/subsidies/seed_2026.json` 手動加一筆（照既有格式）。
+`sources.yaml` 的 URL 抓取（`fetch.py`）與 LLM 蒸餾（`distill.llm_distill`）還沒接進 `scan`。
 
 ## 公司側寫
 
@@ -80,7 +84,7 @@ assumptions 欄位列出推測值，報告會標警語。
 ## 配對引擎
 
 門檻三級：
-- **hard_fail** — 一票否決（資本額 / 員工數 / 行業別 / 設立年限不符）
+- **hard_fail** — 一票否決（資本額 / 員工數 / 行業別 / 地區 / 設立年限不符）
 - **uncertainty** — 缺資料或需線下文件確認
 - **pass** — 確認通過
 
@@ -88,8 +92,11 @@ assumptions 欄位列出推測值，報告會標警語。
 - ✅ eligible — 符合，立即可辦
 - 🟡 likely — 大致符合，少量待確認
 - 🟠 conditional — 有條件（缺關鍵資料）
-- 👀 watch — 窗口已截止，追蹤下一輪
+- 👀 watch — 尚未開放，或已截止但有下一輪，追蹤中
 - ❌ ineligible — 硬門檻不符
+
+`--llm` 精煉只能讓判定更保守並補上申請策略：截止日與結構化硬門檻由規則決定；
+LLM 認為不符的案件降為 🟠 並標註依據，交人工判斷，不會被直接剔除。
 
 ## 行動包
 

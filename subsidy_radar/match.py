@@ -8,7 +8,7 @@
 score 0-100 = 基底 50 + pass 各 +5 + hard_fail 各 -50 + uncertainty 各 -3
               + 金額加成 + 截止日臨近加成
 
-已截止但有 next_round_hint 的案件 → watch（追蹤下一輪），不是 ineligible。
+尚未開放、或已截止但有 next_round_hint 的案件 → watch（追蹤），不是 ineligible。
 
 LLM 精煉只能讓判定更保守並補上申請策略：截止日與結構化硬門檻由規則決定，
 LLM 認為不符的案件降為 conditional 並標註依據，交人工判斷，不會被直接剔除。
@@ -111,7 +111,6 @@ def match_one(
     passes: list[str] = []
     hard_fails: list[str] = []
     uncertainties: list[str] = []
-    is_expired = False
 
     elig = program.eligibility
 
@@ -184,11 +183,12 @@ def match_one(
     for req in elig.requires:
         uncertainties.append(f"需確認：{req}")
 
-    if program.window_close and program.window_close < today:
-        is_expired = True
-
-    if program.status == ProgramStatus.closed and not is_expired:
-        is_expired = True
+    is_expired = program.status == ProgramStatus.closed or (
+        program.window_close is not None and program.window_close < today
+    )
+    not_yet_open = program.status == ProgramStatus.upcoming or (
+        program.window_open is not None and program.window_open > today
+    )
 
     if profile.has_tax_debt is True:
         uncertainties.append("有欠稅紀錄，多數計畫會排除")
@@ -222,6 +222,8 @@ def match_one(
         score = 0
     elif hard_fails:
         verdict = Verdict.ineligible
+    elif not_yet_open:
+        verdict = Verdict.watch
     elif not uncertainties:
         verdict = Verdict.eligible
     elif len(uncertainties) <= 2 and score >= 50:

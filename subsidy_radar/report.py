@@ -157,7 +157,7 @@ def render_report(report: RadarReport) -> str:
     if watch:
         sections.append("---")
         sections.append("")
-        sections.append("## 追蹤中（本輪已截止，關注下一輪）")
+        sections.append("## 追蹤中（尚未開放或本輪已截止）")
         sections.append("")
         for m in watch:
             sections.append(f"- **{m.program_name}**：{m.reasoning}")

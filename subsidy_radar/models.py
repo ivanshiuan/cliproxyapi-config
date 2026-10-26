@@ -14,7 +14,7 @@ from enum import StrEnum
 from typing import Annotated, Any
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field
 
 TAIPEI_TZ = "Asia/Taipei"
 
@@ -192,7 +192,7 @@ class RadarReport(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    generated_at: datetime  # tz-aware
+    generated_at: AwareDatetime
     profile: CompanyProfile
     programs: list[SubsidyProgram] = Field(default_factory=list)
     matches: list[MatchResult] = Field(default_factory=list)

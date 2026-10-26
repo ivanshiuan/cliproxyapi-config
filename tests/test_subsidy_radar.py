@@ -126,6 +126,10 @@ class TestModels:
         with pytest.raises(ValidationError):
             p.name = "y"  # type: ignore[misc]
 
+    def test_report_rejects_naive_timestamp(self, sample_profile: CompanyProfile) -> None:
+        with pytest.raises(ValidationError):
+            RadarReport(generated_at=datetime(2026, 10, 27), profile=sample_profile)
+
 
 # ── extract ───────────────────────────────────────────────────────────────
 
@@ -270,6 +274,12 @@ class TestMatchRules:
         result = match_one(prog, sample_profile, today=TODAY)
         assert result.verdict == Verdict.watch
         assert result.hard_fails == []
+
+    def test_not_yet_open_is_watch(self, sample_profile: CompanyProfile) -> None:
+        upcoming = _program(status=ProgramStatus.upcoming)
+        opens_later = _program(window_open=TODAY + timedelta(days=10))
+        for prog in (upcoming, opens_later):
+            assert match_one(prog, sample_profile, today=TODAY).verdict == Verdict.watch
 
     def test_closed_without_next_round_is_ineligible(
         self, sample_profile: CompanyProfile

@@ -98,7 +98,7 @@ def _base_steps(program: SubsidyProgram, match: MatchResult) -> list[ActionStep]
         ActionStep(
             order=order,
             title="Claude 代擬申請書草稿",
-            detail="用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）",
+            detail="在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）",
             owner="Claude",
         )
     )

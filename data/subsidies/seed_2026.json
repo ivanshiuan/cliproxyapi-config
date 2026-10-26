@@ -239,12 +239,12 @@
     "subsidy_rate": null,
     "amount_notes": "此為行銷顧問公司的個人化補助推薦頁面，非直接補助來源",
     "eligibility": {
-      "notes": "需登入檢視個人化內容。arther.talentelevate.co/get?contact_id=EK1H6wBFbyRV8WpKGDad"
+      "notes": "需登入檢視個人化內容；個人化連結含收件人識別碼，不放進版控"
     },
     "how_to_apply": "以瀏覽器開啟連結閱讀個人化推薦",
-    "apply_url": "https://arther.talentelevate.co/get?contact_id=EK1H6wBFbyRV8WpKGDad",
+    "apply_url": "https://arther.talentelevate.co/",
     "required_documents": [],
-    "source_urls": ["https://arther.talentelevate.co/get?contact_id=EK1H6wBFbyRV8WpKGDad"],
+    "source_urls": ["https://arther.talentelevate.co/"],
     "as_of": "2026-08-04",
     "confidence": "web_search",
     "next_round_hint": null,

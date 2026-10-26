@@ -1,10 +1,9 @@
 """Typer CLI — `python -m subsidy_radar` 或 `subsidy` console script。
 
 子命令：
-  scan      — 完整 pipeline（offline 或 online）
+  scan      — 完整 pipeline（加 --llm 用 Claude 精煉配對）
   list      — 列出 seed 裡所有補助案
   match     — 只跑配對（不產行動包）
-  report    — 從上次 scan 結果重新渲染報告
 """
 
 from __future__ import annotations

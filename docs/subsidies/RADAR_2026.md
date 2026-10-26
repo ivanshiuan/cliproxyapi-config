@@ -1,6 +1,6 @@
 # 🛰️ 2026 政府補助雷達報告
 
-> 產出時間：2026-10-27 01:14 CST
+> 產出時間：2026-10-27 01:47 CST
 > 公司：帝國餐飲科技有限公司｜行業：AI 驅動餐飲營運系統（餐館業）（5610）
 > 員工數：15｜資本額：500.0 萬
 
@@ -73,7 +73,7 @@
    向當地職訓中心提出企業訓練計畫申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -110,7 +110,7 @@
    至研發替代役資訊管理系統提報員額
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -148,7 +148,7 @@
    線上申請：sbir.org.tw → 備齊應備資料 → 計畫辦公室審查
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -188,7 +188,7 @@
    向承辦銀行提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -226,7 +226,7 @@
    向承辦銀行提出貸款申請，銀行轉送信保基金審查
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -263,7 +263,7 @@
    至中小企業署數位轉型專區線上申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -300,7 +300,7 @@
    至計畫網站申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -336,7 +336,7 @@
    至計畫申請平台（aishop.smebiz.org.tw）上傳資料
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -373,7 +373,7 @@
    至臺北市產業獎勵補助平台線上申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -409,7 +409,7 @@
    TCloud 平台（tcloud.gov.tw）線上申請 → 工商憑證驗證 → 取得點數 → 選購方案
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -431,13 +431,13 @@
      - 勞動法規違規狀態未知
 
 2. **查閱官方公告原文**（Ivan）
-   https://arther.talentelevate.co/get?contact_id=EK1H6wBFbyRV8WpKGDad
+   https://arther.talentelevate.co/
 
 3. **送出申請**（Ivan）
    以瀏覽器開啟連結閱讀個人化推薦
 
 4. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 > ⚠️ 此行動包由 AI 依公開資訊產出，僅供參考。正式送件前請逐項核對官方最新公告，並由負責人簽名確認。
 
@@ -468,7 +468,7 @@
    向所在地就業服務站提出
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -505,7 +505,7 @@
    向公立就業服務站（台灣就業通）提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -542,7 +542,7 @@
    至計畫網站提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -579,7 +579,7 @@
    向公立就業服務站提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -617,7 +617,7 @@
    至淨零綠生活網站線上申請認證
 
 5. **Claude 代擬申請書草稿**（Claude）
-   用 `subsidy draft <program_id>` 產出草稿（需人工覆核後再送出）
+   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
 
 **應備文件：**
 
@@ -630,7 +630,7 @@
 
 ---
 
-## 追蹤中（本輪已截止，關注下一輪）
+## 追蹤中（尚未開放或本輪已截止）
 
 - **SIIR 服務業創新研發計畫（個別創新）**：通過 1 條、否決 0 條、待確認 4 條
 - **台北市中小企業數位轉型導入計畫**：通過 1 條、否決 0 條、待確認 3 條
