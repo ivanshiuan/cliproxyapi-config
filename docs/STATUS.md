@@ -1,6 +1,6 @@
 # STATUS — 實測事實（機器產生，勿手改）
 
-> 產生於 `2026-10-25 14:45 UTC` · commit `99ef7c2` (2026-10-25T13:50:40+00:00) · 分支 `claude/business-process-uml-converter-1bd5bp`
+> 產生於 `2026-10-27 15:30 UTC` · commit `f3edb61` (2026-10-26T09:43:26-07:00) · 分支 `claude/business-process-uml-converter-1bd5bp`
 > 重新產生：`make status-report`。這裡的每個數字都從 checkout 算出來（git / ORM / FastAPI app / migration 檔 / grep）。
 > 其他文件若與這份衝突，**以這份為準**，並請把那份文件改成指向這裡，不要再手寫數字。
 
@@ -8,25 +8,25 @@
 
 | 項目 | 實測 |
 |---|---|
-| ORM 資料表 | **33** |
-| API paths / operations / schemas | **60** / **70** / **97** |
-| API 群組 | `/`, `admin`, `campaigns`, `clock`, `customers`, `events`, `health`, `kitchen`, `line`, `membership`, `orders`, `queue`, `reports`, `reservations`, `stock`, `ugc`, `version` |
-| Alembic migration 檔 | **10**；head：`41772db92af3` |
-| 測試（餐飲 + DevSwarm，`make full-check`） | **512** 個 |
+| ORM 資料表 | **41** |
+| API paths / operations / schemas | **119** / **142** / **176** |
+| API 群組 | `/`, `admin`, `campaigns`, `cash-drawer`, `clock`, `customers`, `discount-rules`, `employees`, `events`, `health`, `kitchen`, `line`, `membership`, `menu`, `online-takeout`, `orders`, `pos-auth`, `queue`, `reports`, `reservations`, `stock`, `stores`, `t`, `tables`, `ugc`, `version` |
+| Alembic migration 檔 | **20**；head：`b7d2e9a41f05` |
+| 測試（餐飲 + DevSwarm，`make full-check`） | **709** 個 |
 | 測試（TIGER LINE，`make tigerline-check`） | **181** 個 |
 
 ## 程式碼量（git 追蹤檔）
 
 | 目錄 | 檔案數 | Python 行數 |
 |---|---:|---:|
-| `restaurant_api/` | 119 | 20,122 |
+| `restaurant_api/` | 173 | 29,443 |
 | `devswarm/` | 29 | 4,005 |
 | `tigerline/` | 49 | 4,238 |
-| `tests/` | 82 | 14,435 |
-| `scripts/` | 17 | 2,522 |
+| `tests/` | 111 | 19,025 |
+| `scripts/` | 18 | 2,599 |
 | `sports-intelligence-desk/` | 28 | 0 |
 | `tigerline-web/` | 18 | 0 |
-| 全部 | 415 | 45,322 |
+| 全部 | 510 | 59,310 |
 
 ## 計算引擎有沒有真的接到系統（掃描應用程式碼的實際呼叫，排除 `services/calc/` 與測試）
 
@@ -53,4 +53,4 @@
 
 > ruff / pyright 版本鎖在 `requirements-dev.txt`；執行期依賴只鎖大版號，所以 SQLAlchemy 等會隨時間浮動。
 
-_檔案頂層目錄分佈：restaurant_api 119, tests 82, tigerline 49, devswarm 29, docs 28, sports-intelligence-desk 28, tigerline-web 18, scripts 17_
+_檔案頂層目錄分佈：restaurant_api 173, tests 111, tigerline 49, docs 36, devswarm 29, sports-intelligence-desk 28, scripts 18, tigerline-web 18_
