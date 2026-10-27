@@ -48,6 +48,8 @@ Zeabur 是首選因為：這個 repo 本來就是 Zeabur 配置、有現成 `res
 3. 起 **PostgreSQL 16** 服務 → 取得連線字串。
 4. 部署 **restaurant_api**（用 repo 的 Dockerfile；`DATABASE_URL` 等環境變數注入；
    `.env` 絕不進 git）。
+   **必須一併注入** `RESTO_ENV=prod`、`RESTO_ADMIN_PASSCODE`（至少 8 字元）、`RESTO_SESSION_SECRET`
+   （`openssl rand -hex 32`）：預設值在公開 repo 裡，api 看到預設或太弱的值會**拒絕啟動**。
 5. 跑 `alembic upgrade head` 建全部 41 張表。
 6. `make seed` 灌示範餐廳資料（菜單/桌位/員工），讓 Ivan 點進去就有東西可玩。
 7. 綁定網域：預設先給 `https://<project>.zeabur.app`；若有 `CLOUDFLARE_API_TOKEN`

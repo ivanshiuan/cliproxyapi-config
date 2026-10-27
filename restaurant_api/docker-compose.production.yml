@@ -71,6 +71,11 @@ services:
       migrate:
         condition: service_completed_successfully
     env_file: ../.env.production
+    environment:
+      # Forces production mode no matter what .env.production says (it overrides env_file): the secure
+      # admin cookie, and the refuse-to-start check in restaurant_api/config.py. If RESTO_ADMIN_PASSCODE or
+      # RESTO_SESSION_SECRET is still a default/weak value, this container exits at startup (docker logs resto-api).
+      RESTO_ENV: prod
     ports:
       # Loopback-only: docs/11 §1 forbids exposing 8000 to the internet
       # directly (TLS must terminate at Cloudflare). A reverse proxy /

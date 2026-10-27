@@ -6,6 +6,7 @@ All settings read from environment (and `.env` if present, loaded by FastAPI lif
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import NamedTuple
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -107,3 +108,68 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+# ─── Refuse to start with the built-in dev admin credentials ────────────────────────────
+#
+# RESTO_ADMIN_PASSCODE and RESTO_SESSION_SECRET default to obvious dev values that sit in a public
+# repository. With the default session secret anyone can forge an admin cookie, and with the default
+# passcode anyone can log in: the admin console (campaigns, the daily P&L, ...) would be open to the
+# internet. So outside a developer's machine the API refuses to start until both are really set.
+
+# RESTO_ENV values that plainly mean "a developer's machine or a test run". Anything else (prod,
+# production, staging, or a typo) is treated as internet-facing: the check fails closed.
+_LOCAL_ENVS = frozenset({"dev", "development", "local", "test", "testing", "ci"})
+# Substrings that mark a value as copied from the defaults or from .env.example.
+_PLACEHOLDER_MARKERS = ("change-me", "changeme", "insecure")
+MIN_ADMIN_PASSCODE_LEN = 8
+MIN_SESSION_SECRET_LEN = 32
+
+
+class InsecureConfigurationError(RuntimeError):
+    """An internet-facing deployment is configured with default or weak admin credentials."""
+
+
+class CredentialProblem(NamedTuple):
+    env_var: str
+    reason: str
+
+
+def is_local_env(env: str) -> bool:
+    return env.strip().lower() in _LOCAL_ENVS
+
+
+def admin_credential_problems(settings: Settings) -> list[CredentialProblem]:
+    """What is wrong with the admin passcode / session secret: which variable and why.
+
+    Never includes the values themselves: the result goes into logs.
+    """
+    checks = (
+        ("admin_passcode", "RESTO_ADMIN_PASSCODE", MIN_ADMIN_PASSCODE_LEN, "pick your own store passcode"),
+        ("session_secret", "RESTO_SESSION_SECRET", MIN_SESSION_SECRET_LEN, "generate one with: openssl rand -hex 32"),
+    )
+    problems: list[CredentialProblem] = []
+    for field, env_var, min_len, how in checks:
+        value: str = getattr(settings, field)
+        lowered = value.strip().lower()
+        if value == Settings.model_fields[field].default or any(m in lowered for m in _PLACEHOLDER_MARKERS):
+            problems.append(CredentialProblem(env_var, f"is still a default or example value ({how})"))
+        elif len(value.strip()) < min_len:
+            problems.append(CredentialProblem(env_var, f"is too short, at least {min_len} characters ({how})"))
+    return problems
+
+
+def enforce_production_secrets(settings: Settings) -> None:
+    """Raise unless a non-local environment has real admin credentials. A developer's machine is exempt."""
+    if is_local_env(settings.env):
+        return
+    problems = admin_credential_problems(settings)
+    if problems:
+        which = " 與 ".join(p.env_var for p in problems)
+        raise InsecureConfigurationError(
+            f"RESTO_ENV={settings.env!r} is not a developer environment, but the admin credentials are unsafe, "
+            "so the API refuses to start:\n  - "
+            + "\n  - ".join(f"{p.env_var} {p.reason}" for p in problems)
+            + "\nSet them in .env.production and restart. (On a dev machine use RESTO_ENV=dev.)"
+            + f"\n(zh) 正式環境不能用預設或太弱的管理員密碼: 請在 .env.production 設定 {which} 後重啟。"
+        )

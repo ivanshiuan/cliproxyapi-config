@@ -21,7 +21,7 @@ from . import __version__
 from .api import auth as auth_router
 from .api import health as health_router
 from .api.errors import DomainError, domain_error_handler
-from .config import get_settings
+from .config import enforce_production_secrets, get_settings
 from .database import dispose_engine
 from .middleware import RequestContextMiddleware, configure_logging
 from .routers import campaigns as campaigns_router
@@ -53,6 +53,8 @@ logger = logging.getLogger("restaurant_api")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    # Before anything else: an internet-facing deployment must not run on the built-in dev admin credentials.
+    enforce_production_secrets(settings)
     configure_logging(level=settings.log_level)
     logger.info(
         "restaurant_api.starting",
