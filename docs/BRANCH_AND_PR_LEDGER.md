@@ -1,6 +1,7 @@
 # PR 與分支台帳（快照）
 
 > 資料時點：**2026-10-09**（唯讀盤點）；2026-10-14 複核：#29 / #31 / #45 / #40 仍為 open、預設分支頭仍是 `759c121`（9/16）。
+> **2026-10-26 更新：#40、#31、#29 已依序合併進預設分支（頭 `f3edb61`，單一 Alembic head `b7d2e9a41f05`）。** 下面的表是合併前的快照；其餘 PR 的 `down_revision` 仍指向舊 head，合併前要改接。
 > 這是一次性快照，不是自動更新的狀態；PR 狀態以 GitHub 為準。預設分支 `claude/autonomous-resttech-enterprise-oW9jp`（**沒有 `main`**）。
 > 31 個開放 PR · 59 條遠端分支 · 16 個已關閉 PR。**沒有任何一個 PR 有人類 approve**（只有 CodeRabbit 的 COMMENTED）。
 

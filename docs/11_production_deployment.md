@@ -54,6 +54,17 @@
 - VM 上 `~/.env.production`（root 不可讀，僅 deploy user）
 - 不要存在你的筆電 Downloads/
 
+**`.env.production` 一定要有這兩個值，否則 api 會直接拒絕啟動**（`restaurant_api/config.py`；
+`docker-compose.production.yml` 已強制 `RESTO_ENV=prod`，所以不能靠漏設來繞過）：
+
+| 變數 | 要求 | 怎麼產生 |
+|---|---|---|
+| `RESTO_ADMIN_PASSCODE` | 店長後台通行碼，至少 8 個字元，不能是預設或範例文字 | 自己取一組，存進密碼管理器 |
+| `RESTO_SESSION_SECRET` | 簽後台 cookie 的密鑰，至少 32 個字元，不能是預設或範例文字 | `openssl rand -hex 32` |
+
+沒設好時 `docker logs resto-api` 會直接寫出是哪一個、為什麼。預設值是寫在公開 repo 裡的，
+用預設值上線等於後台對全世界開放（含每日損益報表）。
+
 ---
 
 ## 3. 部署 SOP（每次發版）
@@ -151,6 +162,7 @@ pg_restore --create -d postgres -h test-host /backups/resto-$(date +%Y%m01).dump
 ## 8. 開店日 T-7 檢查清單
 
 - [ ] `.env.production` 已存在 1Password
+- [ ] `.env.production` 已設 `RESTO_ADMIN_PASSCODE`、`RESTO_SESSION_SECRET`（沒設 api 會拒絕啟動，見 §2）
 - [ ] DNS 已指向 Cloudflare → VM
 - [ ] TLS 證書已部署（Cloudflare Universal SSL）
 - [ ] `/health/ready` 從外網跑得通
