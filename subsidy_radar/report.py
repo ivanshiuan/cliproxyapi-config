@@ -14,10 +14,13 @@ from zoneinfo import ZoneInfo
 
 from subsidy_radar.models import (
     ActionPlan,
+    DocStatus,
     MatchResult,
     RadarReport,
+    SubsidyApplication,
     Verdict,
 )
+from subsidy_radar.tracker import progress
 
 TAIPEI = ZoneInfo("Asia/Taipei")
 
@@ -69,7 +72,19 @@ def render_summary_table(matches: list[MatchResult]) -> str:
     return "\n".join(lines)
 
 
-def render_action_plan(plan: ActionPlan) -> str:
+def _render_tracked_documents(application: SubsidyApplication) -> list[str]:
+    done, needed = progress(application)
+    lines = [f"**應備文件（申請中，已備 {done}/{needed}）：**\n"]
+    for doc, status in application.documents.items():
+        if status == DocStatus.na:
+            lines.append(f"- ~~{doc}~~（不適用）")
+        else:
+            lines.append(f"- [{'x' if status == DocStatus.done else ' '}] {doc}")
+    lines.append("")
+    return lines
+
+
+def render_action_plan(plan: ActionPlan, application: SubsidyApplication | None = None) -> str:
     deadline = f"{plan.deadline}（官方公告，建議提前一週送件）" if plan.deadline else "常態受理"
     lines = [
         f"### P{plan.priority}：{plan.program_name}",
@@ -90,7 +105,9 @@ def render_action_plan(plan: ActionPlan) -> str:
                 for detail_line in s.detail.split("\n"):
                     lines.append(f"   {detail_line}")
             lines.append("")
-    if plan.required_documents:
+    if application is not None:
+        lines.extend(_render_tracked_documents(application))
+    elif plan.required_documents:
         lines.append("**應備文件：**\n")
         for d in plan.required_documents:
             lines.append(f"- {d}")
@@ -150,7 +167,7 @@ def render_report(report: RadarReport) -> str:
         sections.append("## 行動包")
         sections.append("")
         for plan in report.plans:
-            sections.append(render_action_plan(plan))
+            sections.append(render_action_plan(plan, report.applications.get(plan.program_id)))
             sections.append("")
 
     watch = [m for m in report.matches if m.verdict == Verdict.watch]

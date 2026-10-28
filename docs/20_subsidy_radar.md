@@ -17,6 +17,7 @@ data/subsidies/
 ├── seed_2026.json          ← 已蒸餾好的 20 項補助案（離線跑不需網路）
 ├── company_profile.yaml    ← 公司側寫（配對引擎的輸入）
 ├── sources.yaml            ← 來源登記簿（fetch 模組讀取）
+├── applications.yaml       ← 申請追蹤：每案應備文件已備 / 未備（apply / doc 會改，可手改）
 ├── raw/                    ← httpx 抓下來的 HTML 快照（gitignored）
 └── inbox/                  ← 瀏覽器另存新檔的頁面（手動丟進來，gitignored）
 
@@ -31,10 +32,14 @@ subsidy_radar/
 ├── plan.py                 ← 行動包產生器 → ActionPlan
 ├── pipeline.py             ← 串接各模組的 orchestrator
 ├── report.py               ← RadarReport → Markdown
-└── cli.py                  ← typer CLI（scan / list / match）
+├── tracker.py              ← 申請追蹤 applications.yaml 讀寫 + 進度
+├── draft.py                ← Claude 代擬申請書草稿
+├── remind.py               ← 截止日 + 缺件提醒（LINE）
+└── cli.py                  ← typer CLI（scan / list / match / apply / doc / status / draft / remind）
 
 docs/subsidies/
-└── RADAR_2026.md           ← pipeline 輸出的雷達報告
+├── RADAR_2026.md           ← pipeline 輸出的雷達報告
+└── drafts/                 ← draft 產出的申請書草稿（每案一檔）
 ```
 
 ## 快速開始
@@ -105,6 +110,26 @@ LLM 認為不符的案件降為 🟠 並標註依據，交人工判斷，不會�
 - 應備文件
 - 截止日 + 緊急度
 - AI 代擬申請書草稿（需人工覆核）
+
+## 申請自動化（Phase 4）
+
+```bash
+python -m subsidy_radar apply small-biz-training      # 開始追蹤：依應備文件建立 checklist
+python -m subsidy_radar doc small-biz-training 1      # 第 1 份文件標為已備（也可寫文件全名）
+python -m subsidy_radar doc small-biz-training 2 na   # 標為不適用；todo 改回未備
+python -m subsidy_radar status                        # 申請中案件：截止日、文件進度、還缺什麼
+python -m subsidy_radar draft small-biz-training      # Claude 代擬申請書 → docs/subsidies/drafts/
+python -m subsidy_radar remind                        # 列出 14 天內截止 + 申請中缺件的提醒
+python -m subsidy_radar remind --send --to <LINE user ID>   # 推送到 LINE
+```
+
+- **追蹤狀態**存在 `data/subsidies/applications.yaml`，也可以直接手改。雲端 session 是拋棄式的，要 commit 進 git 才會保留。
+  報告的行動包會顯示每份文件的勾選狀態。
+- **代擬草稿**需要 `ANTHROPIC_API_KEY`（模型預設 `claude-opus-5-5`，可用 `SUBSIDY_RADAR_MODEL` 覆寫）。
+  資料沒有的事實一律標【待補】，不會自行編造；送件前必須逐字覆核，格式以主辦機關最新公告為準。
+- **LINE 提醒**與餐廳後端共用同一個 LINE 官方帳號：需要 `LINE_CHANNEL_ACCESS_TOKEN`，
+  以及接收者的 LINE user ID（`--to` 或環境變數 `SUBSIDY_LINE_TO`）。沒加 `--send` 時只印出，不會推送。
+  每天自動推送屬於 Phase 5 的排程。
 
 ## 設計決策
 

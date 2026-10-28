@@ -1,6 +1,6 @@
 # 🛰️ 2026 政府補助雷達報告
 
-> 產出時間：2026-10-27 01:47 CST
+> 產出時間：2026-10-29 00:08 CST
 > 公司：帝國餐飲科技有限公司｜行業：AI 驅動餐飲營運系統（餐館業）（5610）
 > 員工數：15｜資本額：500.0 萬
 
@@ -50,7 +50,7 @@
 ### P1：小型企業人力提升計畫（小人提）
 
 - 截止日：2026-10-31（官方公告，建議提前一週送件）
-- 緊急度：🔴 急（剩 4 天）
+- 緊急度：🔴 急（剩 2 天）
 
 **步驟：**
 
@@ -68,12 +68,13 @@
      - 企業訓練計畫書
      - 公司登記證明
      - 勞保投保清冊
+     （`python -m subsidy_radar apply small-biz-training` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    向當地職訓中心提出企業訓練計畫申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft small-biz-training`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -87,7 +88,7 @@
 ### P2：研發替代役企業申請
 
 - 截止日：2026-10-31（官方公告，建議提前一週送件）
-- 緊急度：🔴 急（剩 4 天）
+- 緊急度：🔴 急（剩 2 天）
 
 **步驟：**
 
@@ -105,12 +106,13 @@
      - 企業基本資料
      - 研發職缺說明
      - 研發計畫書
+     （`python -m subsidy_radar apply rd-substitute-service` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至研發替代役資訊管理系統提報員額
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft rd-substitute-service`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -143,12 +145,13 @@
      - 公司登記證明
      - 近三年財務報表
      - 中小企業認定資料
+     （`python -m subsidy_radar apply sbir-phase1` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    線上申請：sbir.org.tw → 備齊應備資料 → 計畫辦公室審查
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft sbir-phase1`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -183,12 +186,13 @@
      - 創業輔導課程證明（20 小時）
      - 公司登記證明
      - 負責人身分證明
+     （`python -m subsidy_radar apply youth-startup-loan` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    向承辦銀行提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft youth-startup-loan`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -221,12 +225,13 @@
      - 營運計畫書
      - 財務報表
      - 公司登記證明
+     （`python -m subsidy_radar apply sme-credit-guarantee` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    向承辦銀行提出貸款申請，銀行轉送信保基金審查
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft sme-credit-guarantee`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -240,7 +245,7 @@
 ### P6：中小微企業數位轉型培力補助（30 人以下）
 
 - 截止日：2026-12-31（官方公告，建議提前一週送件）
-- 緊急度：🟢 充裕（剩 65 天）
+- 緊急度：🟢 充裕（剩 63 天）
 
 **步驟：**
 
@@ -258,12 +263,13 @@
      - 公司登記證明
      - 勞保投保清冊
      - 數位工具採購計畫
+     （`python -m subsidy_radar apply sme-digital-30` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至中小企業署數位轉型專區線上申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft sme-digital-30`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -295,12 +301,13 @@
      - 商業登記證明
      - 減碳方案規劃書
      - 設備報價單
+     （`python -m subsidy_radar apply green-carbon-reduction` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至計畫網站申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft green-carbon-reduction`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -314,7 +321,7 @@
 ### P8：提升商業服務業營運效能強化韌性計畫（AI 導入）
 
 - 截止日：2027-10-20（官方公告，建議提前一週送件）
-- 緊急度：🟢 充裕（剩 358 天）
+- 緊急度：🟢 充裕（剩 356 天）
 
 **步驟：**
 
@@ -331,12 +338,13 @@
      - 商業登記證明
      - 導入方案說明
      - 報價單
+     （`python -m subsidy_radar apply ai-shop-subsidy` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至計畫申請平台（aishop.smebiz.org.tw）上傳資料
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft ai-shop-subsidy`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -368,12 +376,13 @@
      - 研發計畫書
      - 公司登記證明
      - 近年財務報表
+     （`python -m subsidy_radar apply taipei-siti` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至臺北市產業獎勵補助平台線上申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft taipei-siti`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -404,12 +413,13 @@
 
 3. **準備應備文件**（Ivan）
      - 工商憑證 IC 卡
+     （`python -m subsidy_radar apply tcloud-digital` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    TCloud 平台（tcloud.gov.tw）線上申請 → 工商憑證驗證 → 取得點數 → 選購方案
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft tcloud-digital`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -437,7 +447,7 @@
    以瀏覽器開啟連結閱讀個人化推薦
 
 4. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft arther-info-hub`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 > ⚠️ 此行動包由 AI 依公開資訊產出，僅供參考。正式送件前請逐項核對官方最新公告，並由負責人簽名確認。
 
@@ -463,12 +473,13 @@
      - 訓練計畫書
      - 僱用證明
      - 勞保加保資料
+     （`python -m subsidy_radar apply mol-onsite-training` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    向所在地就業服務站提出
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft mol-onsite-training`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -500,12 +511,13 @@
      - 僱用證明
      - 勞工保險加保證明
      - 勞工失業證明
+     （`python -m subsidy_radar apply mol-employment-incentive` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    向公立就業服務站（台灣就業通）提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft mol-employment-incentive`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -537,12 +549,13 @@
      - 研發計畫書
      - 公司登記證明
      - 團隊簡歷
+     （`python -m subsidy_radar apply tiip-innovation` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至計畫網站提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft tiip-innovation`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -574,12 +587,13 @@
      - 訓練計畫書
      - 僱用證明
      - 勞保加保資料
+     （`python -m subsidy_radar apply workplace-readapt` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    向公立就業服務站提出申請
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft workplace-readapt`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 
@@ -612,12 +626,13 @@
      - 餐廳營業登記
      - 食材來源證明
      - 減廢措施說明
+     （`python -m subsidy_radar apply green-restaurant-cert` 開始追蹤備齊進度）
 
 4. **送出申請**（Ivan）
    至淨零綠生活網站線上申請認證
 
 5. **Claude 代擬申請書草稿**（Claude）
-   在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）
+   `python -m subsidy_radar draft green-restaurant-cert`（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）
 
 **應備文件：**
 

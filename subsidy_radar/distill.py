@@ -22,6 +22,7 @@ from subsidy_radar.models import (
     ProgramCategory,
     ProgramStatus,
     SubsidyProgram,
+    llm_model,
     taipei_today,
 )
 
@@ -190,7 +191,7 @@ async def llm_distill(
 
     client = anthropic.AsyncAnthropic(api_key=api_key)
     resp = await client.beta.messages.create(
-        model=os.environ.get("SUBSIDY_RADAR_MODEL", "claude-opus-5-5"),
+        model=llm_model(),
         max_tokens=16000,
         system=_LLM_SYSTEM,
         messages=[{"role": "user", "content": text[:12000]}],

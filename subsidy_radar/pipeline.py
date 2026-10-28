@@ -23,6 +23,7 @@ from subsidy_radar.models import (
 )
 from subsidy_radar.plan import generate_plans
 from subsidy_radar.report import generate_report
+from subsidy_radar.tracker import load_applications
 
 
 def load_programs_from_seed(seed_path: Path) -> list[SubsidyProgram]:
@@ -46,8 +47,12 @@ def run_offline(
     output_path: Path | None = None,
     today: date | None = None,
     llm: bool = False,
+    tracker_path: Path | None = None,
 ) -> RadarReport:
-    """seed JSON + profile YAML → 雷達報告；llm=True 時用 Claude 精煉可行動案件。"""
+    """seed JSON + profile YAML → 雷達報告；llm=True 時用 Claude 精煉可行動案件。
+
+    tracker_path 有給就讀入申請追蹤，行動包會顯示文件勾選進度。
+    """
     today = today or taipei_today()
     programs = load_programs_from_seed(seed_path)
     profile = load_profile(profile_path)
@@ -62,6 +67,7 @@ def run_offline(
         programs=programs,
         matches=matches,
         plans=plans,
+        applications=load_applications(tracker_path) if tracker_path else {},
     )
 
     md = generate_report(report)

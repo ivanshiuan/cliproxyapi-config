@@ -77,7 +77,8 @@ def _base_steps(program: SubsidyProgram, match: MatchResult) -> list[ActionStep]
             ActionStep(
                 order=order,
                 title="準備應備文件",
-                detail="\n".join(f"  - {d}" for d in program.required_documents),
+                detail="\n".join(f"  - {d}" for d in program.required_documents)
+                + f"\n  （`python -m subsidy_radar apply {program.id}` 開始追蹤備齊進度）",
                 owner="Ivan",
             )
         )
@@ -98,7 +99,10 @@ def _base_steps(program: SubsidyProgram, match: MatchResult) -> list[ActionStep]
         ActionStep(
             order=order,
             title="Claude 代擬申請書草稿",
-            detail="在 Claude Code 對話請 Claude 依本行動包代擬（需人工覆核後再送出）",
+            detail=(
+                f"`python -m subsidy_radar draft {program.id}`"
+                "（需 ANTHROPIC_API_KEY；草稿需人工覆核後再送出）"
+            ),
             owner="Claude",
         )
     )

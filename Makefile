@@ -267,6 +267,14 @@ subsidy-list: install ## List all subsidy programs in seed data
 subsidy-match: install ## Run eligibility matching only (no action plans)
 	$(PY) -m subsidy_radar match
 
+.PHONY: subsidy-status
+subsidy-status: install ## Show tracked subsidy applications (deadline, documents still missing)
+	$(PY) -m subsidy_radar status
+
+.PHONY: subsidy-remind
+subsidy-remind: install ## Print subsidy deadline + missing-document reminders (ARGS="--send --to <id>" pushes to LINE)
+	$(PY) -m subsidy_radar remind $(ARGS)
+
 # ----- file ingest -------------------------------------------------------
 
 .PHONY: to-md

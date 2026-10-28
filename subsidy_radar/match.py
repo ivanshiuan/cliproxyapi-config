@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from datetime import date
 from typing import Literal
 
@@ -31,6 +30,7 @@ from subsidy_radar.models import (
     ProgramStatus,
     SubsidyProgram,
     Verdict,
+    llm_model,
     taipei_today,
 )
 
@@ -255,8 +255,6 @@ def match_all(
 
 # ── LLM 精煉 ──────────────────────────────────────────────────────────────
 
-_LLM_MODEL_DEFAULT = "claude-opus-5-5"
-
 _LLM_MATCH_SYSTEM = """你是台灣政府補助案的資格審查顧問，協助一間公司判斷能否申請某個補助案、以及該怎麼申請。
 
 判斷規則：
@@ -286,7 +284,8 @@ def _yes_no(value: bool | None) -> str:
     return "是" if value else "否"
 
 
-def _llm_prompt(program: SubsidyProgram, profile: CompanyProfile, today: date) -> str:
+def case_context(program: SubsidyProgram, profile: CompanyProfile, today: date) -> str:
+    """補助案 + 公司資料的 Markdown 摘要，餵給 LLM 判讀或代擬用。"""
     insured = profile.insured_employees if profile.insured_employees is not None else "未確認"
     owner_age = profile.owner_age if profile.owner_age is not None else "未確認"
     return f"""## 補助案
@@ -361,10 +360,10 @@ async def llm_match_one(
     today = today or taipei_today()
     heuristic = match_one(program, profile, today=today)
     resp = await client.beta.messages.parse(
-        model=os.environ.get("SUBSIDY_RADAR_MODEL", _LLM_MODEL_DEFAULT),
+        model=llm_model(),
         max_tokens=16000,
         system=_LLM_MATCH_SYSTEM,
-        messages=[{"role": "user", "content": _llm_prompt(program, profile, today)}],
+        messages=[{"role": "user", "content": case_context(program, profile, today)}],
         output_format=_LLMJudgment,
         output_config={"effort": "high"},
         betas=["server-side-fallback-2026-07-01"],

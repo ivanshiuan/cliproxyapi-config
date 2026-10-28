@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
@@ -17,11 +18,16 @@ from zoneinfo import ZoneInfo
 from pydantic import AwareDatetime, BaseModel, BeforeValidator, ConfigDict, Field
 
 TAIPEI_TZ = "Asia/Taipei"
+LLM_MODEL_DEFAULT = "claude-opus-5-5"
 
 
 def taipei_today() -> date:
     """補助截止日都是台灣日期；容器跑 UTC，不能用 date.today()。"""
     return datetime.now(ZoneInfo(TAIPEI_TZ)).date()
+
+
+def llm_model() -> str:
+    return os.environ.get("SUBSIDY_RADAR_MODEL", LLM_MODEL_DEFAULT)
 
 
 def _no_float(v: Any) -> Any:
@@ -69,6 +75,12 @@ class Verdict(StrEnum):
     watch = "watch"  # 資格符合但窗口未開 / 已截止，追蹤下一輪
     ineligible = "ineligible"  # 硬門檻不符
     unknown = "unknown"
+
+
+class DocStatus(StrEnum):
+    todo = "todo"  # 未備
+    done = "done"  # 已備
+    na = "na"  # 不適用
 
 
 class EligibilityRule(BaseModel):
@@ -187,6 +199,17 @@ class ActionPlan(BaseModel):
     disclaimer: str = ""
 
 
+class SubsidyApplication(BaseModel):
+    """一案的申請追蹤：應備文件哪些已備、哪些還缺。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    program_id: str
+    started: date
+    documents: dict[str, DocStatus] = Field(default_factory=dict)
+    notes: str | None = None
+
+
 class RadarReport(BaseModel):
     """整份雷達輸出 — report.py 由此渲染 Markdown。"""
 
@@ -197,3 +220,4 @@ class RadarReport(BaseModel):
     programs: list[SubsidyProgram] = Field(default_factory=list)
     matches: list[MatchResult] = Field(default_factory=list)
     plans: list[ActionPlan] = Field(default_factory=list)
+    applications: dict[str, SubsidyApplication] = Field(default_factory=dict)
