@@ -125,6 +125,7 @@ def generate_plan(
         urgency=_urgency(program.window_close, today),
         steps=_base_steps(program, match),
         required_documents=program.required_documents,
+        notes=program.notes,
         draft_notes=_draft_notes(match),
         disclaimer=(
             "此行動包由 AI 依公開資訊產出，僅供參考。"

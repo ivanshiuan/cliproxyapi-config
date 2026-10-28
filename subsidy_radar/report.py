@@ -91,8 +91,10 @@ def render_action_plan(plan: ActionPlan, application: SubsidyApplication | None 
         "",
         f"- 截止日：{deadline}",
         f"- 緊急度：{plan.urgency}",
-        "",
     ]
+    if plan.notes:
+        lines.append(f"- 注意：{plan.notes}")
+    lines.append("")
     if plan.draft_notes:
         lines.append("**🤖 AI 申請策略（需人工覆核）：**\n")
         lines.extend(f"> {line}" for line in plan.draft_notes.split("\n"))
@@ -176,8 +178,9 @@ def render_report(report: RadarReport) -> str:
         sections.append("")
         sections.append("## 追蹤中（尚未開放或本輪已截止）")
         sections.append("")
+        next_rounds = {p.id: p.next_round_hint for p in report.programs}
         for m in watch:
-            sections.append(f"- **{m.program_name}**：{m.reasoning}")
+            sections.append(f"- **{m.program_name}**：{next_rounds.get(m.program_id) or m.reasoning}")
 
     ineligible = [m for m in report.matches if m.verdict == Verdict.ineligible]
     if ineligible:

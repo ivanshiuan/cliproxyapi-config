@@ -195,6 +195,7 @@ class ActionPlan(BaseModel):
     urgency: str = ""  # 🔴急 / 🟠中 / 🟢常態
     steps: list[ActionStep] = Field(default_factory=list)
     required_documents: list[str] = Field(default_factory=list)
+    notes: str | None = None  # 補助案本身的注意事項（如經費用罄即停）
     draft_notes: str | None = None  # LLM 代擬的申請重點草稿（需人工覆核）
     disclaimer: str = ""
 

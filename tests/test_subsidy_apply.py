@@ -241,6 +241,20 @@ def test_plan_steps_point_to_real_commands(profile: CompanyProfile) -> None:
     assert "subsidy_radar draft sbir" in details
 
 
+def test_report_shows_program_notes_and_next_round(tmp_path: Path) -> None:
+    if not SEED_PATH.exists() or not PROFILE_PATH.exists():
+        pytest.skip("seed or profile not found")
+    output = tmp_path / "radar.md"
+    run_offline(SEED_PATH, PROFILE_PATH, output, today=TODAY)
+    md = output.read_text(encoding="utf-8")
+    small_biz = _seed_program("small-biz-training")
+    rd = _seed_program("rd-substitute-service")
+    assert small_biz.notes is not None
+    assert small_biz.notes in md.split("### P1", 1)[1]
+    assert rd.next_round_hint is not None
+    assert rd.next_round_hint in md.split("## 追蹤中", 1)[1]
+
+
 def test_report_renders_tracked_document_checkboxes(tmp_path: Path) -> None:
     if not SEED_PATH.exists() or not PROFILE_PATH.exists():
         pytest.skip("seed or profile not found")

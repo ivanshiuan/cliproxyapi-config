@@ -64,17 +64,17 @@
     "amount_notes": "輔導服務及訓練課程費用由政府全額負擔",
     "eligibility": {
       "max_employees": 50,
-      "requires": ["勞保投保人數 50 人以下", "公司或商業登記"],
-      "notes": "依勞保投保人數認定。含線上數位課程、企業內訓、外部課程、講師費、場地"
+      "requires": ["就業保險投保人數 50 人以下", "公司或商業登記", "參訓者須具就業保險被保險人身分"],
+      "notes": "依就業保險投保人數認定。課程由分署轉介的顧問依需求規劃，原則上以內訓為主"
     },
-    "how_to_apply": "向當地職訓中心提出企業訓練計畫申請",
+    "how_to_apply": "線上登錄服務申請表，次日起 5 個工作日內把紙本送到主要訓練所在地分署（台北市：北基宜花金馬分署 02-8995-6399）；受理後分署轉介顧問、企業參加 4 小時訓練規劃說明會，再由顧問規劃課程",
     "apply_url": "https://onjobtraining.wda.gov.tw/",
-    "required_documents": ["企業訓練計畫書", "公司登記證明", "勞保投保清冊"],
-    "source_urls": ["https://onjobtraining.wda.gov.tw/", "https://business.tibame.com/talent-development/ehri-program-sehrip/"],
-    "as_of": "2026-08-04",
+    "required_documents": ["服務申請表（系統填寫產出）", "合法設立登記證明影本", "最近一期勞工保險費繳款證明及明細表", "最近一期納稅證明（401 表，或負責人無欠稅證明）", "輔導訓練課程需求調查表"],
+    "source_urls": ["https://laws.mol.gov.tw/FLAW/FLAWDAT0202.aspx?id=FL072135", "https://tkyhkm.wda.gov.tw/News_Content.aspx?n=485942419332C50C&sms=F7376EA5ABF578F3&s=68FCB104DDDE5533", "https://onjobtraining.wda.gov.tw/"],
+    "as_of": "2026-10-29",
     "confidence": "web_search",
-    "next_round_hint": "每年 12 月中開放次年度申請",
-    "notes": "可用於員工 AI 工具培訓、食安數位化課程"
+    "next_round_hint": "116 年度預計 2026-12-16 開始受理（依計畫條文常態規則，正式公告尚未發布）",
+    "notes": "經費用罄即停止受理（115 年度是否用罄未確認，需電話問分署）；輔導與課程須在 11/15 前完成，月底才申請幾乎來不及；10/31 為週六，最後上班日 10/30。可用於員工 AI 工具培訓、食安數位化課程"
   },
   {
     "id": "tcloud-digital",
@@ -379,24 +379,24 @@
     "name": "研發替代役企業申請",
     "agency": "內政部役政司",
     "category": "other",
-    "status": "open",
-    "window_open": "2026-08-01",
-    "window_close": "2026-10-31",
+    "status": "closed",
+    "window_open": "2026-08-03",
+    "window_close": "2026-08-31",
     "max_amount_twd": null,
     "subsidy_rate": null,
-    "amount_notes": "非現金補助。取得低於市場薪資之研發人力（役男服役期間由政府負擔部分薪資）",
+    "amount_notes": "非現金補助，是取得研發替代役役男人力。用人單位進用 115 年度以後徵集的役男，每月應繳研究發展費（碩士 46,700、博士 52,500 元，內政部 114/5/2 函；繳費期間未確認）",
     "eligibility": {
-      "requires": ["具備研發職缺", "通過內政部需求審查"],
-      "notes": "需有具體的技術研發崗位。AI/軟體開發相關職缺適用"
+      "requires": ["屬 22 類適用產業（含人工智慧、資通訊）；登記行業為餐館業，能否認定未確認", "員額上限 = 國內研發總人數 ÷ 2 − 在職研發替代役男人數", "研發人力與研發經費需符合官方定義"],
+      "notes": "以新申請單位身分申請。研發人員只有 2–3 人時最多核配 1 名"
     },
-    "how_to_apply": "至研發替代役資訊管理系統提報員額",
+    "how_to_apply": "在研發替代役資訊管理系統線上報名、繳審查費（資格審查 1,000 元 + 員額核配審查 5,000 元）、郵寄紙本",
     "apply_url": "https://rdss.moi.gov.tw/",
-    "required_documents": ["企業基本資料", "研發職缺說明", "研發計畫書"],
-    "source_urls": ["https://rdss.moi.gov.tw/"],
-    "as_of": "2026-10-25",
+    "required_documents": ["報名表（系統填寫）", "研發營運計畫書（新申請單位範本）"],
+    "source_urls": ["https://www.moi.gov.tw/News_Content.aspx?n=9&s=338768", "https://www.cna.com.tw/news/aipl/202607180042.aspx", "https://rdss.moi.gov.tw/"],
+    "as_of": "2026-10-29",
     "confidence": "web_search",
-    "next_round_hint": "每年 8 月提報員額、9-10 月審查。116 年度已截止",
-    "notes": "AI 餐飲系統開發工程師可用研替。相當於政府補貼研發人力成本"
+    "next_round_hint": "117 年度預計 2027 年 8 月受理（約 6 月公告實施計畫，未確認）",
+    "notes": "116 年度受理期間 2026/8/3–8/31，已截止（原資料寫 10/31 截止有誤）"
   },
   {
     "id": "green-restaurant-cert",
