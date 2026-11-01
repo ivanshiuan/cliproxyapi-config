@@ -9,12 +9,14 @@
   status    — 申請中案件的截止日與缺件
   draft     — Claude 代擬申請書草稿
   remind    — 截止日與缺件提醒（加 --send 推到 LINE）
+  stage     — 推進申請階段（送件 → 審查中 → 核准／駁回）
+  daily     — 每日摘要：截止倒數、審查追蹤、新公告（有事才推送）
 """
 
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import anthropic
@@ -28,11 +30,21 @@ from subsidy_radar.draft import DraftError, draft_application, render_draft
 from subsidy_radar.match import match_all
 from subsidy_radar.models import (
     DocStatus,
+    Stage,
     SubsidyApplication,
     SubsidyProgram,
     Verdict,
     llm_model,
     taipei_today,
+)
+from subsidy_radar.monitor import (
+    countdown_alerts,
+    follow_up_alerts,
+    load_sources,
+    load_state,
+    render_daily,
+    save_state,
+    scan_sources,
 )
 from subsidy_radar.pipeline import (
     load_profile,
@@ -45,6 +57,7 @@ from subsidy_radar.remind import (
     push_reminders,
     render_reminder_text,
 )
+from subsidy_radar.report import STAGE_LABEL
 from subsidy_radar.tracker import (
     load_applications,
     missing_documents,
@@ -52,6 +65,7 @@ from subsidy_radar.tracker import (
     resolve_document,
     save_applications,
     set_document,
+    set_stage,
     start_application,
 )
 
@@ -63,6 +77,9 @@ _DEFAULT_PROFILE = Path("data/subsidies/company_profile.yaml")
 _DEFAULT_OUTPUT = Path("docs/subsidies/RADAR_2026.md")
 _DEFAULT_TRACKER = Path("data/subsidies/applications.yaml")
 _DEFAULT_DRAFT_DIR = Path("docs/subsidies/drafts")
+_DEFAULT_SOURCES = Path("data/subsidies/sources.yaml")
+_DEFAULT_STATE = Path("data/subsidies/monitor_state.json")
+_RAW_DIR = Path("data/subsidies/raw")
 
 
 _OPT_SEED = typer.Option(_DEFAULT_SEED, help="補助案 seed JSON")
@@ -233,6 +250,7 @@ def show_status(
     today = taipei_today()
     table = Table(title=f"申請進度（{today}）")
     table.add_column("補助案")
+    table.add_column("階段")
     table.add_column("截止")
     table.add_column("文件")
     table.add_column("還缺")
@@ -241,11 +259,47 @@ def show_status(
         done, needed = progress(application)
         table.add_row(
             program.name if program else program_id,
+            STAGE_LABEL[application.stage],
             describe_deadline(program.window_close if program else None, today),
             f"{done}/{needed}",
-            "、".join(missing_documents(application)) or "—",
+            "、".join(missing_documents(application)) or "—"
+            if application.stage == Stage.preparing
+            else "—",
         )
     console.print(table)
+
+
+_ARG_STAGE = typer.Argument(..., help="preparing / submitted / reviewing / approved / rejected")
+_OPT_ON = typer.Option(None, "--on", help="日期 YYYY-MM-DD，預設今天（台北）")
+_OPT_AMOUNT = typer.Option(None, "--amount", help="核定金額（元），只能搭配 approved")
+
+
+@app.command("stage")
+def stage_cmd(
+    program_id: str,
+    new_stage: Stage = _ARG_STAGE,
+    on: str | None = _OPT_ON,
+    amount: str | None = _OPT_AMOUNT,
+    tracker: Path = _OPT_TRACKER,
+) -> None:
+    """推進申請階段：送件記送件日、核准／駁回記結果日，核准可填核定金額。"""
+    applications = load_applications(tracker)
+    application = applications.get(program_id)
+    if application is None:
+        console.print(f"[red]{program_id} 還沒開始追蹤[/]，先執行 apply {program_id}")
+        raise typer.Exit(1)
+    if amount is not None and new_stage != Stage.approved:
+        console.print("[red]--amount 只能搭配 approved[/]")
+        raise typer.Exit(1)
+    try:
+        day = date.fromisoformat(on) if on else taipei_today()
+        updated = set_stage(application, new_stage, day, amount)
+    except ValueError as exc:
+        console.print(f"[red]輸入有誤[/]：{escape(str(exc))}")
+        raise typer.Exit(1) from exc
+    applications[program_id] = updated
+    save_applications(tracker, applications)
+    console.print(f"{program_id} → {STAGE_LABEL[new_stage]}", markup=False)
 
 
 # ── 代擬與提醒 ────────────────────────────────────────────────────────────
@@ -309,16 +363,19 @@ def remind(
         console.print("目前沒有需要提醒的事項")
         return
     text = render_reminder_text(reminders, today)
-    console.print(text, markup=False, highlight=False)
-    if not send:
-        return
+    console.print(text, markup=False, highlight=False, soft_wrap=True)
+    if send:
+        _send_line(text, to)
+
+
+def _send_line(text: str, to: str) -> None:
     if not to:
         console.print("[red]需要接收者[/]：加 --to 或設定 SUBSIDY_LINE_TO")
         raise typer.Exit(1)
     try:
         messenger = HttpLineMessenger.from_env()
     except RuntimeError as exc:
-        console.print(f"[red]{exc}[/]")
+        console.print(f"[red]{escape(str(exc))}[/]")
         raise typer.Exit(1) from exc
     try:
         asyncio.run(_push_and_close(messenger, to, text))
@@ -326,6 +383,46 @@ def remind(
         console.print(f"[red]LINE 推送失敗[/]：{escape(str(exc))}")
         raise typer.Exit(1) from exc
     console.print("[green]已推送到 LINE[/]")
+
+
+_OPT_SOURCES = typer.Option(_DEFAULT_SOURCES, help="來源登記簿 YAML")
+_OPT_STATE = typer.Option(_DEFAULT_STATE, help="新公告偵測的基準狀態檔")
+_OPT_FETCH = typer.Option(False, "--fetch", help="抓來源頁偵測新公告（需能連到各官網）")
+
+
+@app.command()
+def daily(
+    seed: Path = _OPT_SEED,
+    profile: Path = _OPT_PROFILE,
+    tracker: Path = _OPT_TRACKER,
+    sources: Path = _OPT_SOURCES,
+    state: Path = _OPT_STATE,
+    fetch: bool = _OPT_FETCH,
+    send: bool = _OPT_SEND,
+    to: str = _OPT_TO,
+) -> None:
+    """每日摘要：截止倒數、審查追蹤，加 --fetch 偵測新公告；有事才推送。"""
+    today = taipei_today()
+    programs = load_programs_from_seed(seed)
+    matches = match_all(programs, load_profile(profile), today=today)
+    applications = load_applications(tracker)
+    alerts = countdown_alerts(programs, matches, applications, today)
+    alerts += follow_up_alerts(programs, applications, today)
+    if fetch:
+        found, new_state, failures = asyncio.run(
+            scan_sources(load_sources(sources), load_state(state), _RAW_DIR)
+        )
+        save_state(state, new_state)
+        alerts += found
+        for failure in failures:
+            console.print(f"[yellow]抓取失敗[/] {escape(failure)}")
+    if not alerts:
+        console.print("今天沒有需要提醒的事項")
+        return
+    text = render_daily(alerts, today)
+    console.print(text, markup=False, highlight=False, soft_wrap=True)
+    if send:
+        _send_line(text, to)
 
 
 def main() -> None:

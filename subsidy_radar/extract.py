@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from html.parser import HTMLParser
+from urllib.parse import urldefrag, urljoin
 
 _SKIP_TAGS = {"script", "style", "noscript", "svg", "head", "iframe"}
 _BLOCK_TAGS = {
@@ -87,3 +88,43 @@ def html_links(html: str) -> list[str]:
     parser = _TextExtractor()
     parser.feed(html)
     return parser.links
+
+
+class _AnchorExtractor(HTMLParser):
+    def __init__(self, base_url: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self._base_url = base_url
+        self._href: str | None = None
+        self._title = ""
+        self._text: list[str] = []
+        self.anchors: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag != "a":
+            return
+        attr = dict(attrs)
+        href = (attr.get("href") or "").strip()
+        skip = not href or href.startswith(("#", "javascript:", "mailto:", "tel:"))
+        self._href = None if skip else href
+        self._title = (attr.get("title") or "").strip()
+        self._text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag != "a" or self._href is None:
+            return
+        text = re.sub(r"\s+", " ", "".join(self._text)).strip() or self._title
+        url = urldefrag(urljoin(self._base_url, self._href)).url
+        if text and url.startswith("http"):
+            self.anchors.append((text, url))
+        self._href = None
+
+
+def html_anchors(html: str, base_url: str) -> list[tuple[str, str]]:
+    """（連結文字, 絕對網址）清單；相對路徑以 base_url 補全，文字空白時改用 title。"""
+    parser = _AnchorExtractor(base_url)
+    parser.feed(html)
+    return parser.anchors

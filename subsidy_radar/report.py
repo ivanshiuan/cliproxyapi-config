@@ -17,6 +17,7 @@ from subsidy_radar.models import (
     DocStatus,
     MatchResult,
     RadarReport,
+    Stage,
     SubsidyApplication,
     Verdict,
 )
@@ -40,6 +41,15 @@ _VERDICT_ORDER = {
     Verdict.watch: 3,
     Verdict.unknown: 4,
     Verdict.ineligible: 5,
+}
+
+
+STAGE_LABEL = {
+    Stage.preparing: "📝 準備中",
+    Stage.submitted: "📮 已送件",
+    Stage.reviewing: "🔍 審查中",
+    Stage.approved: "🎉 核准",
+    Stage.rejected: "❌ 駁回",
 }
 
 
@@ -80,6 +90,28 @@ def _render_tracked_documents(application: SubsidyApplication) -> list[str]:
             lines.append(f"- ~~{doc}~~（不適用）")
         else:
             lines.append(f"- [{'x' if status == DocStatus.done else ' '}] {doc}")
+    lines.append("")
+    return lines
+
+
+def render_applications(report: RadarReport) -> list[str]:
+    names = {p.id: p.name for p in report.programs}
+    approved = [a for a in report.applications.values() if a.stage == Stage.approved]
+    awarded = sum(a.awarded_twd for a in approved if a.awarded_twd)
+    lines = [
+        "## 申請進度",
+        "",
+        f"**已核准 {len(approved)} 案，核定金額合計 NT$ {_fmt_amount(awarded)}**",
+        "",
+        "| 補助案 | 階段 | 文件 | 送件日 | 結果日 | 核定金額 |",
+        "|--------|------|------|--------|--------|----------|",
+    ]
+    for program_id, a in report.applications.items():
+        done, needed = progress(a)
+        lines.append(
+            f"| {names.get(program_id, program_id)} | {STAGE_LABEL[a.stage]} | {done}/{needed} "
+            f"| {a.submitted_on or '-'} | {a.decided_on or '-'} | {_fmt_amount(a.awarded_twd)} |"
+        )
     lines.append("")
     return lines
 
@@ -155,6 +187,11 @@ def render_report(report: RadarReport) -> str:
         for a in p.assumptions:
             sections.append(f"- {a}")
         sections.append("")
+
+    if report.applications:
+        sections.append("---")
+        sections.append("")
+        sections.extend(render_applications(report))
 
     sections.append("---")
     sections.append("")

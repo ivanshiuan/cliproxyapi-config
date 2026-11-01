@@ -275,6 +275,10 @@ subsidy-status: install ## Show tracked subsidy applications (deadline, document
 subsidy-remind: install ## Print subsidy deadline + missing-document reminders (ARGS="--send --to <id>" pushes to LINE)
 	$(PY) -m subsidy_radar remind $(ARGS)
 
+.PHONY: subsidy-daily
+subsidy-daily: install ## Daily subsidy digest: countdown, review follow-ups (ARGS="--fetch --send" for announcements + LINE)
+	$(PY) -m subsidy_radar daily $(ARGS)
+
 # ----- file ingest -------------------------------------------------------
 
 .PHONY: to-md

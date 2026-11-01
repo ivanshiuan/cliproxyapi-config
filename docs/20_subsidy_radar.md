@@ -17,7 +17,8 @@ data/subsidies/
 ├── seed_2026.json          ← 已蒸餾好的 20 項補助案（離線跑不需網路）
 ├── company_profile.yaml    ← 公司側寫（配對引擎的輸入）
 ├── sources.yaml            ← 來源登記簿（fetch 模組讀取）
-├── applications.yaml       ← 申請追蹤：每案應備文件已備 / 未備（apply / doc 會改，可手改）
+├── applications.yaml       ← 申請追蹤：應備文件已備 / 未備 + 申請階段（apply / doc / stage 會改，可手改）
+├── monitor_state.json      ← 新公告偵測的基準（gitignored；排程存在 Actions cache）
 ├── raw/                    ← httpx 抓下來的 HTML 快照（gitignored）
 └── inbox/                  ← 瀏覽器另存新檔的頁面（手動丟進來，gitignored）
 
@@ -35,7 +36,8 @@ subsidy_radar/
 ├── tracker.py              ← 申請追蹤 applications.yaml 讀寫 + 進度
 ├── draft.py                ← Claude 代擬申請書草稿
 ├── remind.py               ← 截止日 + 缺件提醒（LINE）
-└── cli.py                  ← typer CLI（scan / list / match / apply / doc / status / draft / remind）
+├── monitor.py              ← 每日摘要：截止倒數、審查追蹤、新公告偵測
+└── cli.py                  ← typer CLI（scan / list / match / apply / doc / status / stage / draft / remind / daily）
 
 docs/subsidies/
 ├── RADAR_2026.md           ← pipeline 輸出的雷達報告
@@ -129,7 +131,39 @@ python -m subsidy_radar remind --send --to <LINE user ID>   # 推送到 LINE
   資料沒有的事實一律標【待補】，不會自行編造；送件前必須逐字覆核，格式以主辦機關最新公告為準。
 - **LINE 提醒**與餐廳後端共用同一個 LINE 官方帳號：需要 `LINE_CHANNEL_ACCESS_TOKEN`，
   以及接收者的 LINE user ID（`--to` 或環境變數 `SUBSIDY_LINE_TO`）。沒加 `--send` 時只印出，不會推送。
-  每天自動推送屬於 Phase 5 的排程。
+  每天自動推送見下方 Phase 5。
+
+## 持續監控（Phase 5）
+
+```bash
+python -m subsidy_radar stage small-biz-training submitted --on 2026-10-30   # 送件
+python -m subsidy_radar stage small-biz-training reviewing                   # 審查中
+python -m subsidy_radar stage small-biz-training approved --amount 100000    # 核准（核定金額）
+python -m subsidy_radar stage small-biz-training rejected                    # 駁回
+python -m subsidy_radar daily                     # 今天的摘要（只印出）
+python -m subsidy_radar daily --fetch --send      # 抓官網偵測新公告，有事才推到 LINE
+```
+
+**每日摘要只提醒「今天剛好碰到」的事**，每天自動推送也不會洗版：
+- **截止倒數**：可行動案件在 D-30、D-14、D-7 與最後三天提醒；送件後就停止。
+- **審查追蹤**：送件滿 30／60／90 天還沒有結果，提醒聯絡主辦機關。
+- **新公告**（加 `--fetch`）：抓 `sources.yaml` 的各來源頁，只有「新出現、標題含補助關鍵字的連結」才算新公告，
+  每個來源最多列 5 則。**第一次抓某來源只建基準、不提醒**，所以不會一次跳出整頁舊連結。
+- 什麼都沒碰到的日子不推送。
+
+報告開頭會多一個「申請進度」區塊：每案階段、送件日、結果日，以及**已核准金額合計**。
+
+### 每天自動執行（GitHub Actions）
+
+`.github/workflows/subsidy-daily.yml` 每天台北時間 08:30 跑 `daily --fetch`。
+
+- 和 `daily-brief` 一樣唯讀，不會 commit；新公告的基準存在 Actions cache。
+- 要推到 LINE：到 GitHub repo **Settings → Secrets and variables → Actions** 新增兩個 secret：
+  `LINE_CHANNEL_ACCESS_TOKEN`（LINE 官方帳號的 channel access token）、`SUBSIDY_LINE_TO`（接收者的 LINE user ID）。
+  沒設的話摘要只寫進該次執行的 job summary。
+- 排程只在預設分支上跑，所以要這個 PR 合併後才會開始；也可以在 Actions 頁面按 **Run workflow** 手動跑。
+- 這個雲端開發環境的網路擋掉官網（`--fetch` 會全部顯示抓取失敗），GitHub Actions 的網路不受這個限制。
+  如果某些官網擋海外 IP，該來源會列在 job summary 的「抓取失敗」，不影響其他來源。
 
 ## 設計決策
 

@@ -83,6 +83,14 @@ class DocStatus(StrEnum):
     na = "na"  # 不適用
 
 
+class Stage(StrEnum):
+    preparing = "preparing"  # 準備中
+    submitted = "submitted"  # 已送件
+    reviewing = "reviewing"  # 審查中
+    approved = "approved"  # 核准
+    rejected = "rejected"  # 駁回
+
+
 class EligibilityRule(BaseModel):
     """結構化資格門檻 — None 代表該計畫無此限制。"""
 
@@ -201,13 +209,17 @@ class ActionPlan(BaseModel):
 
 
 class SubsidyApplication(BaseModel):
-    """一案的申請追蹤：應備文件哪些已備、哪些還缺。"""
+    """一案的申請追蹤：應備文件哪些已備、哪些還缺，以及送件到核准的階段。"""
 
     model_config = ConfigDict(frozen=True)
 
     program_id: str
     started: date
     documents: dict[str, DocStatus] = Field(default_factory=dict)
+    stage: Stage = Stage.preparing
+    submitted_on: date | None = None
+    decided_on: date | None = None
+    awarded_twd: TWD | None = None
     notes: str | None = None
 
 

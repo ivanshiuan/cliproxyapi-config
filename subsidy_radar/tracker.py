@@ -12,11 +12,18 @@ from pathlib import Path
 
 import yaml
 
-from subsidy_radar.models import DocStatus, SubsidyApplication, SubsidyProgram, taipei_today
+from subsidy_radar.models import (
+    DocStatus,
+    Stage,
+    SubsidyApplication,
+    SubsidyProgram,
+    taipei_today,
+)
 
 _HEADER = """\
-# 補助申請追蹤 — `python -m subsidy_radar apply / doc` 會改這個檔，也可以直接手改
+# 補助申請追蹤 — `python -m subsidy_radar apply / doc / stage` 會改這個檔，也可以直接手改
 # 文件狀態：todo = 未備、done = 已備、na = 不適用
+# 階段：preparing 準備中 → submitted 已送件 → reviewing 審查中 → approved 核准 / rejected 駁回
 """
 
 
@@ -59,6 +66,26 @@ def set_document(
     return application.model_copy(
         update={"documents": {**application.documents, document: status}}
     )
+
+
+def set_stage(
+    application: SubsidyApplication,
+    stage: Stage,
+    on: date,
+    awarded: str | None = None,
+) -> SubsidyApplication:
+    """推進申請階段：送件記送件日、核准／駁回記結果日，核准可填核定金額。
+
+    走 model_validate 而不是 model_copy，讓金額照樣經過 TWD 驗證（拒收 float）。
+    """
+    update: dict[str, object] = {"stage": stage}
+    if stage == Stage.submitted:
+        update["submitted_on"] = on
+    elif stage in (Stage.approved, Stage.rejected):
+        update["decided_on"] = on
+    if awarded is not None:
+        update["awarded_twd"] = awarded
+    return SubsidyApplication.model_validate({**application.model_dump(), **update})
 
 
 def resolve_document(application: SubsidyApplication, ref: str) -> str:

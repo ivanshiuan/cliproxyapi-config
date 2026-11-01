@@ -11,7 +11,13 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict, Field
 
 from restaurant_api.integrations.line import LineMessage, LineMessenger
-from subsidy_radar.models import MatchResult, SubsidyApplication, SubsidyProgram, Verdict
+from subsidy_radar.models import (
+    MatchResult,
+    Stage,
+    SubsidyApplication,
+    SubsidyProgram,
+    Verdict,
+)
 from subsidy_radar.tracker import missing_documents
 
 _ACTIONABLE = {Verdict.eligible, Verdict.likely, Verdict.conditional}
@@ -46,6 +52,8 @@ def build_reminders(
         days_left = (deadline - today).days if deadline else None
         closes_soon = days_left is not None and days_left <= horizon_days
         application = applications.get(program.id)
+        if application is not None and application.stage != Stage.preparing:
+            continue
         missing = missing_documents(application) if application else []
         if closes_soon or missing:
             reminders.append(

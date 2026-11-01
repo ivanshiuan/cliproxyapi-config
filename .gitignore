@@ -118,3 +118,4 @@ tmp/
 # ──────────────────────────────────────────────────────────────────────────
 data/subsidies/raw/
 data/subsidies/inbox/
+data/subsidies/monitor_state.json
