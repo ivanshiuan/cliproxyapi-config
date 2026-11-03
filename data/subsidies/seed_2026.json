@@ -280,9 +280,9 @@
     "name": "中小微企業數位轉型培力補助（30 人以下）",
     "agency": "經濟部中小及新創企業署",
     "category": "voucher",
-    "status": "open",
+    "status": "closed",
     "window_open": null,
-    "window_close": "2026-12-31",
+    "window_close": "2025-12-31",
     "max_amount_twd": "100000",
     "subsidy_rate": null,
     "amount_notes": "每員工上限 1 萬元，企業上限 10 萬。可用於數位工具導入、軟體採購",
@@ -294,11 +294,11 @@
     "how_to_apply": "至中小企業署數位轉型專區線上申請",
     "apply_url": "https://www.sme.gov.tw/",
     "required_documents": ["公司登記證明", "勞保投保清冊", "數位工具採購計畫"],
-    "source_urls": ["https://www.sme.gov.tw/"],
-    "as_of": "2026-10-25",
+    "source_urls": ["https://dtts.org.tw/subsidy/info/info.aspx", "https://n.yam.com/Article/20260105835036", "https://www.sme.gov.tw/"],
+    "as_of": "2026-11-02",
     "confidence": "web_search",
-    "next_round_hint": "全年受理至 12/31 或額滿",
-    "notes": "帝國 15 人符合 30 人以下門檻。可用於 POS、ERP、CRM 等數位工具導入"
+    "next_round_hint": "未見 115／116 年度新梯次公告（未確認）",
+    "notes": "受理期間為 114 年度：補助要點寫「至中華民國一百十四年十二月三十一日」（2025-12-31 或經費用罄）；已核定業者的執行／核銷延至 2026-03-31。原資料誤植為 2026-12-31。帝國 15 人符合 30 人以下門檻"
   },
   {
     "id": "taipei-digital-transform",
@@ -320,10 +320,10 @@
     "apply_url": "https://dbc.gov.taipei/",
     "required_documents": ["公司登記證明", "數位轉型導入計畫書", "報價單"],
     "source_urls": ["https://dbc.gov.taipei/"],
-    "as_of": "2026-10-25",
+    "as_of": "2026-11-02",
     "confidence": "web_search",
-    "next_round_hint": "2026 年梯次已截止（6 月），關注 2027 年 6 月",
-    "notes": "台北市專屬。金額不高但申請門檻低，適合首次申請補助的企業"
+    "next_round_hint": "2027 年是否續辦未確認",
+    "notes": "台北市專屬。金額不高但申請門檻低，適合首次申請補助的企業。2026-11-02 查證：臺北市法規查詢系統顯示「臺北市商業數位轉型服務方案補助作業要點」於 114/12/11 公告廢止、2026-01-01 生效（法規代碼 FL099639）。它和本案是否同一方案、本案 2026 年 6 月梯次的依據都未確認，需人工核對"
   },
   {
     "id": "green-carbon-reduction",
@@ -496,5 +496,54 @@
     "confidence": "web_search",
     "next_round_hint": "常年受理",
     "notes": "不是補助而是融資保證，但可大幅降低銀行貸款門檻。AI 投資計畫有加分"
+  },
+  {
+    "id": "sme-diversified-loan",
+    "name": "中小微企業多元發展專案貸款",
+    "agency": "經濟部（向承辦銀行申請，中小企業信用保證基金保證）",
+    "category": "loan",
+    "status": "open",
+    "window_open": "2025-01-15",
+    "window_close": "2028-10-31",
+    "max_amount_twd": null,
+    "subsidy_rate": null,
+    "amount_notes": "貸款，要還款，不是補助。每家最高 3,500 萬元；信保基金保證至少 9 成，100 萬元以下 10 成。週轉金與資本性支出的分項上限、利率與利息補貼未確認",
+    "eligibility": {
+      "requires": ["中小企業認定", "通過承辦銀行授信審查"],
+      "notes": "受理至 2028-10-31 或額度用罄"
+    },
+    "how_to_apply": "向往來或承辦銀行提出貸款申請，由銀行送信保基金保證",
+    "apply_url": null,
+    "required_documents": [],
+    "source_urls": ["https://coia.kcg.gov.tw/admin/ct/news/20250116146192.pdf", "https://coia.kcg.gov.tw/admin/ct/news/20250505854103.pdf", "https://coia.kcg.gov.tw/admin/ct/news/202512171104111.pdf", "https://www.ctee.com.tw/news/20251009701828-430104", "https://www.ctee.com.tw/news/20260206701579-430503"],
+    "as_of": "2026-11-02",
+    "confidence": "web_search",
+    "next_round_hint": null,
+    "notes": "要點 2025-01-15 生效、2025-09-19 修正。可用於擴店設備或 AI 營運軟體研發週轉。3,500 萬是貸款額度還是保證額度的口徑未逐字確認"
+  },
+  {
+    "id": "service-ai-integration",
+    "name": "服務業 AI 軟硬整合補助",
+    "agency": "經濟部商業發展署",
+    "category": "grant",
+    "status": "unknown",
+    "window_open": null,
+    "window_close": null,
+    "max_amount_twd": "3000000",
+    "subsidy_rate": "50%",
+    "amount_notes": "單店導入簡易型 AI 工具、連鎖業者導入客製化工具：每案補助 50%、上限 300 萬元；跨業整合多處場域：每案最高 2,000 萬元（另一則報導寫 2,000～3,000 萬）。業者至少自籌一半，硬體（機器人、智能取貨櫃、電子紙等）也能補",
+    "eligibility": {
+      "industry_scopes": ["45-96"],
+      "requires": ["申請資格（規模門檻、是否需先登錄為解決方案供應商）未確認"],
+      "notes": "餐廳可當導入方；自研的 AI 營運軟體也可能以解決方案方參與跨業合作案"
+    },
+    "how_to_apply": "受理期間與申請方式未確認：請到經濟部商業發展署的服務業 AI 專區確認",
+    "apply_url": null,
+    "required_documents": [],
+    "source_urls": ["https://www.ctee.com.tw/news/20251215701714-430503", "https://wantrich.chinatimes.com/news/20260212900451-420501", "https://www.ctee.com.tw/news/20260212701466-430503", "https://serv.gcis.nat.gov.tw/AOCAI/_admin/assets/5f15a4f2-683a-4254-ad5c-b87dbe89f65e"],
+    "as_of": "2026-11-02",
+    "confidence": "web_search",
+    "next_round_hint": null,
+    "notes": "115 年度首度推出。受理期間未確認，可能已開放（2026-02-25 起已辦全台推廣說明會）。和 ai-shop-subsidy（每店最高 10 萬）口徑不同，是否為同一方案的子項未確認"
   }
 ]
