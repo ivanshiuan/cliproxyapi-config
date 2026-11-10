@@ -531,19 +531,43 @@
     "window_close": null,
     "max_amount_twd": "3000000",
     "subsidy_rate": "50%",
-    "amount_notes": "單店導入簡易型 AI 工具、連鎖業者導入客製化工具：每案補助 50%、上限 300 萬元；跨業整合多處場域：每案最高 2,000 萬元（另一則報導寫 2,000～3,000 萬）。業者至少自籌一半，硬體（機器人、智能取貨櫃、電子紙等）也能補",
+    "amount_notes": "商發署服務業 AI 補助分三級：單店導入簡易型 AI 工具，每店最高 10 萬元（即 ai-shop-subsidy）；連鎖型（連鎖或加盟業者帶動 20～50 家店導入 AI 工具）每案最高 300 萬元、自籌 50%；整合型（整合 3 處以上場域、帶動 200 家服務業供應鏈企業）每案最高 2,000 萬元、補助不超過一半（另一則報導寫 2,000～3,000 萬）。硬體（機器人、智能取貨櫃、電子紙等）也能補。工商時報 2026-02-12 報導寫單店與連鎖都是 50%、上限 300 萬，和單店 10 萬的說法不一致",
     "eligibility": {
       "industry_scopes": ["45-96"],
-      "requires": ["申請資格（規模門檻、是否需先登錄為解決方案供應商）未確認"],
-      "notes": "餐廳可當導入方；自研的 AI 營運軟體也可能以解決方案方參與跨業合作案"
+      "requires": ["連鎖型：須為連鎖或加盟業者，帶動 20～50 家店導入 AI 工具", "整合型：須整合 3 處以上場域，並帶動 200 家服務業供應鏈企業", "是否需先登錄為解決方案供應商未確認"],
+      "notes": "15 人的帝國若只有單一或少數門市，多半只適用單店級距（每店最高 10 萬，見 ai-shop-subsidy）；300 萬的連鎖型要帶動 20～50 家店。自研的 AI 營運軟體也可能以解決方案方參與別人的整合型案"
     },
     "how_to_apply": "受理期間與申請方式未確認：請到經濟部商業發展署的服務業 AI 專區確認",
     "apply_url": null,
     "required_documents": [],
-    "source_urls": ["https://www.ctee.com.tw/news/20251215701714-430503", "https://wantrich.chinatimes.com/news/20260212900451-420501", "https://www.ctee.com.tw/news/20260212701466-430503", "https://serv.gcis.nat.gov.tw/AOCAI/_admin/assets/5f15a4f2-683a-4254-ad5c-b87dbe89f65e"],
-    "as_of": "2026-11-02",
+    "source_urls": ["https://www.ctee.com.tw/news/20251215701714-430503", "https://wantrich.chinatimes.com/news/20260212900451-420501", "https://www.ctee.com.tw/news/20260212701466-430503", "https://serv.gcis.nat.gov.tw/AOCAI/_admin/assets/5f15a4f2-683a-4254-ad5c-b87dbe89f65e", "https://www.cio.com.tw/115430/", "https://www.bnext.com.tw/article/92736/sme-ai-subsidy-tax-credit-2026"],
+    "as_of": "2026-11-09",
     "confidence": "web_search",
     "next_round_hint": null,
-    "notes": "115 年度首度推出。受理期間未確認，可能已開放（2026-02-25 起已辦全台推廣說明會）。和 ai-shop-subsidy（每店最高 10 萬）口徑不同，是否為同一方案的子項未確認"
+    "notes": "115 年度首度推出，2026-02-25 起辦全台推廣說明會。數位時代彙整寫連鎖型第二梯次 8/31 已截止、整合型本梯次 2026-10-30 17:00 截止、下一梯次依公告；只有這一個來源，未確認，受理期間先留空。單店、連鎖、整合三級在兩則報導中並列為商發署同一套補助，官方原文未逐字確認"
+  },
+  {
+    "id": "sme-ai-innovation-coaching",
+    "name": "中小微企業 AI 創新應用輔導計畫",
+    "agency": "經濟部中小及新創企業署（執行單位：資策會）",
+    "category": "other",
+    "status": "closed",
+    "window_open": null,
+    "window_close": "2026-04-30",
+    "max_amount_twd": null,
+    "subsidy_rate": null,
+    "amount_notes": "提供輔導資源（診斷工具、輔導諮詢、專家指導、實地訪視，涵蓋問題探索、服務設計、服務建置、服務導入），不是直接撥款；每案經費或補助額度未確認",
+    "eligibility": {
+      "requires": ["中小企業認定（實收資本額 1 億元以下或員工未滿 200 人）", "無銀行拒絕往來、3 年內無欠繳應納稅捐", "行業通用型須發展 1 種行業別 AI 方案並帶動至少 50 家服務業中小微企業導入；體系創新型須發展 2 種 AI 方案並帶動至少 20 家導入"],
+      "notes": "申請方是提出 AI 方案、帶動其他中小微企業導入的業者。帝國可拿自研的 AI 營運軟體當餐飲業的行業別方案，但要帶動 50 家（體系創新型 20 家）業者導入，門檻高。若不自己提案，也可能以導入業者身分加入別家的方案（未確認）"
+    },
+    "how_to_apply": "115 年度採郵寄或親送紙本（郵戳為憑），提案後安排簡報與專家指導會議；審查看需求合理性、方案可行性、市場擴散性（各占 30%）。諮詢：資策會數位轉型研究院 (02) 6607-2157／2159",
+    "apply_url": "https://www.sme.gov.tw/article-tw-2275-14405",
+    "required_documents": ["提案申請表", "立案證明", "納稅或信用相關證明", "提案簡報"],
+    "source_urls": ["https://www.sme.gov.tw/article-tw-2275-14405", "https://www.sme.gov.tw/files/14405/11174AB0-CFAC-41E2-9F1A-E742ACACBDB5", "https://www.ctee.com.tw/news/20260410700385-439901"],
+    "as_of": "2026-11-09",
+    "confidence": "web_search",
+    "next_round_hint": "116 年度是否續辦、何時受理未確認",
+    "notes": "115 年度 2026-04-02 起受理（工商時報），至 2026-04-30 17:00 止，隨到隨審、額滿為止，已截止。全年目標輔導 2,500 家，導入業者滿意度須平均 85% 以上。每案經費、116 年度是否續辦未確認"
   }
 ]
