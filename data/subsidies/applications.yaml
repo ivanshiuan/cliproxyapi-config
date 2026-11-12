@@ -1,0 +1,40 @@
+# 補助申請追蹤 — `python -m subsidy_radar apply / doc / stage` 會改這個檔，也可以直接手改
+# 文件狀態：todo = 未備、done = 已備、na = 不適用
+# 階段：preparing 準備中 → submitted 已送件 → reviewing 審查中 → approved 核准 / rejected 駁回
+applications:
+  ai-shop-subsidy:
+    started: '2026-11-12'
+    documents:
+      商業登記證明: todo
+      導入方案說明: todo
+      報價單: todo
+    stage: preparing
+  green-carbon-reduction:
+    started: '2026-11-12'
+    documents:
+      商業登記證明: todo
+      減碳方案規劃書: todo
+      設備報價單: todo
+    stage: preparing
+  sbir-phase1:
+    started: '2026-11-12'
+    documents:
+      研發計畫書: todo
+      公司登記證明: todo
+      近三年財務報表: todo
+      中小企業認定資料: todo
+    stage: preparing
+  sme-credit-guarantee:
+    started: '2026-11-12'
+    documents:
+      營運計畫書: todo
+      財務報表: todo
+      公司登記證明: todo
+    stage: preparing
+  taipei-siti:
+    started: '2026-11-12'
+    documents:
+      研發計畫書: todo
+      公司登記證明: todo
+      近年財務報表: todo
+    stage: preparing
