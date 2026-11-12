@@ -13,6 +13,7 @@ from subsidy_radar.models import (
     ActionPlan,
     ActionStep,
     MatchResult,
+    ProgramStatus,
     SubsidyProgram,
     Verdict,
     taipei_today,
@@ -20,15 +21,18 @@ from subsidy_radar.models import (
 
 _ACTIONABLE = {Verdict.eligible, Verdict.likely, Verdict.conditional}
 _URGENT_DAYS = 14
+_KNOWN_OPEN = {ProgramStatus.rolling, ProgramStatus.open}
 
 
 def _closes_soon(deadline: date | None, today: date) -> bool:
     return deadline is not None and (deadline - today).days <= _URGENT_DAYS
 
 
-def _urgency(deadline: date | None, today: date) -> str:
+def _urgency(program: SubsidyProgram, today: date) -> str:
+    deadline = program.window_close
     if deadline is None:
-        return "🟢 常態受理"
+        icon = "🟢" if program.status in _KNOWN_OPEN else "⚪"
+        return f"{icon} {program.open_ended_label()}"
     days_left = (deadline - today).days
     if days_left <= _URGENT_DAYS:
         return f"🔴 急（剩 {days_left} 天）"
@@ -122,7 +126,8 @@ def generate_plan(
         program_name=program.name,
         priority=priority,
         deadline=program.window_close,
-        urgency=_urgency(program.window_close, today),
+        no_deadline_label=program.open_ended_label(),
+        urgency=_urgency(program, today),
         steps=_base_steps(program, match),
         required_documents=program.required_documents,
         notes=program.notes,

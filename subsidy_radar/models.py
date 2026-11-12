@@ -60,6 +60,16 @@ class ProgramStatus(StrEnum):
     unknown = "unknown"
 
 
+# 沒有截止日時怎麼稱呼：只有隨到隨審的案件才叫「常態受理」，
+# 其餘沒查到受理期間的不能讓人以為隨時可送件。
+_OPEN_ENDED_LABEL = {
+    ProgramStatus.rolling: "常態受理",
+    ProgramStatus.open: "受理中，未載明截止日",
+    ProgramStatus.closed: "本年度已截止",
+    ProgramStatus.upcoming: "尚未開放",
+}
+
+
 class DataConfidence(StrEnum):
     official = "official"  # 官方公告原文
     web_search = "web_search"  # 網路查證（需以官網為準）
@@ -135,6 +145,10 @@ class SubsidyProgram(BaseModel):
     next_round_hint: str | None = None
     notes: str | None = None
 
+    def open_ended_label(self) -> str:
+        """沒有截止日時顯示的文字（狀態不明就說「受理期間未確認」）。"""
+        return _OPEN_ENDED_LABEL.get(self.status, "受理期間未確認")
+
 
 class CompanyProfile(BaseModel):
     """我方公司側寫 — 配對引擎的另一半輸入。
@@ -200,7 +214,8 @@ class ActionPlan(BaseModel):
     program_name: str
     priority: int  # 1 = 最優先
     deadline: date | None = None
-    urgency: str = ""  # 🔴急 / 🟠中 / 🟢常態
+    no_deadline_label: str = "常態受理"  # deadline 為空時顯示的文字
+    urgency: str = ""  # 🔴急 / 🟠中 / 🟢常態 / ⚪未確認
     steps: list[ActionStep] = Field(default_factory=list)
     required_documents: list[str] = Field(default_factory=list)
     notes: str | None = None  # 補助案本身的注意事項（如經費用罄即停）

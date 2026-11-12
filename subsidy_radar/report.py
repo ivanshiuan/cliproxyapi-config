@@ -10,12 +10,14 @@ RadarReport → docs/subsidies/RADAR_2026.md
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from zoneinfo import ZoneInfo
 
 from subsidy_radar.models import (
     ActionPlan,
     DocStatus,
     MatchResult,
+    ProgramCategory,
     RadarReport,
     Stage,
     SubsidyApplication,
@@ -68,7 +70,8 @@ def _fmt_amount(amt: object) -> str:
         return str(amt)
 
 
-def render_summary_table(matches: list[MatchResult]) -> str:
+def render_summary_table(matches: list[MatchResult], loan_ids: Collection[str] = ()) -> str:
+    """loan_ids：貸款案的 id，金額欄會標「貸款」，提醒這是要還的額度。"""
     rows = sorted(matches, key=lambda m: (_VERDICT_ORDER.get(m.verdict, 9), -m.score))
     lines = [
         "| # | 補助案 | 判定 | 分數 | 預估金額 | 說明 |",
@@ -77,6 +80,8 @@ def render_summary_table(matches: list[MatchResult]) -> str:
     for i, m in enumerate(rows, 1):
         label = _VERDICT_LABEL.get(m.verdict, str(m.verdict))
         amt = _fmt_amount(m.estimated_value_twd)
+        if m.program_id in loan_ids and m.estimated_value_twd is not None:
+            amt = f"{amt}（貸款）"
         reason = m.reasoning[:60] if m.reasoning else ""
         lines.append(f"| {i} | {m.program_name} | {label} | {m.score} | {amt} | {reason} |")
     return "\n".join(lines)
@@ -117,7 +122,9 @@ def render_applications(report: RadarReport) -> list[str]:
 
 
 def render_action_plan(plan: ActionPlan, application: SubsidyApplication | None = None) -> str:
-    deadline = f"{plan.deadline}（官方公告，建議提前一週送件）" if plan.deadline else "常態受理"
+    deadline = (
+        f"{plan.deadline}（官方公告，建議提前一週送件）" if plan.deadline else plan.no_deadline_label
+    )
     lines = [
         f"### P{plan.priority}：{plan.program_name}",
         "",
@@ -156,7 +163,12 @@ def render_report(report: RadarReport) -> str:
     ts = report.generated_at.astimezone(TAIPEI).strftime("%Y-%m-%d %H:%M %Z")
     p = report.profile
     high = [m for m in report.matches if m.verdict in {Verdict.eligible, Verdict.likely}]
-    eligible_value = sum(m.estimated_value_twd for m in high if m.estimated_value_twd)
+    # 貸款要還，不算「可爭取」的錢；額度另外列
+    loan_ids = {pr.id for pr in report.programs if pr.category == ProgramCategory.loan}
+    eligible_value = sum(
+        m.estimated_value_twd for m in high if m.estimated_value_twd and m.program_id not in loan_ids
+    )
+    loan_value = sum(m.estimated_value_twd for m in high if m.estimated_value_twd and m.program_id in loan_ids)
 
     sections = [
         "# 🛰️ 2026 政府補助雷達報告",
@@ -175,6 +187,9 @@ def render_report(report: RadarReport) -> str:
         f"（{len(high)} 項高度符合，預估可爭取 NT$ {_fmt_amount(eligible_value)}）**"
     )
     sections.append("")
+    if loan_value:
+        sections.append(f"> 💳 另可申請貸款額度 NT$ {_fmt_amount(loan_value)}（要還款，不計入預估可爭取）。")
+        sections.append("")
     if actionable_count > len(high):
         sections.append(
             f"> 🟠 另 {actionable_count - len(high)} 項「有條件」案件需先釐清待確認項目，"
@@ -197,7 +212,7 @@ def render_report(report: RadarReport) -> str:
     sections.append("")
     sections.append("## 一覽表")
     sections.append("")
-    sections.append(render_summary_table(report.matches))
+    sections.append(render_summary_table(report.matches, loan_ids))
     sections.append("")
 
     if report.plans:

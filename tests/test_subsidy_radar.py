@@ -41,7 +41,7 @@ from subsidy_radar.models import (
     Verdict,
 )
 from subsidy_radar.pipeline import load_profile, load_programs_from_seed, run_offline
-from subsidy_radar.plan import generate_plans
+from subsidy_radar.plan import generate_plan, generate_plans
 from subsidy_radar.report import generate_report, render_action_plan, render_summary_table
 
 # ── fixtures ──────────────────────────────────────────────────────────────
@@ -425,6 +425,28 @@ class TestPlan:
         assert "剩 5 天" in plans[0].urgency
         assert "2026-10-31" in render_action_plan(plans[0])
 
+    @pytest.mark.parametrize(
+        ("status", "label", "icon"),
+        [
+            (ProgramStatus.rolling, "常態受理", "🟢"),
+            (ProgramStatus.open, "受理中，未載明截止日", "🟢"),
+            (ProgramStatus.unknown, "受理期間未確認", "⚪"),
+        ],
+    )
+    def test_no_deadline_label_follows_status(
+        self, sample_profile: CompanyProfile, status: ProgramStatus, label: str, icon: str
+    ) -> None:
+        # 受理期間沒查到的案件不能顯示成「常態受理」，讓人以為隨時可送件
+        program = _program(status=status)
+        match = match_all([program], sample_profile, today=TODAY)[0]
+        plan = generate_plan(program, match, priority=1, today=TODAY)
+        assert plan.urgency == f"{icon} {label}"
+        assert f"截止日：{label}" in render_action_plan(plan)
+
+    def test_open_ended_label_for_closed_and_upcoming(self) -> None:
+        assert _program(status=ProgramStatus.closed).open_ended_label() == "本年度已截止"
+        assert _program(status=ProgramStatus.upcoming).open_ended_label() == "尚未開放"
+
 
 # ── report ────────────────────────────────────────────────────────────────
 
@@ -440,6 +462,34 @@ class TestReport:
         table = render_summary_table([mr])
         assert "Test" in table
         assert "✅" in table
+
+    def test_loans_not_counted_as_obtainable(self, sample_profile: CompanyProfile) -> None:
+        # 貸款要還款，不能加進「預估可爭取」
+        grant = _program(id="grant", name="Grant", max_amount_twd="1000000")
+        loan = _program(
+            id="loan", name="Loan", category=ProgramCategory.loan, max_amount_twd="4000000"
+        )
+        matches = [
+            MatchResult(
+                program_id=p.id,
+                program_name=p.name,
+                verdict=Verdict.likely,
+                score=60,
+                estimated_value_twd=p.max_amount_twd,
+            )
+            for p in (grant, loan)
+        ]
+        report = RadarReport(
+            generated_at=datetime(2026, 10, 26, tzinfo=UTC),
+            profile=sample_profile,
+            programs=[grant, loan],
+            matches=matches,
+        )
+        md = generate_report(report)
+        assert "預估可爭取 NT$ 100.0 萬" in md
+        assert "另可申請貸款額度 NT$ 400.0 萬（要還款" in md
+        assert "| 400.0 萬（貸款） |" in md
+        assert "100.0 萬（貸款）" not in md
 
     def test_generate_report(
         self, sample_program: SubsidyProgram, sample_profile: CompanyProfile

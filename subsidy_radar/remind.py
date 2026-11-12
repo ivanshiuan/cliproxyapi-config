@@ -30,6 +30,7 @@ class Reminder(BaseModel):
     program_id: str
     program_name: str
     deadline: date | None
+    no_deadline_label: str = "常態受理"
     days_left: int | None
     closes_soon: bool
     applying: bool
@@ -61,6 +62,7 @@ def build_reminders(
                     program_id=program.id,
                     program_name=program.name,
                     deadline=deadline,
+                    no_deadline_label=program.open_ended_label(),
                     days_left=days_left,
                     closes_soon=closes_soon,
                     applying=application is not None,
@@ -73,9 +75,10 @@ def build_reminders(
     )
 
 
-def describe_deadline(deadline: date | None, today: date) -> str:
+def describe_deadline(deadline: date | None, today: date, no_deadline: str = "常態受理") -> str:
+    """no_deadline：沒有截止日時的文字，用 SubsidyProgram.open_ended_label() 傳入。"""
     if deadline is None:
-        return "常態受理"
+        return no_deadline
     days_left = (deadline - today).days
     if days_left < 0:
         return f"{deadline:%m/%d} 已截止"
@@ -95,7 +98,7 @@ def render_reminder_text(reminders: list[Reminder], today: date) -> str:
     for r in reminders:
         lines.append("")
         lines.append(f"{'⏰' if r.closes_soon else '📎'} {r.program_name}")
-        lines.append(f"{describe_deadline(r.deadline, today)}｜{_status_line(r)}")
+        lines.append(f"{describe_deadline(r.deadline, today, r.no_deadline_label)}｜{_status_line(r)}")
     text = "\n".join(lines)
     if len(text) > _LINE_TEXT_LIMIT:
         return text[: _LINE_TEXT_LIMIT - 1] + "…"

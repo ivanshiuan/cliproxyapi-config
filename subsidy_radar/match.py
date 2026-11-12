@@ -293,7 +293,7 @@ def case_context(program: SubsidyProgram, profile: CompanyProfile, today: date) 
 - 主辦機關：{program.agency}
 - 類別：{program.category}
 - 狀態：{program.status}
-- 申請期間：{program.window_open or "未載明"} ～ {program.window_close or "常態受理"}
+- 申請期間：{program.window_open or "未載明"} ～ {program.window_close or program.open_ended_label()}
 - 最高金額：{program.max_amount_twd or "未載明"}（補助比率：{program.subsidy_rate or "未載明"}）
 - 金額說明：{program.amount_notes or "無"}
 - 結構化資格條件：{program.eligibility.model_dump_json()}

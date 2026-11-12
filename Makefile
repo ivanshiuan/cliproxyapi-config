@@ -60,7 +60,7 @@ test-fast: ## Run tests assuming env is already set up
 
 .PHONY: lint
 lint: install ## Lint with ruff (read-only)
-	$(VENV)/bin/python -m ruff check devswarm restaurant_api tigerline tests scripts
+	$(VENV)/bin/python -m ruff check devswarm restaurant_api tigerline subsidy_radar tests scripts
 
 .PHONY: typecheck
 typecheck: install ## Run pyright type checker (version pinned in requirements-dev.txt)
@@ -169,7 +169,7 @@ demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳�
 
 .PHONY: full-check
 full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smoke + migration drift
-	$(VENV)/bin/ruff check devswarm restaurant_api tigerline tests scripts
+	$(VENV)/bin/ruff check devswarm restaurant_api tigerline subsidy_radar tests scripts
 	$(VENV)/bin/pyright
 	$(PYTEST) tests/ --ignore=tests/tigerline
 	cd restaurant_api && ../$(VENV)/bin/alembic check

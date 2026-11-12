@@ -136,6 +136,8 @@ ignore = ["E501"]  # line length handled by formatter
 "tigerline/compliance_guard.py" = ["RUF001"]
 # Subsidy radar uses Chinese in user-facing strings / docstrings / YAML comments.
 "subsidy_radar/*.py" = ["RUF001", "RUF002", "RUF003"]
+# Its tests assert on that Chinese report / LINE text verbatim.
+"tests/test_subsidy_*.py" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.format]
 quote-style = "double"

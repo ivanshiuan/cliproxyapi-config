@@ -30,6 +30,7 @@ from subsidy_radar.draft import DraftError, draft_application, render_draft
 from subsidy_radar.match import match_all
 from subsidy_radar.models import (
     DocStatus,
+    ProgramCategory,
     Stage,
     SubsidyApplication,
     SubsidyProgram,
@@ -117,8 +118,14 @@ def scan(
         refined = sum(1 for m in actionable if m.strategic_notes)
         console.print(f"AI 精煉：{refined}/{len(actionable)} 案完成（其餘保留規則判定）")
     if eligible:
-        total = sum(m.estimated_value_twd for m in eligible if m.estimated_value_twd)
+        loan_ids = {p.id for p in report.programs if p.category == ProgramCategory.loan}
+        total = sum(
+            m.estimated_value_twd for m in eligible if m.estimated_value_twd and m.program_id not in loan_ids
+        )
+        loans = sum(m.estimated_value_twd for m in eligible if m.estimated_value_twd and m.program_id in loan_ids)
         console.print(f"[bold green]預估可爭取：NT$ {total:,.0f}[/]")
+        if loans:
+            console.print(f"另可申請貸款額度：NT$ {loans:,.0f}（要還款，不計入）")
     console.print(f"\n報告已輸出：{output}")
 
 
@@ -260,7 +267,9 @@ def show_status(
         table.add_row(
             program.name if program else program_id,
             STAGE_LABEL[application.stage],
-            describe_deadline(program.window_close if program else None, today),
+            describe_deadline(program.window_close, today, program.open_ended_label())
+            if program
+            else "—",
             f"{done}/{needed}",
             "、".join(missing_documents(application)) or "—"
             if application.stage == Stage.preparing

@@ -220,6 +220,14 @@ class TestRemind:
         assert stub.sent_messages[0]["to"] == "U123"
         assert stub.sent_messages[0]["message"].text == text
 
+    def test_unconfirmed_window_not_called_rolling(self) -> None:
+        program = _program(id="tbd", name="待查", status=ProgramStatus.unknown)
+        applications = {"tbd": start_application(program, today=TODAY)}
+        reminders = build_reminders([program], [_match("tbd", Verdict.conditional)], applications, TODAY)
+        text = render_reminder_text(reminders, TODAY)
+        assert "受理期間未確認｜申請中，還缺 2 份" in text
+        assert "常態受理" not in text
+
     def test_render_truncates_to_line_limit(self) -> None:
         programs = [
             _program(id=f"p{i}", name="很長的補助案名稱" * 10, window_close=TODAY + timedelta(days=1))
