@@ -12,8 +12,8 @@ region: "台北市"
 owner_age: 35
 owner_has_20h_startup_course: null   # 尚未確認
 is_company_registered: true
-has_tax_debt: null                   # 尚未確認
-has_labor_law_violations: null       # 尚未確認
+has_tax_debt: false                  # 負責人確認無欠稅（2026-11-12）
+has_labor_law_violations: false      # 負責人確認無勞動法規違規（2026-11-12）
 previous_grants: []
 digital_tools:
   - "LINE Official Account"
@@ -25,5 +25,3 @@ assumptions:
   - "資本額 500 萬為估計，請以公司登記證明為準"
   - "負責人年齡 35 歲為估計"
   - "是否已取得 20 小時創業輔導課程證明未確認"
-  - "欠稅狀態未查詢"
-  - "勞動法規違規狀態未查詢"
