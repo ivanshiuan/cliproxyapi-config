@@ -569,5 +569,29 @@
     "confidence": "web_search",
     "next_round_hint": "116 年度是否續辦、何時受理未確認",
     "notes": "115 年度 2026-04-02 起受理（工商時報），至 2026-04-30 17:00 止，隨到隨審、額滿為止，已截止。全年目標輔導 2,500 家，導入業者滿意度須平均 85% 以上。每案經費、116 年度是否續辦未確認"
+  },
+  {
+    "id": "sme-deeptech-cross-domain",
+    "name": "深科技驅動中小企業跨域創新計畫（企業跨域研發補助）",
+    "agency": "經濟部中小及新創企業署（執行單位：財團法人中衛發展中心）",
+    "category": "grant",
+    "status": "unknown",
+    "window_open": null,
+    "window_close": null,
+    "max_amount_twd": null,
+    "subsidy_rate": null,
+    "amount_notes": "補助上限與補助比例未確認（申請須知全文讀不到）。報導中的 SBIR 先期研究 150 萬、研究開發 1,200 萬是 SBIR 各階段的上限，不是本計畫的數字，不可套用",
+    "eligibility": {
+      "requires": ["符合中小企業或新創企業資格（認定方式未確認）", "與其他企業跨域合作研發（合作家數、條件未確認）"],
+      "notes": "116 年度申請須知寫明目的是鼓勵中小及新創企業跨域合作；政策依據含「中小微企業多元振興發展計畫」「AI 新十大建設」。帝國可用自研的 AI 營運軟體結合餐飲場域找夥伴提案，但是否符合計畫的「深科技」定義未確認"
+    },
+    "how_to_apply": "SBIR 計畫專案辦公室受理（sbir.sme.gov.tw/cross/info），諮詢專線 0800-888-968；受理期間與送件方式以 SBIR 官網公告為準",
+    "apply_url": "https://sbir.sme.gov.tw/cross/info",
+    "required_documents": [],
+    "source_urls": ["https://www.moea.gov.tw/MNS/populace/news/wHandNews_File.ashx?file_id=127963", "https://www.moea.gov.tw/Mns/populace/news/wHandNews_File.ashx?file_id=127958", "https://udn.com/news/story/7238/9536257", "https://wantrich.chinatimes.com/news/20260610900037-420101"],
+    "as_of": "2026-11-16",
+    "confidence": "web_search",
+    "next_round_hint": null,
+    "notes": "116 年度（2027）企業跨域研發補助申請須知，2026-10-14 核定版，經濟部網站公告。受理期間、補助上限、補助比例、申請資格細節都未確認。報導所說 SBIR「跨域型」（鼓勵中小及新創企業跨域合作，運用創新科技或商業模式增加營收）應即此類補助，未確認。下一步：打 0800-888-968 或看 SBIR 官網跨域頁面，問受理時間與上限"
   }
 ]

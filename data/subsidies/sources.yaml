@@ -7,6 +7,11 @@ sources:
     url: "https://sbir.org.tw"
     notes: "隨到隨審"
 
+  - id: sme-deeptech-cross
+    name: "深科技驅動中小企業跨域創新計畫（SBIR 跨域）"
+    url: "https://sbir.sme.gov.tw/cross/info"
+    notes: "116 年度受理期間未確認，盯公告"
+
   - id: siir
     name: "SIIR 服務業創新研發計畫"
     url: "https://gcis.nat.gov.tw/neo-s/Web/Default.aspx"
