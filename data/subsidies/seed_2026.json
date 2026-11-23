@@ -593,5 +593,54 @@
     "confidence": "web_search",
     "next_round_hint": null,
     "notes": "116 年度（2027）企業跨域研發補助申請須知，2026-10-14 核定版，經濟部網站公告。受理期間、補助上限、補助比例、申請資格細節都未確認。報導所說 SBIR「跨域型」（鼓勵中小及新創企業跨域合作，運用創新科技或商業模式增加營收）應即此類補助，未確認。下一步：打 0800-888-968 或看 SBIR 官網跨域頁面，問受理時間與上限"
+  },
+  {
+    "id": "moea-rd-layout",
+    "name": "企業創新研發布局推動計畫",
+    "agency": "經濟部產業技術司（計畫管理單位：台北市電腦商業同業公會）",
+    "category": "grant",
+    "status": "unknown",
+    "window_open": null,
+    "window_close": null,
+    "max_amount_twd": "30000000",
+    "subsidy_rate": null,
+    "amount_notes": "單案補助最高 3,000 萬元（中央社、工商時報都有報導）。補助比例未確認：中央社寫以計畫全程總經費 50% 為上限、計畫期程兩年，未找到第二個來源",
+    "eligibility": {
+      "requires": ["符合申請資格（資格條文未查到，未確認）", "總經理擔任計畫主持人，並提出公司未來 3 年技術路程圖（報導所述審查重點，未確認）", "自籌部分計畫經費（補助比例未確認）"],
+      "notes": "計畫目的是協助企業把研發能量制度化、規劃未來 3 年技術藍圖。帝國有自研 AI 營運軟體，可以拿來提案；但 15 人的公司是否符合資格、是否要求既有研發部門或一定研發人力，都未確認。經濟部服務網 2026-08 另有一份標示「國內研發中心」的簡報，內容與適用對象未讀到"
+    },
+    "how_to_apply": "一階段審查（省去構想審），計畫書上限 30 頁；受理方式與截止日以計畫網站公告為準。諮詢：A+ 企業創新專案辦公室 (02)2341-2314",
+    "apply_url": "https://service.moea.gov.tw/EE514/tw/aiip/",
+    "required_documents": [],
+    "source_urls": ["https://www.cna.com.tw/news/afe/202511120232.aspx", "https://www.ctee.com.tw/news/20251113700097-430104", "https://service.moea.gov.tw/EE514/wSite/public/Attachment/00106/f1760674352721.pdf", "https://service.moea.gov.tw/EE514/wSite/public/Attachment/00106/f1764570023591.pdf", "https://service.moea.gov.tw/EE514/wSite/public/Attachment/00106/f1786096466825.pdf"],
+    "as_of": "2026-11-23",
+    "confidence": "web_search",
+    "next_round_hint": null,
+    "notes": "經濟部 2025-11-12 公布。截止日未確認：中央社報導寫申請至 115 年 12 月 31 日（2026-12-31），但官方原文讀不到、也沒有第二個來源，而且 2026-08 有更新版簡報，截止日可能已改。若 12/31 屬實，只剩約 5 週。下一步：盡快打 (02)2341-2314 問截止日、申請資格，以及 15 人的公司能不能申請"
+  },
+  {
+    "id": "ai-talent-enterprise-class",
+    "name": "AI 職能提升班－企業專班（強化服務業人才韌性計畫）",
+    "agency": "經濟部商業發展署（執行單位：商業服務業 AI 人才辦公室）",
+    "category": "training",
+    "status": "open",
+    "window_open": null,
+    "window_close": "2027-07-31",
+    "max_amount_twd": null,
+    "subsidy_rate": null,
+    "amount_notes": "申請須知名稱是「培訓補助」，但補助金額、比例與企業自付額都未確認",
+    "eligibility": {
+      "industry_scopes": ["45-96"],
+      "requires": ["每班最低開班人數符合規定（門檻未確認，帝國員工 15 人）", "學員實體上課至少 30 小時、實作至少占 30%（要排班配合）"],
+      "notes": "對象是商業服務業者，依企業需求客製 AI 課程；同計畫的 AI 課程有智慧餐飲相關主題。每次申請 1 班，完課並核銷後才能再申請，每家企業最多 2 班。帝國可用來訓練員工使用 AI 工具（含自研營運軟體）"
+    },
+    "how_to_apply": "向商業服務業 AI 人才辦公室申請；受理到 2027-07-31，商業發展署可依經費使用情形提前公告停止受理",
+    "apply_url": null,
+    "required_documents": [],
+    "source_urls": ["https://serv.gcis.nat.gov.tw/AOCAI/_admin/assets/b5d9e89f-7c70-4038-af21-b8c3be5b63c9", "https://serv.gcis.nat.gov.tw/AOCAI/_admin/assets/5f15a4f2-683a-4254-ad5c-b87dbe89f65e", "https://www.1111.com.tw/news/jobns/160705"],
+    "as_of": "2026-11-23",
+    "confidence": "web_search",
+    "next_round_hint": "受理至 2027-07-31，經費用罄可能提前截止",
+    "notes": "115–116 年度計畫，申請須知 115 年 4 月版（官方原文讀不到，內容來自搜尋摘要）。補助金額、最低開班人數、申請網址都未確認。下一步：洽商業服務業 AI 人才辦公室，問最低開班人數與企業要自付多少"
   }
 ]
