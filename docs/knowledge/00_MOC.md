@@ -28,6 +28,7 @@
 <!-- 這環節的知識卡連結放這，例：[[2026-07-08-xxx]] -->
 
 ## 會員成長
+- [[2026-11-25-twenty-crm-benchmark]] — 會員升級成關係經營：跟進任務（客訴回訪/生日禮）、標籤（VIP/素食/過敏）、客戶時間軸
 
 ## 定價
 
@@ -43,6 +44,8 @@
 ## 競品情報
 - [[2026-07-23-aibou-crew-competitor]] — Aibou Crew（艾柏雲端）人力軸 HR SaaS 蒸餾：NT$168/人/月、勞基法防呆、我們以全域損益超車
 - [[2026-07-23-haodian-pos-competitor]] — 好點 POS 一站式點餐收銀蒸餾：操作外殼完整但無成本/損益；已據此補齊菜單後台/桌位/客製/訂單生命週期/報表（docs/13）
+- [[2026-11-25-twenty-crm-benchmark]] — Twenty CRM（開源 Salesforce 替代）：客戶時間軸 + 備註/任務/標籤；已補進 `/crm/*`，時間軸多塞訂單/集點/儲值（docs/14）
 
 ## 系統與AI
+- [[2026-11-25-twenty-crm-benchmark]] — `/crm/*` 5 表 + 七源合併時間軸 API（migration c4e9b2d71a05）
 - [[2026-07-23-aibou-crew-competitor]] — 勞基法即時 guardrail 應納入 clock_router / labor_hours_classifier 強化

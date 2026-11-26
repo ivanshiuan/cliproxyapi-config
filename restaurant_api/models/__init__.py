@@ -26,6 +26,16 @@ from .campaigns import (
 )
 from .cash import CashDrawerSession
 from .cost_events import StaffMealEvent, TastingEvent, WasteEvent
+from .crm import (
+    CustomerInteraction,
+    CustomerNote,
+    CustomerTag,
+    CustomerTagLink,
+    CustomerTask,
+    CustomerTaskStatus,
+    InteractionChannel,
+    InteractionDirection,
+)
 from .customers import (
     Customer,
     CustomerPointsLedger,
@@ -144,6 +154,15 @@ __all__ = [  # noqa: RUF022 — order is by module, not alphabetical, for readab
     "CustomerStoredValueLedger",
     "Referral",
     "ReferralStatus",
+    # CRM relationship layer (對標 Twenty CRM)
+    "CustomerNote",
+    "CustomerTask",
+    "CustomerTaskStatus",
+    "CustomerTag",
+    "CustomerTagLink",
+    "CustomerInteraction",
+    "InteractionChannel",
+    "InteractionDirection",
     "UgcKind",
     "UgcStatus",
     "UgcSubmission",

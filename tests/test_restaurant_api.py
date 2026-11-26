@@ -36,8 +36,9 @@ def test_root_endpoint():
 def test_models_metadata_has_30_tables():
     """18 core + 5 closed-loop + 2 (reservations + walk_in_queue) + 1 national
     + 4 marketing-campaign (wheel-spin lottery) + 1 stored-value + 1 referral
-    + 1 UGC + 4 POS-parity (dining tables + modifier groups, docs/13) = 37
-    total."""
+    + 1 UGC + 4 POS-parity (dining tables + modifier groups, docs/13)
+    + 5 CRM relationship layer (notes/tasks/tags/links/interactions, docs/14)
+    = 42 total."""
     from restaurant_api.models import Base
 
     expected = {
@@ -87,10 +88,16 @@ def test_models_metadata_has_30_tables():
         "modifier_groups",
         "modifier_options",
         "menu_item_modifier_groups",
+        # CRM relationship layer — 對標 Twenty CRM (5, docs/14)
+        "customer_notes",
+        "customer_tasks",
+        "customer_tags",
+        "customer_tag_links",
+        "customer_interactions",
     }
     actual = set(Base.metadata.tables.keys())
     assert actual == expected, f"missing: {expected - actual}; extra: {actual - expected}"
-    assert len(Base.metadata.tables) == 37
+    assert len(Base.metadata.tables) == 42
 
 
 def test_money_columns_are_numeric_14_4():
