@@ -1,0 +1,10 @@
+{
+  "name": "car16-api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "npx wrangler dev --local",
+    "deploy": "npx wrangler deploy"
+  }
+}

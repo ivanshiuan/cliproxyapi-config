@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>標牌競標公告 — car16</title>
+<link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<main>
+  <h2>標牌競標公告</h2>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="btn sm tab" data-phase="announced">公告中</button>
+    <button class="btn ghost sm tab" data-phase="bidding">競標中</button>
+    <button class="btn ghost sm tab" data-phase="closed">已結標</button>
+  </div>
+  <div id="meta" class="notice" style="display:none"></div>
+  <div class="card table-scroll">
+    <table class="data">
+      <thead><tr><th>車牌號碼</th><th>監理所</th><th>車種</th><th>底價</th><th>目前出價</th><th>出價數</th><th>競標期間</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="muted">載入中…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="notice">
+    出價與保證金繳納請至 <a href="https://www.mvdis.gov.tw/m3-emv-plate/bid/announce" target="_blank" rel="noopener">監理服務網</a> 進行。出價超過 30 萬元須先繳 20% 保證金；得標後未依規定繳費將沒收保證金並禁止再參與競標。需要代標協助請至「委託代辦」。
+  </div>
+</main>
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/chatbot.js"></script>
+<script src="js/ui.js"></script>
+<script>
+const fmt = (n) => (n == null ? "—" : "NT$" + Number(n).toLocaleString("zh-TW"));
+async function load(phase) {
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("ghost", b.dataset.phase !== phase));
+  const rows = document.getElementById("rows");
+  rows.innerHTML = '<tr><td colspan="7" class="muted">載入中…</td></tr>';
+  try {
+    const d = await api.get(`/api/auctions?phase=${phase}`);
+    rows.innerHTML = d.results.length
+      ? d.results.map((r) => `<tr>
+          <td class="plate">${r.plate_no}</td><td>${r.region}</td><td>${r.vehicle_type || "—"}</td>
+          <td>${fmt(r.base_price_twd)}</td><td>${fmt(r.current_bid_twd)}</td><td>${r.bid_count ?? "—"}</td>
+          <td class="muted">${r.bid_start || "—"} ～ ${r.bid_end || "—"}</td>
+        </tr>`).join("")
+      : '<tr><td colspan="7" class="muted">目前沒有資料</td></tr>';
+    const meta = document.getElementById("meta");
+    meta.style.display = "block";
+    meta.textContent = d.data_as_of
+      ? `資料時間：${d.data_as_of}（UTC）｜來源：監理服務網${d.stale ? "｜⚠ 資料可能非最新" : ""}`
+      : "資料庫尚無快取資料";
+  } catch (e) {
+    rows.innerHTML = `<tr><td colspan="7" class="error-box">${e.message}</td></tr>`;
+  }
+}
+document.querySelectorAll(".tab").forEach((b) => (b.onclick = () => load(b.dataset.phase)));
+load("announced");
+</script>
+</body>
+</html>
