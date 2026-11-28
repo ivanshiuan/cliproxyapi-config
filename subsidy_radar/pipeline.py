@@ -1,0 +1,78 @@
+"""Pipeline 編排 — 把各模組串成「抓→蒸餾→配→包→報告」一條龍。
+
+兩種模式：
+1. offline — 從 seed JSON + company YAML 跑（免抓網頁；llm=True 時呼叫 Claude 精煉配對）
+2. online  — httpx 抓取 + LLM 蒸餾（需 ANTHROPIC_API_KEY）
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import UTC, date, datetime
+from pathlib import Path
+
+import yaml
+
+from subsidy_radar.match import llm_refine_all, match_all
+from subsidy_radar.models import (
+    CompanyProfile,
+    RadarReport,
+    SubsidyProgram,
+    taipei_today,
+)
+from subsidy_radar.plan import generate_plans
+from subsidy_radar.report import generate_report
+from subsidy_radar.tracker import load_applications
+
+
+def load_programs_from_seed(seed_path: Path) -> list[SubsidyProgram]:
+    """從 seed JSON 載入已蒸餾好的補助卡（離線模式）。"""
+    raw = json.loads(seed_path.read_text(encoding="utf-8"))
+    programs: list[SubsidyProgram] = []
+    for item in raw:
+        programs.append(SubsidyProgram.model_validate(item))
+    return programs
+
+
+def load_profile(profile_path: Path) -> CompanyProfile:
+    """從 YAML 載入公司側寫。"""
+    raw = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+    return CompanyProfile.model_validate(raw)
+
+
+def run_offline(
+    seed_path: Path,
+    profile_path: Path,
+    output_path: Path | None = None,
+    today: date | None = None,
+    llm: bool = False,
+    tracker_path: Path | None = None,
+) -> RadarReport:
+    """seed JSON + profile YAML → 雷達報告；llm=True 時用 Claude 精煉可行動案件。
+
+    tracker_path 有給就讀入申請追蹤，行動包會顯示文件勾選進度。
+    """
+    today = today or taipei_today()
+    programs = load_programs_from_seed(seed_path)
+    profile = load_profile(profile_path)
+    matches = match_all(programs, profile, today=today)
+    if llm:
+        matches = asyncio.run(llm_refine_all(programs, matches, profile, today=today))
+    plans = generate_plans(programs, matches, today=today)
+
+    report = RadarReport(
+        generated_at=datetime.now(UTC),
+        profile=profile,
+        programs=programs,
+        matches=matches,
+        plans=plans,
+        applications=load_applications(tracker_path) if tracker_path else {},
+    )
+
+    md = generate_report(report)
+    if output_path:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(md, encoding="utf-8")
+
+    return report

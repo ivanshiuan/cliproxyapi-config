@@ -60,7 +60,7 @@ test-fast: ## Run tests assuming env is already set up
 
 .PHONY: lint
 lint: install ## Lint with ruff (read-only)
-	$(VENV)/bin/python -m ruff check devswarm restaurant_api tigerline tests scripts
+	$(VENV)/bin/python -m ruff check devswarm restaurant_api tigerline subsidy_radar tests scripts
 
 .PHONY: typecheck
 typecheck: install ## Run pyright type checker (version pinned in requirements-dev.txt)
@@ -169,7 +169,7 @@ demo-flow: install ## Run the end-to-end POS day flow (打卡→開單→結帳�
 
 .PHONY: full-check
 full-check: install ## Run every quality gate: ruff + pyright + pytest + db-smoke + migration drift
-	$(VENV)/bin/ruff check devswarm restaurant_api tigerline tests scripts
+	$(VENV)/bin/ruff check devswarm restaurant_api tigerline subsidy_radar tests scripts
 	$(VENV)/bin/pyright
 	$(PYTEST) tests/ --ignore=tests/tigerline
 	cd restaurant_api && ../$(VENV)/bin/alembic check
@@ -252,6 +252,32 @@ docker-prod-up: ## Bring up production-shape stack (requires .env.production)
 .PHONY: docker-prod-down
 docker-prod-down: ## Tear down production-shape stack
 	docker compose -f restaurant_api/docker-compose.production.yml down
+
+# ----- subsidy radar -----------------------------------------------------
+
+.PHONY: subsidy-scan
+subsidy-scan: install ## Run subsidy radar pipeline (offline) → docs/subsidies/RADAR_2026.md
+	$(PY) -m subsidy_radar scan
+
+.PHONY: subsidy-list
+subsidy-list: install ## List all subsidy programs in seed data
+	$(PY) -m subsidy_radar list
+
+.PHONY: subsidy-match
+subsidy-match: install ## Run eligibility matching only (no action plans)
+	$(PY) -m subsidy_radar match
+
+.PHONY: subsidy-status
+subsidy-status: install ## Show tracked subsidy applications (deadline, documents still missing)
+	$(PY) -m subsidy_radar status
+
+.PHONY: subsidy-remind
+subsidy-remind: install ## Print subsidy deadline + missing-document reminders (ARGS="--send --to <id>" pushes to LINE)
+	$(PY) -m subsidy_radar remind $(ARGS)
+
+.PHONY: subsidy-daily
+subsidy-daily: install ## Daily subsidy digest: countdown, review follow-ups (ARGS="--fetch --send" for announcements + LINE)
+	$(PY) -m subsidy_radar daily $(ARGS)
 
 # ----- file ingest -------------------------------------------------------
 

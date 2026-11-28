@@ -1,0 +1,71 @@
+name: Subsidy Daily
+
+# Daily subsidy digest: deadline countdown, review follow-ups, new announcements.
+# Report-only like daily-brief: never commits. The announcement baseline lives in
+# the Actions cache. Pushes to LINE only when both secrets below are set; otherwise
+# the digest goes to the job summary. See docs/20_subsidy_radar.md.
+
+on:
+  schedule:
+    - cron: '30 0 * * *'   # 00:30 UTC = 08:30 Taipei, every day
+  workflow_dispatch:           # Manual trigger from GitHub Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: subsidy-daily
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.CANONICAL_BRANCH || github.event.repository.default_branch }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Restore announcement baseline
+        uses: actions/cache/restore@v4
+        with:
+          path: data/subsidies/monitor_state.json
+          key: subsidy-monitor-${{ github.run_id }}
+          restore-keys: subsidy-monitor-
+
+      - name: Daily digest
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          SUBSIDY_LINE_TO: ${{ secrets.SUBSIDY_LINE_TO }}
+        run: |
+          args="--fetch"
+          if [ -n "$LINE_CHANNEL_ACCESS_TOKEN" ] && [ -n "$SUBSIDY_LINE_TO" ]; then
+            args="$args --send"
+          fi
+          set +e
+          python -m subsidy_radar daily $args > digest.txt 2>&1
+          status=$?
+          set -e
+          cat digest.txt
+          {
+            echo '### 補助每日摘要'
+            echo
+            echo '```text'
+            cat digest.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit $status
+
+      - name: Save announcement baseline
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/subsidies/monitor_state.json
+          key: subsidy-monitor-${{ github.run_id }}
